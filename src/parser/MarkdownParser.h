@@ -2,6 +2,8 @@
 
 #include "MarkdownAst.h"
 
+struct cmark_node;
+
 class MarkdownParser {
 public:
     MarkdownParser();
@@ -9,9 +11,8 @@ public:
     AstNodePtr parse(const QString& markdown);
 
 private:
-    struct cmark_node;
-    AstNodePtr convertNode(struct cmark_node* node);
-    AstNodeType mapNodeType(int cmarkType);
+    AstNodePtr convertNode(cmark_node* node);
+    AstNodeType mapNodeType(cmark_node* node);
     bool m_extensionsRegistered = false;
     void ensureExtensions();
 };
