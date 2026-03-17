@@ -9,7 +9,7 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets Network)
 
 option(CMARK_TESTS "" OFF)
 option(CMARK_SHARED "" OFF)
