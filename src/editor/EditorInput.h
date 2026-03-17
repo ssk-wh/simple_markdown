@@ -12,6 +12,9 @@ public:
 
     bool keyPressEvent(QKeyEvent* event);
 
+    // IME 提交文本
+    void insertText(const QString& text);
+
 private:
     EditorWidget* m_editor;
 
@@ -19,9 +22,6 @@ private:
     Document* doc();
     Selection& sel();
     EditorLayout* layout();
-
-    // 文本操作
-    void insertText(const QString& text);
     void deleteForward();
     void deleteBackward();
     void insertNewLine();

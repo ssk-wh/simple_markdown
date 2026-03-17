@@ -1,5 +1,6 @@
 #pragma once
 #include <QtGlobal>
+#include <QString>
 #include "Selection.h"
 
 class QPainter;
@@ -14,5 +15,6 @@ public:
                int firstLine, int lastLine,
                int gutterWidth, qreal scrollY,
                bool cursorVisible = false,
-               TextPosition cursorPos = {0, 0});
+               TextPosition cursorPos = {0, 0},
+               const QString& preeditString = QString());
 };

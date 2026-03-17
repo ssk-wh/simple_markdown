@@ -1,6 +1,7 @@
 #pragma once
 #include <QAbstractScrollArea>
 #include <QTimer>
+#include <QInputMethodEvent>
 #include "Selection.h"
 
 class Document;
@@ -34,6 +35,8 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void inputMethodEvent(QInputMethodEvent* event) override;
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
 
 private slots:
     void onTextChanged(int offset, int removedLen, int addedLen);
@@ -48,6 +51,7 @@ private:
     QTimer m_cursorBlinkTimer;
     bool m_cursorVisible = true;
     bool m_mousePressed = false;
+    QString m_preeditString;
 
     TextPosition pixelToTextPosition(const QPoint& pos) const;
 

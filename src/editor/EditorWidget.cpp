@@ -40,6 +40,7 @@ EditorWidget::EditorWidget(QWidget* parent)
     m_cursorBlinkTimer.start(500);
 
     setFocusPolicy(Qt::StrongFocus);
+    setAttribute(Qt::WA_InputMethodEnabled, true);
 }
 
 EditorWidget::~EditorWidget()
@@ -118,7 +119,8 @@ void EditorWidget::paintEvent(QPaintEvent* event)
     m_painter->paint(&painter, m_layout, m_doc, first, last,
                      m_gutterWidth, sy,
                      m_cursorVisible && hasFocus(),
-                     m_doc->selection().cursorPosition());
+                     m_doc->selection().cursorPosition(),
+                     m_preeditString);
     painter.restore();
 }
 
@@ -285,4 +287,45 @@ int EditorWidget::lastVisibleLine() const
 qreal EditorWidget::scrollY() const
 {
     return verticalScrollBar()->value();
+}
+
+void EditorWidget::inputMethodEvent(QInputMethodEvent* event)
+{
+    if (!event->commitString().isEmpty()) {
+        m_preeditString.clear();
+        m_input->insertText(event->commitString());
+        ensureCursorVisible();
+    }
+
+    m_preeditString = event->preeditString();
+
+    viewport()->update();
+    event->accept();
+}
+
+QVariant EditorWidget::inputMethodQuery(Qt::InputMethodQuery query) const
+{
+    switch (query) {
+    case Qt::ImEnabled:
+        return true;
+
+    case Qt::ImCursorRectangle: {
+        QRectF cr = m_layout->cursorRect(m_doc->selection().cursorPosition());
+        cr.moveLeft(cr.x() + m_gutterWidth + 8);
+        cr.moveTop(cr.y() - scrollY());
+        return cr.toRect();
+    }
+
+    case Qt::ImSurroundingText:
+        return m_doc->lineText(m_doc->selection().cursorPosition().line);
+
+    case Qt::ImCursorPosition:
+        return m_doc->selection().cursorPosition().column;
+
+    case Qt::ImFont:
+        return m_layout->font();
+
+    default:
+        return QAbstractScrollArea::inputMethodQuery(query);
+    }
 }

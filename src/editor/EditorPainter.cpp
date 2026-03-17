@@ -11,7 +11,8 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
                           int firstLine, int lastLine,
                           int gutterWidth, qreal scrollY,
                           bool cursorVisible,
-                          TextPosition cursorPos)
+                          TextPosition cursorPos,
+                          const QString& preeditString)
 {
     const qreal margin = 8;
     qreal viewWidth = painter->clipBoundingRect().width();
@@ -66,6 +67,29 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
 
         qreal y = layout->lineY(line) - scrollY;
         tl->draw(painter, QPointF(gutterWidth + margin, y));  // 8px left margin
+    }
+
+    // Preedit 文本绘制
+    if (!preeditString.isEmpty()) {
+        QRectF cr = layout->cursorRect(cursorPos);
+        qreal px = cr.x() + gutterWidth + margin;
+        qreal py = cr.y() - scrollY;
+
+        painter->save();
+        QFont preeditFont = layout->font();
+        painter->setFont(preeditFont);
+        painter->setPen(Qt::black);
+
+        QFontMetricsF fm(preeditFont);
+        qreal textWidth = fm.horizontalAdvance(preeditString);
+        painter->fillRect(QRectF(px, py, textWidth, cr.height()), QColor(255, 255, 200));
+
+        painter->drawText(QPointF(px, py + fm.ascent()), preeditString);
+
+        painter->setPen(QPen(Qt::black, 1, Qt::DashLine));
+        painter->drawLine(QPointF(px, py + cr.height() - 1),
+                          QPointF(px + textWidth, py + cr.height() - 1));
+        painter->restore();
     }
 
     // 光标绘制
