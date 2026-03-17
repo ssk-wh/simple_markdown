@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include "Selection.h"
+#include "SyntaxHighlighter.h"
 
 class Document;
 
@@ -72,4 +73,6 @@ private:
     void ensureLayout(int line) const;
     void ensureYCache() const;
     void invalidateYCache();
+
+    mutable SyntaxHighlighter m_highlighter;
 };

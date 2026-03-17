@@ -63,6 +63,7 @@ void EditorLayout::rebuild()
     int count = m_doc->lineCount();
     m_lines.resize(count);
     // All lines start as dirty by default (LineInfo default)
+    m_highlighter.setLineCount(count);
     invalidateYCache();
 }
 
@@ -78,6 +79,8 @@ void EditorLayout::updateLines(int startLine, int endLine)
         m_lines.resize(docLines);
         // New lines are dirty by default
     }
+
+    m_highlighter.invalidateFromLine(startLine);
 
     int end = std::min(endLine, static_cast<int>(m_lines.size()) - 1);
     for (int i = startLine; i <= end; ++i) {
@@ -121,6 +124,19 @@ void EditorLayout::ensureLayout(int line) const
         tline.setPosition(QPointF(0, y));
         y += tline.height();
     }
+    // 语法高亮
+    QVector<HighlightToken> tokens = m_highlighter.highlightLine(line, text);
+    QVector<QTextLayout::FormatRange> formats;
+    formats.reserve(tokens.size());
+    for (const auto& token : tokens) {
+        QTextLayout::FormatRange fr;
+        fr.start = token.start;
+        fr.length = token.length;
+        fr.format = token.format;
+        formats.append(fr);
+    }
+    tl->setFormats(formats);
+
     tl->endLayout();
 
     info.height = y;
