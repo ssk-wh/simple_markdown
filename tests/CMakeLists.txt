@@ -1,8 +1,8 @@
-find_package(Qt5 REQUIRED COMPONENTS Core)
+find_package(Qt5 REQUIRED COMPONENTS Core Test)
 
 function(add_unit_test TEST_NAME TEST_SOURCE)
     add_executable(${TEST_NAME} ${TEST_SOURCE})
-    target_link_libraries(${TEST_NAME} PRIVATE easy_core gtest gtest_main)
+    target_link_libraries(${TEST_NAME} PRIVATE easy_core gtest gtest_main Qt5::Test)
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 endfunction()
 
