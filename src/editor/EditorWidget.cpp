@@ -266,13 +266,12 @@ void EditorWidget::ensureCursorVisible()
 void EditorWidget::onTextChanged(int offset, int removedLen, int addedLen)
 {
     Q_UNUSED(removedLen);
+    Q_UNUSED(addedLen);
 
-    int startLine = m_doc->offsetToLine(offset);
-    int endLine = startLine;
-    if (addedLen > 0) {
-        endLine = m_doc->offsetToLine(offset + addedLen);
-    }
-    m_layout->updateLines(startLine, endLine);
+    // 简化策略：任何文本变化都重建整个布局
+    // 增量更新在复杂场景下（删除换行、跨行替换）容易出 bug
+    // 对于常规大小的文件（<10000行），rebuild 很快
+    m_layout->rebuild();
     updateScrollBars();
     viewport()->update();
 }

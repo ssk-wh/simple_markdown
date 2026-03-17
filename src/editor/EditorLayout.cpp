@@ -103,6 +103,8 @@ void EditorLayout::ensureLayout(int line) const
 {
     if (line < 0 || line >= static_cast<int>(m_lines.size()))
         return;
+    if (!m_doc)
+        return;
 
     auto& info = m_lines[line];
     if (!info.dirty)

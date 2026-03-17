@@ -45,7 +45,7 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
 
         for (int line = startLine; line <= endLine && line < layout->lineCount(); ++line) {
             QTextLayout* tl = layout->layoutForLine(line);
-            if (!tl) continue;
+            if (!tl || tl->lineCount() == 0) continue;
 
             qreal lineTop = layout->lineY(line) - scrollY;
             int lineLen = doc->lineText(line).length();
@@ -57,8 +57,8 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
                 selEnd = lineLen + 1;  // 选中换行符，整行宽度
             }
 
-            qreal x1 = tl->lineAt(0).cursorToX(selStart);
-            qreal x2 = (selEnd > lineLen) ? viewWidth : tl->lineAt(0).cursorToX(selEnd);
+            qreal x1 = tl->lineAt(0).cursorToX(qMin(selStart, lineLen));
+            qreal x2 = (selEnd > lineLen) ? viewWidth : tl->lineAt(0).cursorToX(qMin(selEnd, lineLen));
 
             painter->fillRect(QRectF(gutterWidth + margin + x1, lineTop,
                                       x2 - x1, layout->lineHeight(line)),

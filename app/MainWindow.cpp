@@ -135,7 +135,7 @@ void MainWindow::newTab()
         "\n"
         "A **lightweight** cross-platform Markdown editor.\n"
     );
-    tab.scheduler->parseNow();
+    // parseNow will be triggered by textChanged → debounce
 }
 
 void MainWindow::openFile(const QString& path)
@@ -166,9 +166,9 @@ MainWindow::TabData MainWindow::createTab()
 
     tab.splitter = new QSplitter(Qt::Horizontal);
     tab.editor = new EditorWidget(tab.splitter);
-    tab.preview = new PreviewWidget(tab.splitter);
-
     tab.splitter->addWidget(tab.editor);
+
+    tab.preview = new PreviewWidget(tab.splitter);
     tab.splitter->addWidget(tab.preview);
     tab.splitter->setSizes({640, 640});
 
