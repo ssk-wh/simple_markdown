@@ -16,6 +16,7 @@
 #include <QCloseEvent>
 #include <QFileInfo>
 #include <QShortcut>
+#include <QActionGroup>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -92,6 +93,28 @@ void MainWindow::setupMenuBar()
         if (auto* tab = currentTab())
             tab->editor->showReplaceBar();
     }, QKeySequence(Qt::CTRL + Qt::Key_H));
+
+    // -- View menu --
+    QMenu* viewMenu = menuBar()->addMenu(tr("View"));
+
+    QActionGroup* themeGroup = new QActionGroup(this);
+    themeGroup->setExclusive(true);
+
+    QAction* lightThemeAct = viewMenu->addAction(tr("Light Theme"));
+    lightThemeAct->setCheckable(true);
+    lightThemeAct->setChecked(true);
+    themeGroup->addAction(lightThemeAct);
+
+    QAction* darkThemeAct = viewMenu->addAction(tr("Dark Theme"));
+    darkThemeAct->setCheckable(true);
+    themeGroup->addAction(darkThemeAct);
+
+    connect(lightThemeAct, &QAction::triggered, this, [this]() {
+        applyTheme(Theme::light());
+    });
+    connect(darkThemeAct, &QAction::triggered, this, [this]() {
+        applyTheme(Theme::dark());
+    });
 }
 
 void MainWindow::setupDragDrop()
@@ -158,6 +181,10 @@ MainWindow::TabData MainWindow::createTab()
     // Scroll sync: editor -> preview
     tab.scrollSync = new ScrollSync(tab.editor, tab.preview, tab.splitter);
 
+    // Apply current theme
+    tab.editor->setTheme(m_currentTheme);
+    tab.preview->setTheme(m_currentTheme);
+
     // Track modifications for tab title
     connect(tab.editor->document(), &Document::modifiedChanged,
             this, [this](bool) {
@@ -206,6 +233,15 @@ void MainWindow::updateRecentFilesMenu()
     }
     m_recentMenu->addSeparator();
     m_recentMenu->addAction(tr("Clear"), m_recentFiles, &RecentFiles::clear);
+}
+
+void MainWindow::applyTheme(const Theme& theme)
+{
+    m_currentTheme = theme;
+    for (auto& tab : m_tabs) {
+        tab.editor->setTheme(theme);
+        tab.preview->setTheme(theme);
+    }
 }
 
 MainWindow::TabData* MainWindow::currentTab()

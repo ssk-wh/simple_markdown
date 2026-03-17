@@ -2,8 +2,17 @@
 
 #include <QFontMetricsF>
 
-PreviewPainter::PreviewPainter() = default;
+PreviewPainter::PreviewPainter()
+    : m_theme(Theme::light())
+{
+}
+
 PreviewPainter::~PreviewPainter() = default;
+
+void PreviewPainter::setTheme(const Theme& theme)
+{
+    m_theme = theme;
+}
 
 void PreviewPainter::paint(QPainter* painter, const LayoutBlock& root,
                             qreal scrollY, qreal viewportHeight, qreal viewportWidth)
@@ -45,7 +54,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         // H1/H2: bottom separator line
         if (block.headingLevel <= 2) {
             qreal lineY = drawY + block.bounds.height() - 4;
-            p->setPen(QPen(QColor("#EAECEF"), 1));
+            p->setPen(QPen(m_theme.previewHeadingSeparator, 1));
             p->drawLine(QPointF(drawX, lineY), QPointF(drawX + block.bounds.width(), lineY));
         }
         break;
@@ -54,15 +63,15 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
     case LayoutBlock::HtmlBlock: {
         // Background
         QRectF bgRect(drawX, drawY, block.bounds.width(), block.bounds.height());
-        p->fillRect(bgRect, QColor("#F6F8FA"));
-        p->setPen(QPen(QColor("#E1E4E8"), 1));
+        p->fillRect(bgRect, m_theme.previewCodeBg);
+        p->setPen(QPen(m_theme.previewCodeBorder, 1));
         p->drawRoundedRect(bgRect, 4, 4);
 
         // Draw code text
         QFont monoFont("Consolas", 9);
         monoFont.setStyleHint(QFont::Monospace);
         p->setFont(monoFont);
-        p->setPen(QColor("#333333"));
+        p->setPen(m_theme.previewCodeFg);
         QFontMetricsF fm(monoFont);
         qreal lineH = fm.height() * 1.4;
         qreal textX = drawX + 8;
@@ -78,10 +87,10 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
     case LayoutBlock::BlockQuote: {
         // Background
         QRectF bgRect(drawX, drawY, block.bounds.width(), block.bounds.height());
-        p->fillRect(bgRect, QColor("#F8F8F8"));
+        p->fillRect(bgRect, m_theme.previewBlockQuoteBg);
 
         // Left bar
-        p->fillRect(QRectF(drawX, drawY, 3, block.bounds.height()), QColor("#DFE2E5"));
+        p->fillRect(QRectF(drawX, drawY, 3, block.bounds.height()), m_theme.previewBlockQuoteBorder);
 
         // Children
         for (const auto& child : block.children) {
@@ -99,7 +108,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             // Draw bullet/number
             QFont baseFont("Segoe UI", 10);
             p->setFont(baseFont);
-            p->setPen(Qt::black);
+            p->setPen(m_theme.previewFg);
             QFontMetricsF fm(baseFont);
 
             if (block.ordered) {
@@ -125,7 +134,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
     }
     case LayoutBlock::Table: {
         // Draw grid
-        p->setPen(QPen(QColor("#DFE2E5"), 1));
+        p->setPen(QPen(m_theme.previewTableBorder, 1));
 
         bool isFirstRow = true;
         for (const auto& row : block.children) {
@@ -136,11 +145,11 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             // Header row background
             if (isFirstRow) {
                 p->fillRect(QRectF(drawX, rowDrawY, block.bounds.width(), rowHeight),
-                            QColor("#F6F8FA"));
+                            m_theme.previewTableHeaderBg);
             }
 
             // Row border
-            p->setPen(QPen(QColor("#DFE2E5"), 1));
+            p->setPen(QPen(m_theme.previewTableBorder, 1));
             p->drawLine(QPointF(drawX, rowDrawY + rowHeight),
                         QPointF(drawX + block.bounds.width(), rowDrawY + rowHeight));
 
@@ -150,7 +159,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                 qreal cellY = rowDrawY;
 
                 // Column border
-                p->setPen(QPen(QColor("#DFE2E5"), 1));
+                p->setPen(QPen(m_theme.previewTableBorder, 1));
                 p->drawLine(QPointF(cellX, rowDrawY),
                             QPointF(cellX, rowDrawY + rowHeight));
 
@@ -158,7 +167,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                 QFont cellFont("Segoe UI", 10);
                 if (isFirstRow) cellFont.setWeight(QFont::Bold);
                 p->setFont(cellFont);
-                p->setPen(Qt::black);
+                p->setPen(m_theme.previewFg);
 
                 if (!cell.inlineRuns.empty()) {
                     paintInlineRuns(p, cell, cellX + 4, cellY + 4, cell.bounds.width() - 8);
@@ -166,7 +175,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             }
 
             // Right border
-            p->setPen(QPen(QColor("#DFE2E5"), 1));
+            p->setPen(QPen(m_theme.previewTableBorder, 1));
             p->drawLine(QPointF(drawX + block.bounds.width(), rowDrawY),
                         QPointF(drawX + block.bounds.width(), rowDrawY + rowHeight));
 
@@ -177,10 +186,10 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
     case LayoutBlock::Image: {
         // Placeholder
         QRectF rect(drawX, drawY, block.bounds.width(), block.bounds.height());
-        p->fillRect(rect, QColor("#F0F0F0"));
-        p->setPen(QPen(QColor("#CCCCCC"), 1));
+        p->fillRect(rect, m_theme.previewImagePlaceholderBg);
+        p->setPen(QPen(m_theme.previewImagePlaceholderBorder, 1));
         p->drawRect(rect);
-        p->setPen(QColor("#999999"));
+        p->setPen(m_theme.previewImagePlaceholderText);
         QFont f("Segoe UI", 10);
         p->setFont(f);
         QString label = block.imageUrl.isEmpty()
@@ -191,7 +200,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
     }
     case LayoutBlock::ThematicBreak: {
         qreal lineY = drawY + block.bounds.height() / 2.0;
-        p->setPen(QPen(QColor("#E0E0E0"), 2));
+        p->setPen(QPen(m_theme.previewHr, 2));
         p->drawLine(QPointF(drawX, lineY), QPointF(drawX + block.bounds.width(), lineY));
         break;
     }

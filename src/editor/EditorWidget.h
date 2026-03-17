@@ -3,6 +3,7 @@
 #include <QTimer>
 #include <QInputMethodEvent>
 #include "Selection.h"
+#include "Theme.h"
 
 class Document;
 class EditorLayout;
@@ -22,6 +23,8 @@ public:
     EditorLayout* editorLayout() const;
 
     int gutterWidth() const;
+
+    void setTheme(const Theme& theme);
 
     void ensureCursorVisible();
 
@@ -67,6 +70,7 @@ private:
     bool m_mousePressed = false;
     QString m_preeditString;
 
+    Theme m_theme;
     QVector<QPair<int,int>> m_searchMatches;  // (offset, length) pairs
     QString m_currentSearchText;
 

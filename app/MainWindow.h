@@ -2,6 +2,7 @@
 #include <QMainWindow>
 #include <QTabWidget>
 #include <QVector>
+#include "Theme.h"
 
 class EditorWidget;
 class PreviewWidget;
@@ -10,6 +11,7 @@ class ScrollSync;
 class RecentFiles;
 class QSplitter;
 class QMenu;
+class QActionGroup;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -46,11 +48,14 @@ private:
     RecentFiles* m_recentFiles;
     QMenu* m_recentMenu = nullptr;
 
+    Theme m_currentTheme;
+
     void setupMenuBar();
     void setupDragDrop();
     TabData createTab();
     void updateTabTitle(int index);
     void updateRecentFilesMenu();
+    void applyTheme(const Theme& theme);
     TabData* currentTab();
     bool maybeSave(int index);
 };

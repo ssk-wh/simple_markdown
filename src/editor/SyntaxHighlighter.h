@@ -5,6 +5,8 @@
 #include <QColor>
 #include <vector>
 
+#include "Theme.h"
+
 struct HighlightToken {
     int start;
     int length;
@@ -14,6 +16,8 @@ struct HighlightToken {
 class SyntaxHighlighter {
 public:
     SyntaxHighlighter();
+
+    void setTheme(const Theme& theme);
 
     QVector<HighlightToken> highlightLine(int lineIndex, const QString& text);
     void invalidateFromLine(int startLine);
@@ -41,5 +45,5 @@ private:
     QTextCharFormat m_blockQuoteFormat;
     QTextCharFormat m_fenceFormat;
 
-    void setupFormats();
+    void setupFormats(const Theme& theme);
 };

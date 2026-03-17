@@ -9,6 +9,7 @@
 #include <memory>
 #include "Selection.h"
 #include "SyntaxHighlighter.h"
+#include "Theme.h"
 
 class Document;
 
@@ -23,6 +24,7 @@ public:
     QFont font() const;
     void setTabStopWidth(int spaces);
     void setWrapWidth(qreal width);  // 0 = 不折行
+    void setTheme(const Theme& theme);
 
     // 关联文档
     void setDocument(Document* doc);

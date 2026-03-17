@@ -26,6 +26,13 @@ void EditorLayout::setFont(const QFont& font)
         rebuild();
 }
 
+void EditorLayout::setTheme(const Theme& theme)
+{
+    m_highlighter.setTheme(theme);
+    if (m_doc)
+        rebuild();
+}
+
 QFont EditorLayout::font() const
 {
     return m_font;

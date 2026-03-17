@@ -14,13 +14,18 @@ static bool isInRanges(int pos, const QVector<QPair<int,int>>& ranges)
 
 SyntaxHighlighter::SyntaxHighlighter()
 {
-    setupFormats();
+    setupFormats(Theme::light());
 }
 
-void SyntaxHighlighter::setupFormats()
+void SyntaxHighlighter::setTheme(const Theme& theme)
 {
-    // 标题：深蓝色 + 粗体
-    m_headingFormat.setForeground(QColor("#1A237E"));
+    setupFormats(theme);
+}
+
+void SyntaxHighlighter::setupFormats(const Theme& theme)
+{
+    // 标题：主题色 + 粗体
+    m_headingFormat.setForeground(theme.syntaxHeading);
     m_headingFormat.setFontWeight(QFont::Bold);
 
     // 粗体
@@ -29,27 +34,27 @@ void SyntaxHighlighter::setupFormats()
     // 斜体
     m_italicFormat.setFontItalic(true);
 
-    // 行内代码：灰色背景 + 红色文字
-    m_codeFormat.setForeground(QColor("#C62828"));
-    m_codeFormat.setBackground(QColor("#F5F5F5"));
+    // 行内代码
+    m_codeFormat.setForeground(theme.syntaxCode);
+    m_codeFormat.setBackground(theme.syntaxCodeBg);
 
     // 链接：蓝色 + 下划线
-    m_linkFormat.setForeground(QColor("#0366D6"));
+    m_linkFormat.setForeground(theme.syntaxLink);
     m_linkFormat.setFontUnderline(true);
 
-    // 代码块内容：绿色
-    m_codeBlockFormat.setForeground(QColor("#2E7D32"));
-    m_codeBlockFormat.setBackground(QColor("#F8F8F8"));
+    // 代码块内容
+    m_codeBlockFormat.setForeground(theme.syntaxCodeBlock);
+    m_codeBlockFormat.setBackground(theme.syntaxCodeBlockBg);
 
-    // 列表标记：紫色
-    m_listFormat.setForeground(QColor("#6A1B9A"));
+    // 列表标记
+    m_listFormat.setForeground(theme.syntaxList);
 
-    // 引用：灰色
-    m_blockQuoteFormat.setForeground(QColor("#757575"));
+    // 引用
+    m_blockQuoteFormat.setForeground(theme.syntaxBlockQuote);
 
     // 围栏标记本身
-    m_fenceFormat.setForeground(QColor("#999999"));
-    m_fenceFormat.setBackground(QColor("#F0F0F0"));
+    m_fenceFormat.setForeground(theme.syntaxFence);
+    m_fenceFormat.setBackground(theme.syntaxFenceBg);
 }
 
 QVector<HighlightToken> SyntaxHighlighter::highlightLine(int lineIndex, const QString& text)

@@ -4,6 +4,7 @@
 #include "EditorInput.h"
 #include "SearchBar.h"
 #include "Document.h"
+#include "Theme.h"
 
 #include <QPainter>
 #include <QPaintEvent>
@@ -91,6 +92,14 @@ EditorLayout* EditorWidget::editorLayout() const
     return m_layout;
 }
 
+void EditorWidget::setTheme(const Theme& theme)
+{
+    m_theme = theme;
+    m_painter->setTheme(theme);
+    m_layout->setTheme(theme);
+    viewport()->update();
+}
+
 int EditorWidget::gutterWidth() const
 {
     return m_gutterWidth;
@@ -108,10 +117,10 @@ void EditorWidget::paintEvent(QPaintEvent* event)
     qreal sy = scrollY();
 
     // Draw gutter background
-    painter.fillRect(0, 0, m_gutterWidth, viewport()->height(), QColor("#F0F0F0"));
+    painter.fillRect(0, 0, m_gutterWidth, viewport()->height(), m_theme.editorGutterBg);
 
     // Draw line numbers
-    painter.setPen(QColor("#999999"));
+    painter.setPen(m_theme.editorLineNumber);
     QFont gutterFont = m_layout->font();
     gutterFont.setPointSize(gutterFont.pointSize() - 1);
     painter.setFont(gutterFont);
@@ -123,7 +132,7 @@ void EditorWidget::paintEvent(QPaintEvent* event)
     }
 
     // Draw separator line
-    painter.setPen(QColor("#E0E0E0"));
+    painter.setPen(m_theme.editorGutterLine);
     painter.drawLine(m_gutterWidth - 1, 0, m_gutterWidth - 1, viewport()->height());
 
     // Draw text area

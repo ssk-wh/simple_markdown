@@ -55,7 +55,7 @@ void PreviewWidget::updateAst(std::shared_ptr<AstNode> root)
 void PreviewWidget::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter(viewport());
-    painter.fillRect(viewport()->rect(), Qt::white);
+    painter.fillRect(viewport()->rect(), m_theme.previewBg);
 
     if (!m_currentAst) return;
 
@@ -95,6 +95,18 @@ void PreviewWidget::updateScrollBars()
     verticalScrollBar()->setRange(0, maxScroll);
     verticalScrollBar()->setPageStep(static_cast<int>(vpH));
     verticalScrollBar()->setSingleStep(20);
+}
+
+void PreviewWidget::setTheme(const Theme& theme)
+{
+    m_theme = theme;
+    m_painter->setTheme(theme);
+
+    QPalette pal = viewport()->palette();
+    pal.setColor(QPalette::Window, theme.previewBg);
+    viewport()->setPalette(pal);
+
+    viewport()->update();
 }
 
 void PreviewWidget::scrollToSourceLine(int line)

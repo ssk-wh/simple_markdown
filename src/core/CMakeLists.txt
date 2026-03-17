@@ -6,7 +6,8 @@ add_library(easy_core STATIC
     Selection.h Selection.cpp
     Document.h Document.cpp
     RecentFiles.h RecentFiles.cpp
+    Theme.h Theme.cpp
 )
 
 target_include_directories(easy_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(easy_core PUBLIC Qt5::Core)
+target_link_libraries(easy_core PUBLIC Qt5::Core Qt5::Gui)

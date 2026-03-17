@@ -5,7 +5,15 @@
 #include <QPainter>
 #include <QTextLayout>
 
-EditorPainter::EditorPainter() = default;
+EditorPainter::EditorPainter()
+    : m_theme(Theme::light())
+{
+}
+
+void EditorPainter::setTheme(const Theme& theme)
+{
+    m_theme = theme;
+}
 
 void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc,
                           int firstLine, int lastLine,
@@ -19,7 +27,7 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
     qreal viewWidth = painter->clipBoundingRect().width();
 
     // Background
-    painter->fillRect(painter->clipBoundingRect(), Qt::white);
+    painter->fillRect(painter->clipBoundingRect(), m_theme.editorBg);
 
     // 当前行高亮 / 选区绘制
     bool hasSelection = doc->selection().hasSelection();
@@ -27,9 +35,9 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
         // 当前行浅色背景
         qreal cy = layout->lineY(cursorPos.line) - scrollY;
         qreal ch = layout->lineHeight(cursorPos.line);
-        painter->fillRect(QRectF(gutterWidth, cy, viewWidth, ch), QColor("#F5F5F5"));
+        painter->fillRect(QRectF(gutterWidth, cy, viewWidth, ch), m_theme.editorCurrentLine);
     } else {
-        // 选区蓝色背景
+        // 选区背景
         TextPosition startPos = doc->selection().range().start();
         TextPosition endPos = doc->selection().range().end();
         int startLine = qMax(startPos.line, firstLine);
@@ -54,7 +62,7 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
 
             painter->fillRect(QRectF(gutterWidth + margin + x1, lineTop,
                                       x2 - x1, layout->lineHeight(line)),
-                              QColor(181, 213, 255));  // #B5D5FF
+                              m_theme.editorSelection);
         }
     }
 
@@ -76,11 +84,11 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
 
         painter->fillRect(QRectF(gutterWidth + margin + x1, y,
                                   x2 - x1, layout->lineHeight(matchLine)),
-                          QColor(255, 235, 59, 128));  // 半透明黄色
+                          m_theme.editorSearchMatch);
     }
 
     // Text
-    painter->setPen(Qt::black);
+    painter->setPen(m_theme.editorFg);
     painter->setFont(layout->font());
 
     for (int line = firstLine; line <= lastLine && line < layout->lineCount(); ++line) {
@@ -100,15 +108,15 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
         painter->save();
         QFont preeditFont = layout->font();
         painter->setFont(preeditFont);
-        painter->setPen(Qt::black);
+        painter->setPen(m_theme.editorFg);
 
         QFontMetricsF fm(preeditFont);
         qreal textWidth = fm.horizontalAdvance(preeditString);
-        painter->fillRect(QRectF(px, py, textWidth, cr.height()), QColor(255, 255, 200));
+        painter->fillRect(QRectF(px, py, textWidth, cr.height()), m_theme.editorPreeditBg);
 
         painter->drawText(QPointF(px, py + fm.ascent()), preeditString);
 
-        painter->setPen(QPen(Qt::black, 1, Qt::DashLine));
+        painter->setPen(QPen(m_theme.editorFg, 1, Qt::DashLine));
         painter->drawLine(QPointF(px, py + cr.height() - 1),
                           QPointF(px + textWidth, py + cr.height() - 1));
         painter->restore();
@@ -119,6 +127,6 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
         QRectF cr = layout->cursorRect(cursorPos);
         cr.moveLeft(cr.x() + gutterWidth + 8);  // 加 gutter 和 margin 偏移
         cr.moveTop(cr.y() - scrollY);
-        painter->fillRect(cr, Qt::black);
+        painter->fillRect(cr, m_theme.editorCursor);
     }
 }
