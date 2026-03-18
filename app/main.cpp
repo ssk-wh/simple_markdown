@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QIcon>
 #include "MainWindow.h"
 
 #ifdef _WIN32
@@ -50,14 +51,10 @@ int main(int argc, char* argv[])
     SetUnhandledExceptionFilter(crashHandler);
 #endif
 
-    // Workaround: Qt 5.15 Release 模式下 Qt5Gui.dll 在首次绘制时可能因
-    // 内部日志回调未初始化导致 ACCESS_VIOLATION。设置日志规则触发内部初始化。
-    // Workaround: Qt 5.15 + MSVC Release 模式下 Qt5Gui.dll 首次绘制时
-    // 内部访问违规（偏移 0x1049F4）。设置 QT_LOGGING_RULES 触发 Qt 内部的
-    // logging category 初始化路径，避免未初始化指针访问。
     QApplication app(argc, argv);
     app.setApplicationName("EasyMarkdown");
     app.setOrganizationName("EasyMarkdown");
+    app.setWindowIcon(QIcon(":/app-icon.png"));
 
     MainWindow window;
 

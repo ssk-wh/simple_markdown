@@ -20,6 +20,8 @@ Unicode True
 
 ; ============== MUI Settings ==============
 !define MUI_ABORTWARNING
+!define MUI_ICON "..\resources\app-icon.ico"
+!define MUI_UNICON "..\resources\app-icon.ico"
 
 ; ============== Pages ==============
 !insertmacro MUI_PAGE_WELCOME
