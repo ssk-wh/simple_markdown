@@ -201,6 +201,7 @@ TextPosition EditorWidget::pixelToTextPosition(const QPoint& pos) const {
 
 void EditorWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
+        setFocus();
         TextPosition pos = pixelToTextPosition(event->pos());
         bool shift = event->modifiers() & Qt::ShiftModifier;
         if (shift) {
@@ -212,15 +213,19 @@ void EditorWidget::mousePressEvent(QMouseEvent* event) {
         m_cursorVisible = true;
         m_cursorBlinkTimer.start(500);
         viewport()->update();
+        event->accept();
+        return;
     }
     QAbstractScrollArea::mousePressEvent(event);
 }
 
 void EditorWidget::mouseMoveEvent(QMouseEvent* event) {
-    if (m_mousePressed) {
+    if (m_mousePressed && (event->buttons() & Qt::LeftButton)) {
         TextPosition pos = pixelToTextPosition(event->pos());
         m_doc->selection().extendSelection(pos);
         viewport()->update();
+        event->accept();
+        return;
     }
     QAbstractScrollArea::mouseMoveEvent(event);
 }

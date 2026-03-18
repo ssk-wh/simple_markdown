@@ -244,39 +244,49 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             p->fillRect(QRectF(curX - 2, curY, w + 4, lineHeight), run.bgColor);
         }
 
-        // Simple word-wrap
-        const QStringList words = run.text.split(' ', Qt::SkipEmptyParts);
-        for (int i = 0; i < words.size(); ++i) {
-            QString word = words[i];
-            if (i > 0) word = " " + word;
-            qreal wordWidth = fm.horizontalAdvance(word);
-
-            if (curX + wordWidth > x + maxWidth && curX > x) {
-                curX = x;
-                curY += lineHeight;
+        // Word-wrap preserving spaces
+        // Split into segments: each word keeps its preceding whitespace
+        QString remaining = run.text;
+        while (!remaining.isEmpty()) {
+            // Find next word boundary for wrapping
+            int splitPos = -1;
+            qreal segWidth = 0;
+            for (int i = 0; i < remaining.length(); ++i) {
+                if (i > 0 && remaining[i] == ' ') {
+                    splitPos = i;
+                }
+                segWidth = fm.horizontalAdvance(remaining.left(i + 1));
+                if (curX + segWidth > x + maxWidth && curX > x && splitPos > 0) {
+                    // Wrap at last space
+                    QString segment = remaining.left(splitPos);
+                    qreal w = fm.horizontalAdvance(segment);
+                    p->drawText(QPointF(curX, curY + fm.ascent()), segment);
+                    if (!run.linkUrl.isEmpty())
+                        p->drawLine(QPointF(curX, curY + fm.ascent() + 2), QPointF(curX + w, curY + fm.ascent() + 2));
+                    if (run.isStrikethrough)
+                        p->drawLine(QPointF(curX, curY + fm.ascent() / 2), QPointF(curX + w, curY + fm.ascent() / 2));
+                    curX = x;
+                    curY += lineHeight;
+                    remaining = remaining.mid(splitPos);
+                    splitPos = -1;
+                    break;
+                }
             }
-
-            p->drawText(QPointF(curX, curY + fm.ascent()), word);
-
-            // Link underline
-            if (!run.linkUrl.isEmpty()) {
-                p->drawLine(QPointF(curX, curY + fm.ascent() + 2),
-                            QPointF(curX + wordWidth, curY + fm.ascent() + 2));
+            if (splitPos == -1 || curX + segWidth <= x + maxWidth || curX <= x) {
+                // Draw remaining text on current line
+                qreal w = fm.horizontalAdvance(remaining);
+                if (curX + w > x + maxWidth && curX > x) {
+                    curX = x;
+                    curY += lineHeight;
+                }
+                p->drawText(QPointF(curX, curY + fm.ascent()), remaining);
+                if (!run.linkUrl.isEmpty())
+                    p->drawLine(QPointF(curX, curY + fm.ascent() + 2), QPointF(curX + w, curY + fm.ascent() + 2));
+                if (run.isStrikethrough)
+                    p->drawLine(QPointF(curX, curY + fm.ascent() / 2), QPointF(curX + w, curY + fm.ascent() / 2));
+                curX += w;
+                break;
             }
-
-            // Strikethrough
-            if (run.isStrikethrough) {
-                qreal strikeY = curY + fm.ascent() / 2;
-                p->drawLine(QPointF(curX, strikeY), QPointF(curX + wordWidth, strikeY));
-            }
-
-            curX += wordWidth;
-        }
-
-        // Handle whitespace-only runs (e.g., soft breaks rendered as " ")
-        if (words.isEmpty() && !run.text.isEmpty()) {
-            qreal w = fm.horizontalAdvance(run.text);
-            curX += w;
         }
     }
 }
