@@ -244,49 +244,52 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             p->fillRect(QRectF(curX - 2, curY, w + 4, lineHeight), run.bgColor);
         }
 
-        // Word-wrap preserving spaces
-        // Split into segments: each word keeps its preceding whitespace
-        QString remaining = run.text;
-        while (!remaining.isEmpty()) {
-            // Find next word boundary for wrapping
-            int splitPos = -1;
-            qreal segWidth = 0;
-            for (int i = 0; i < remaining.length(); ++i) {
-                if (i > 0 && remaining[i] == ' ') {
-                    splitPos = i;
-                }
-                segWidth = fm.horizontalAdvance(remaining.left(i + 1));
-                if (curX + segWidth > x + maxWidth && curX > x && splitPos > 0) {
-                    // Wrap at last space
-                    QString segment = remaining.left(splitPos);
-                    qreal w = fm.horizontalAdvance(segment);
-                    p->drawText(QPointF(curX, curY + fm.ascent()), segment);
-                    if (!run.linkUrl.isEmpty())
-                        p->drawLine(QPointF(curX, curY + fm.ascent() + 2), QPointF(curX + w, curY + fm.ascent() + 2));
-                    if (run.isStrikethrough)
-                        p->drawLine(QPointF(curX, curY + fm.ascent() / 2), QPointF(curX + w, curY + fm.ascent() / 2));
-                    curX = x;
-                    curY += lineHeight;
-                    remaining = remaining.mid(splitPos);
-                    splitPos = -1;
-                    break;
-                }
-            }
-            if (splitPos == -1 || curX + segWidth <= x + maxWidth || curX <= x) {
-                // Draw remaining text on current line
-                qreal w = fm.horizontalAdvance(remaining);
-                if (curX + w > x + maxWidth && curX > x) {
-                    curX = x;
-                    curY += lineHeight;
-                }
-                p->drawText(QPointF(curX, curY + fm.ascent()), remaining);
+        // Draw run text directly, with simple line-wrap at word boundaries
+        QString text = run.text;
+        while (!text.isEmpty()) {
+            qreal fullWidth = fm.horizontalAdvance(text);
+
+            // Fits on current line?
+            if (curX + fullWidth <= x + maxWidth || curX <= x) {
+                p->drawText(QPointF(curX, curY + fm.ascent()), text);
                 if (!run.linkUrl.isEmpty())
-                    p->drawLine(QPointF(curX, curY + fm.ascent() + 2), QPointF(curX + w, curY + fm.ascent() + 2));
+                    p->drawLine(QPointF(curX, curY + fm.ascent() + 2), QPointF(curX + fullWidth, curY + fm.ascent() + 2));
                 if (run.isStrikethrough)
-                    p->drawLine(QPointF(curX, curY + fm.ascent() / 2), QPointF(curX + w, curY + fm.ascent() / 2));
-                curX += w;
+                    p->drawLine(QPointF(curX, curY + fm.ascent() / 2), QPointF(curX + fullWidth, curY + fm.ascent() / 2));
+                curX += fullWidth;
                 break;
             }
+
+            // Need to wrap: find last space that fits
+            int wrapAt = -1;
+            for (int i = 0; i < text.length(); ++i) {
+                if (text[i] == ' ') {
+                    qreal w = fm.horizontalAdvance(text.left(i));
+                    if (curX + w > x + maxWidth) break;
+                    wrapAt = i;
+                }
+            }
+
+            if (wrapAt <= 0) {
+                // No space fits, force wrap entire text to next line
+                curX = x;
+                curY += lineHeight;
+                continue;
+            }
+
+            // Draw up to wrapAt
+            QString segment = text.left(wrapAt);
+            qreal segW = fm.horizontalAdvance(segment);
+            p->drawText(QPointF(curX, curY + fm.ascent()), segment);
+            if (!run.linkUrl.isEmpty())
+                p->drawLine(QPointF(curX, curY + fm.ascent() + 2), QPointF(curX + segW, curY + fm.ascent() + 2));
+            if (run.isStrikethrough)
+                p->drawLine(QPointF(curX, curY + fm.ascent() / 2), QPointF(curX + segW, curY + fm.ascent() / 2));
+
+            // Move to next line, skip the space at wrapAt
+            curX = x;
+            curY += lineHeight;
+            text = text.mid(wrapAt + 1);
         }
     }
 }
