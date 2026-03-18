@@ -1,4 +1,4 @@
-# EasyMarkdown Phase 2: 自绘编辑器
+# SimpleMarkdown Phase 2: 自绘编辑器
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -207,7 +207,7 @@ tests/
 
 每个 Task 完成后：
 1. 编译通过: `cmake --build build`
-2. 运行 EasyMarkdown 手动验证功能
+2. 运行 SimpleMarkdown 手动验证功能
 3. 相关单元测试通过
 
 Phase 2 整体验收：

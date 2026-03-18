@@ -1,8 +1,8 @@
-# EasyMarkdown 需求文档
+# SimpleMarkdown 需求文档
 
 ## 1. 产品概述
 
-EasyMarkdown 是一款轻量、高性能的跨平台 Markdown 阅读/编辑器，支持 Windows 和 Linux。
+SimpleMarkdown 是一款轻量、高性能的跨平台 Markdown 阅读/编辑器，支持 Windows 和 Linux。
 
 ## 2. 核心功能
 

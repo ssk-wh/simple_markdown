@@ -21,7 +21,7 @@
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    setWindowTitle("EasyMarkdown");
+    setWindowTitle("SimpleMarkdown");
     resize(1280, 800);
 
     m_recentFiles = new RecentFiles(this);
@@ -131,7 +131,7 @@ void MainWindow::newTab()
 
     // Insert sample text for new empty tabs
     tab.editor->document()->insert(0,
-        "# EasyMarkdown\n"
+        "# SimpleMarkdown\n"
         "\n"
         "A **lightweight** cross-platform Markdown editor.\n"
     );
@@ -215,7 +215,7 @@ void MainWindow::updateTabTitle(int index)
 
     // Update window title
     if (index == m_tabWidget->currentIndex())
-        setWindowTitle(title + " - EasyMarkdown");
+        setWindowTitle(title + " - SimpleMarkdown");
 }
 
 void MainWindow::updateRecentFilesMenu()

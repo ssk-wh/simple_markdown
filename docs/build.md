@@ -1,4 +1,4 @@
-# EasyMarkdown 构建说明
+# SimpleMarkdown 构建说明
 
 ## 前置依赖
 
@@ -57,11 +57,11 @@ ctest -C Release --output-on-failure
 
 ```bash
 # Windows
-build/app/Release/EasyMarkdown.exe
+build/app/Release/SimpleMarkdown.exe
 
 # Linux
-build/app/EasyMarkdown
+build/app/SimpleMarkdown
 
 # 打开文件
-build/app/Release/EasyMarkdown.exe path/to/file.md
+build/app/Release/SimpleMarkdown.exe path/to/file.md
 ```

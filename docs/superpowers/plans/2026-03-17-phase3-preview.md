@@ -1,4 +1,4 @@
-# EasyMarkdown Phase 3: Markdown 解析 + 自绘预览
+# SimpleMarkdown Phase 3: Markdown 解析 + 自绘预览
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development to implement this plan.
 

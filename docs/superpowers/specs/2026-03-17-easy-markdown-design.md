@@ -1,8 +1,8 @@
-# EasyMarkdown 设计规格
+# SimpleMarkdown 设计规格
 
 ## 1. 概述
 
-EasyMarkdown 是一款轻量、高性能的跨平台（Windows/Linux）Markdown 阅读/编辑器。采用分屏模式（左侧源码编辑 + 右侧实时预览），通过 QPainter 自绘实现编辑器和预览渲染，追求极致的启动速度和输入响应。
+SimpleMarkdown 是一款轻量、高性能的跨平台（Windows/Linux）Markdown 阅读/编辑器。采用分屏模式（左侧源码编辑 + 右侧实时预览），通过 QPainter 自绘实现编辑器和预览渲染，追求极致的启动速度和输入响应。
 
 ### 1.1 核心指标
 

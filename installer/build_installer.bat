@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 chcp 65001 >nul 2>&1
 
 echo ========================================
-echo  EasyMarkdown Installer Build Script
+echo  SimpleMarkdown Installer Build Script
 echo ========================================
 
 :: Configuration
@@ -29,7 +29,7 @@ if "%QT_DIR%"=="" (
 echo [INFO] Qt found: %QT_DIR%
 
 :: Extract version from CMakeLists.txt
-for /f "tokens=3" %%v in ('findstr /r "project(EasyMarkdown VERSION" "%PROJECT_DIR%\CMakeLists.txt"') do (
+for /f "tokens=3" %%v in ('findstr /r "project(SimpleMarkdown VERSION" "%PROJECT_DIR%\CMakeLists.txt"') do (
     set "VERSION=%%v"
 )
 :: Clean trailing parenthesis
@@ -40,7 +40,7 @@ echo [INFO] Version: %VERSION%
 :: Build Release
 echo [STEP 1] Building Release...
 cmake -S "%PROJECT_DIR%" -B "%BUILD_DIR%" 2>nul
-cmake --build "%BUILD_DIR%" --config Release --target EasyMarkdown
+cmake --build "%BUILD_DIR%" --config Release --target SimpleMarkdown
 if errorlevel 1 (
     echo [ERROR] Build failed
     exit /b 1
@@ -55,7 +55,7 @@ mkdir "%DIST_DIR%\imageformats"
 mkdir "%DIST_DIR%\styles"
 
 :: Copy exe
-copy "%BUILD_DIR%\app\Release\EasyMarkdown.exe" "%DIST_DIR%\" >nul
+copy "%BUILD_DIR%\app\Release\SimpleMarkdown.exe" "%DIST_DIR%\" >nul
 
 :: Copy Qt DLLs
 for %%f in (Qt5Core Qt5Gui Qt5Widgets Qt5Network Qt5Svg) do (
@@ -90,6 +90,7 @@ echo [INFO] Collected %count% files
 echo [STEP 3] Building installer...
 powershell -Command "(Get-Content -Encoding UTF8 '%~dp0EasyMarkdown.nsi') -replace '!define APP_VERSION \".*\"', '!define APP_VERSION \"%VERSION%\"' | Set-Content -Encoding UTF8 '%~dp0EasyMarkdown.nsi'"
 
+
 :: Build NSIS installer
 where makensis >nul 2>&1
 if errorlevel 1 (
@@ -109,5 +110,5 @@ if errorlevel 1 (
 echo ========================================
 echo  Build complete!
 echo  Portable: %DIST_DIR%
-if exist "%~dp0EasyMarkdown-%VERSION%-Setup.exe" echo  Installer: %~dp0EasyMarkdown-%VERSION%-Setup.exe
+if exist "%~dp0SimpleMarkdown-%VERSION%-Setup.exe" echo  Installer: %~dp0SimpleMarkdown-%VERSION%-Setup.exe
 echo ========================================

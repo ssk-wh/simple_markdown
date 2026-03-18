@@ -52,8 +52,8 @@ int main(int argc, char* argv[])
 #endif
 
     QApplication app(argc, argv);
-    app.setApplicationName("EasyMarkdown");
-    app.setOrganizationName("EasyMarkdown");
+    app.setApplicationName("SimpleMarkdown");
+    app.setOrganizationName("SimpleMarkdown");
     app.setWindowIcon(QIcon(":/app-icon.png"));
 
     MainWindow window;

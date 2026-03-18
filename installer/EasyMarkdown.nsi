@@ -1,15 +1,15 @@
-; EasyMarkdown NSIS Installer Script
+; SimpleMarkdown NSIS Installer Script
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 
 ; ============== Basic Info ==============
-!define APP_NAME "EasyMarkdown"
+!define APP_NAME "SimpleMarkdown"
 !define APP_VERSION "0.1.0"
-!define APP_PUBLISHER "EasyMarkdown"
-!define APP_EXE "EasyMarkdown.exe"
+!define APP_PUBLISHER "SimpleMarkdown"
+!define APP_EXE "SimpleMarkdown.exe"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
-!define FILETYPE_KEY "EasyMarkdown.Document"
+!define FILETYPE_KEY "SimpleMarkdown.Document"
 
 Name "${APP_NAME} ${APP_VERSION}"
 OutFile "${APP_NAME}-${APP_VERSION}-Setup.exe"
@@ -102,7 +102,7 @@ SectionEnd
 
 ; ============== Section Descriptions ==============
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-    !insertmacro MUI_DESCRIPTION_TEXT ${SecMain} "Install EasyMarkdown and all required files"
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecMain} "Install SimpleMarkdown and all required files"
     !insertmacro MUI_DESCRIPTION_TEXT ${SecStartMenu} "Create Start Menu shortcuts"
     !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} "Create Desktop shortcut"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END

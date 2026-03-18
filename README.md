@@ -1,4 +1,4 @@
-# EasyMarkdown
+# SimpleMarkdown
 
 轻量、高性能的跨平台 Markdown 编辑器，基于 C++17 / Qt 5.15 全自绘渲染。
 

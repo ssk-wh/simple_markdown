@@ -1,4 +1,4 @@
-# EasyMarkdown 架构文档
+# SimpleMarkdown 架构文档
 
 ## 1. 整体架构
 

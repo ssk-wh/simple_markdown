@@ -1,4 +1,4 @@
-# EasyMarkdown Phase 1: 项目脚手架 + 核心数据模型
+# SimpleMarkdown Phase 1: 项目脚手架 + 核心数据模型
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -106,7 +106,7 @@ out/
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
-project(EasyMarkdown VERSION 0.1.0 LANGUAGES C CXX)
+project(SimpleMarkdown VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -1231,7 +1231,7 @@ git commit -m "test: 补充边界情况和性能基准测试"
 - [ ] **Step 1: 创建 README.md**
 
 ```markdown
-# EasyMarkdown
+# SimpleMarkdown
 
 轻量、高性能的跨平台 Markdown 编辑器。
 

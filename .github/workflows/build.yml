@@ -44,7 +44,7 @@ jobs:
             $version = $Matches[1]
           } else {
             $content = Get-Content CMakeLists.txt -Raw
-            if ($content -match 'project\(EasyMarkdown\s+VERSION\s+([0-9.]+)') {
+            if ($content -match 'project\(SimpleMarkdown\s+VERSION\s+([0-9.]+)') {
               $version = $Matches[1]
             } else {
               $version = "0.1.0"
@@ -88,7 +88,7 @@ jobs:
           Write-Host "Qt plugins: $qtPlugins"
 
           # Copy exe
-          Copy-Item "build/app/Release/EasyMarkdown.exe" "$dist/"
+          Copy-Item "build/app/Release/SimpleMarkdown.exe" "$dist/"
 
           # Copy Qt DLLs
           foreach ($dll in @("Qt5Core","Qt5Gui","Qt5Widgets","Qt5Network","Qt5Svg")) {
@@ -133,19 +133,19 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: EasyMarkdown-${{ env.VERSION }}-Setup
-          path: installer/EasyMarkdown-*-Setup.exe
+          name: SimpleMarkdown-${{ env.VERSION }}-Setup
+          path: installer/SimpleMarkdown-*-Setup.exe
 
       - name: Create portable zip
         shell: pwsh
         run: |
-          Compress-Archive -Path "installer/dist/*" -DestinationPath "installer/EasyMarkdown-$env:VERSION-Portable.zip"
+          Compress-Archive -Path "installer/dist/*" -DestinationPath "installer/SimpleMarkdown-$env:VERSION-Portable.zip"
 
       - name: Upload portable
         uses: actions/upload-artifact@v4
         with:
-          name: EasyMarkdown-${{ env.VERSION }}-Windows-Portable
-          path: installer/EasyMarkdown-*-Portable.zip
+          name: SimpleMarkdown-${{ env.VERSION }}-Windows-Portable
+          path: installer/SimpleMarkdown-*-Portable.zip
 
   release:
     needs: [build-windows]
