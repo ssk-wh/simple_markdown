@@ -139,6 +139,39 @@ void EditorWidget::paintEvent(QPaintEvent* event)
     painter.save();
     painter.setClipRect(m_gutterWidth, 0, viewport()->width() - m_gutterWidth, viewport()->height());
 
+    // 选区绘制在 clip 之前（覆盖 gutter + 文本区域全宽）
+    if (m_doc->selection().hasSelection()) {
+        QColor selColor = palette().highlight().color();
+        if (!selColor.isValid() || selColor == Qt::white)
+            selColor = QColor(0, 51, 153);  // 深蓝色 fallback
+        selColor.setAlpha(80);
+
+        TextPosition startPos = m_doc->selection().range().start();
+        TextPosition endPos = m_doc->selection().range().end();
+        int startLine = qMax(startPos.line, first);
+        int endLine = qMin(endPos.line, last);
+
+        for (int line = startLine; line <= endLine && line < m_layout->lineCount(); ++line) {
+            QTextLayout* tl = m_layout->layoutForLine(line);
+            if (!tl || tl->lineCount() == 0) continue;
+
+            qreal lineTop = m_layout->lineY(line) - sy;
+            int lineLen = m_doc->lineText(line).length();
+            int selStart = (line == startPos.line) ? startPos.column : 0;
+            int selEnd = (line == endPos.line) ? endPos.column : lineLen;
+            if (selStart >= selEnd && line != endPos.line) selEnd = lineLen + 1;
+
+            qreal x1 = tl->lineAt(0).cursorToX(qMin(selStart, lineLen));
+            qreal x2 = (selEnd > lineLen)
+                        ? (qreal)(viewport()->width())
+                        : tl->lineAt(0).cursorToX(qMin(selEnd, lineLen));
+
+            painter.fillRect(QRectF(m_gutterWidth + 8 + x1, lineTop,
+                                     x2 - x1, m_layout->lineHeight(line)),
+                             selColor);
+        }
+    }
+
     m_painter->paint(&painter, m_layout, m_doc, first, last,
                      m_gutterWidth, sy,
                      m_cursorVisible && hasFocus(),

@@ -29,41 +29,11 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
     // Background
     painter->fillRect(painter->clipBoundingRect(), m_theme.editorBg);
 
-    // 当前行高亮 / 选区绘制
-    bool hasSelection = doc->selection().hasSelection();
-    if (!hasSelection) {
-        // 当前行浅色背景
+    // 当前行高亮（选区绘制已移到 EditorWidget::paintEvent 中）
+    if (!doc->selection().hasSelection()) {
         qreal cy = layout->lineY(cursorPos.line) - scrollY;
         qreal ch = layout->lineHeight(cursorPos.line);
         painter->fillRect(QRectF(gutterWidth, cy, viewWidth, ch), m_theme.editorCurrentLine);
-    } else {
-        // 选区背景
-        TextPosition startPos = doc->selection().range().start();
-        TextPosition endPos = doc->selection().range().end();
-        int startLine = qMax(startPos.line, firstLine);
-        int endLine = qMin(endPos.line, lastLine);
-
-        for (int line = startLine; line <= endLine && line < layout->lineCount(); ++line) {
-            QTextLayout* tl = layout->layoutForLine(line);
-            if (!tl || tl->lineCount() == 0) continue;
-
-            qreal lineTop = layout->lineY(line) - scrollY;
-            int lineLen = doc->lineText(line).length();
-
-            int selStart = (line == startPos.line) ? startPos.column : 0;
-            int selEnd = (line == endPos.line) ? endPos.column : lineLen;
-
-            if (selStart >= selEnd && line != endPos.line) {
-                selEnd = lineLen + 1;  // 选中换行符，整行宽度
-            }
-
-            qreal x1 = tl->lineAt(0).cursorToX(qMin(selStart, lineLen));
-            qreal x2 = (selEnd > lineLen) ? viewWidth : tl->lineAt(0).cursorToX(qMin(selEnd, lineLen));
-
-            painter->fillRect(QRectF(gutterWidth + margin + x1, lineTop,
-                                      x2 - x1, layout->lineHeight(line)),
-                              m_theme.editorSelection);
-        }
     }
 
     // 搜索匹配高亮
