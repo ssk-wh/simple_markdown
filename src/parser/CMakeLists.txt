@@ -11,4 +11,4 @@ target_include_directories(easy_parser PRIVATE
     ${CMAKE_BINARY_DIR}/3rdparty/cmark-gfm/extensions
 )
 target_compile_definitions(easy_parser PUBLIC CMARK_GFM_STATIC_DEFINE CMARK_GFM_EXTENSIONS_STATIC_DEFINE)
-target_link_libraries(easy_parser PUBLIC easy_core Qt5::Core libcmark-gfm_static libcmark-gfm-extensions_static)
+target_link_libraries(easy_parser PUBLIC easy_core Qt5::Core libcmark-gfm-extensions_static libcmark-gfm_static)
