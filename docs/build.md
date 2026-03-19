@@ -18,7 +18,7 @@
 
 ```bash
 git clone --recursive <repo-url>
-cd easy_markdown
+cd simple_markdown
 ```
 
 如果已 clone 但未初始化 submodule：

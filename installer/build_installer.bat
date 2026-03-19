@@ -88,7 +88,7 @@ echo [INFO] Collected %count% files
 
 :: Update version in NSIS script
 echo [STEP 3] Building installer...
-powershell -Command "(Get-Content -Encoding UTF8 '%~dp0EasyMarkdown.nsi') -replace '!define APP_VERSION \".*\"', '!define APP_VERSION \"%VERSION%\"' | Set-Content -Encoding UTF8 '%~dp0EasyMarkdown.nsi'"
+powershell -Command "(Get-Content -Encoding UTF8 '%~dp0SimpleMarkdown.nsi') -replace '!define APP_VERSION \".*\"', '!define APP_VERSION \"%VERSION%\"' | Set-Content -Encoding UTF8 '%~dp0SimpleMarkdown.nsi'"
 
 
 :: Build NSIS installer
@@ -100,7 +100,7 @@ if errorlevel 1 (
 )
 
 cd /d "%~dp0"
-makensis EasyMarkdown.nsi
+makensis SimpleMarkdown.nsi
 if errorlevel 1 (
     echo [ERROR] NSIS build failed
     exit /b 1

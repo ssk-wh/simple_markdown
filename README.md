@@ -44,7 +44,7 @@
 ## 项目结构
 
 ```
-easy_markdown/
+simple_markdown/
 ├── app/                    # 应用入口（main、MainWindow）
 ├── src/
 │   ├── core/               # 核心数据模型（PieceTable、Document、UndoStack、Selection、Theme）
@@ -72,7 +72,7 @@ easy_markdown/
 
 ```bash
 git clone --recursive <repo-url>
-cd easy_markdown
+cd simple_markdown
 cmake -S . -B build
 cmake --build build --config Release
 ```

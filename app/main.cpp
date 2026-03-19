@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QIcon>
+#include <QFileInfo>
 #include <QLocalSocket>
 #include "MainWindow.h"
 
