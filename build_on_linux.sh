@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-BUILD_DIR="build_tools"
+BUILD_DIR="build"
 BUILD_TYPE="Release"
 JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 

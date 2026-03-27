@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "nsiScript": "installer/SimpleMarkdown.nsi",
   "build": {
-    "command": "build_tools/build.bat",
-    "outputDir": "build/app/Release",
+    "command": "build_on_win.bat",
+    "outputDir": "build/app",
     "exe": "SimpleMarkdown.exe"
   },
   "dist": {
