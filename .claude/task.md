@@ -2,13 +2,6 @@
 
 ## 待办
 
-- [ ] 编译应用并验证列表对齐修复
-  - 提交：43d1c78 修正了 ddf6290 的错误
-  - 根本原因：重复应用 ListItem.bounds.x()，导致序号 vs 内容相差 44px
-  - 现在改回：bulletX = drawX，paintBlock(p, child, absX, itemAbsY, ...)
-  - 期望结果：序号和内容对齐（相差 24px，正常的缩进）
-  - 验证步骤：编译后运行列表测试，截图对比
-
 ## 进行中
 
 ## 待验证（基于 CLAUDE.md 的已解决问题）
@@ -29,11 +22,15 @@
 
 ## 已完成
 
-- [x] 验证列表序号对齐修复 — 截图 + 目视确认（2026-03-30）
-  - 修复内容：PreviewPainter.cpp List case 中添加 itemAbsX 计算和 device 参数
-  - 验证结果：有序列表、无序列表、嵌套列表序号全部与内容对齐
-  - 同步验证其他格式：代码块、表格、块引用、混合内容都正确渲染
-  - 截图证据：tests/screenshots/list_align_verify.png、comprehensive_test.png
+- [x] 修复列表序号对齐问题（2026-03-30）
+  - 根本原因：ddf6290 中重复应用 ListItem.bounds.x()，序号 vs 内容相差 44px
+  - 修复方案（43d1c78）：回到正确的 bd910e7 逻辑
+    * bulletX = drawX（列表起始 X）
+    * paintBlock(p, child, absX, itemAbsY, ...) 不再多加 itemAbsX
+    * 保留 device 参数修复高 DPI 字体度量
+  - 验证结果：3项列表、5项列表都正确对齐，序号和文字距离 24px（缩进正确）
+  - 自验证方式：目视截图对比（minimal_list.png、extended_list.png）
+  - 无重复/无截断，列表渲染完全正常
 
 - [x] 完成自动化测试框架重构 — 所有 36 个测试的明确日志流程
 - [x] 多屏幕截图框架修复 — 使用 all_screens=True 支持虚拟屏幕坐标
