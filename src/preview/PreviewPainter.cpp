@@ -207,19 +207,21 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         // Left bar
         p->fillRect(QRectF(drawX, drawY, 3, block.bounds.height()), m_theme.previewBlockQuoteBorder);
 
-        // Children - 传入正确的子块绝对 y 坐标
+        // Children - 传入正确的子块绝对坐标（包括 X 偏移）
         for (const auto& child : block.children) {
+            qreal childAbsX = absX + child.bounds.x();
             qreal childAbsY = absY + child.bounds.y();
-            paintBlock(p, child, absX, childAbsY, scrollY, viewportHeight, viewportWidth);
+            paintBlock(p, child, childAbsX, childAbsY, scrollY, viewportHeight, viewportWidth);
         }
         break;
     }
     case LayoutBlock::List: {
         int itemIndex = 0;
         for (const auto& child : block.children) {
+            qreal itemAbsX = absX + child.bounds.x();  // [坐标系统统一] 列表项 X 偏移（缩进）
             qreal itemAbsY = absY + child.bounds.y();
             qreal itemDrawY = itemAbsY - scrollY;
-            qreal bulletX = drawX;
+            qreal bulletX = itemAbsX;  // 序号与内容使用同一 X 坐标系统
 
             QFont baseFont("Segoe UI", 10);
             p->setFont(baseFont);
@@ -234,7 +236,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                             QStringLiteral("\u2022"));
             }
 
-            paintBlock(p, child, absX, itemAbsY, scrollY, viewportHeight, viewportWidth);
+            paintBlock(p, child, itemAbsX, itemAbsY, scrollY, viewportHeight, viewportWidth);
             itemIndex++;
         }
         break;
