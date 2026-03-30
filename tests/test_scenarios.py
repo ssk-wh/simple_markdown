@@ -27,9 +27,48 @@ class RenderingTests(TestCase):
 
     def setUp(self):
         """准备测试环境"""
+        # [改进] 杀掉现有进程，清晰地展示测试流程
+        import subprocess
+        try:
+            subprocess.run(["taskkill", "/IM", "SimpleMarkdown.exe", "/F"],
+                          capture_output=True, timeout=2)
+            self.logger.info("Killed existing SimpleMarkdown processes")
+            time.sleep(1)
+        except:
+            pass
+
         self.fixture = MarkdownFixture()
         self.validator = RenderingValidator(logger=self.logger)
+        self.logger.info("Opening application with test file...")
         self.app = self.launch_app()
+        self.logger.info("Application ready for testing")
+
+    def test_file_and_capture(self, fixture_file: str, test_name: str) -> None:
+        """
+        [改进流程] 打开测试文件、等待渲染、截图验证
+
+        步骤：
+        1. 加载Markdown文件
+        2. 打开到应用
+        3. 等待渲染完成
+        4. 截图保存
+        5. 记录日志
+        """
+        self.logger.info(f"[1/4] Loading markdown file: {fixture_file}")
+        md_content = self.fixture.load(fixture_file)
+
+        self.logger.info(f"[2/4] Opening file in application...")
+        self.app.open_file_from_text(md_content, fixture_file)
+
+        self.logger.info(f"[3/4] Waiting for rendering to complete...")
+        self.wait_for_condition(lambda: self.app.is_running(), timeout=3.0)
+        time.sleep(1)  # 额外等待以确保渲染完成
+
+        self.logger.info(f"[4/4] Taking screenshot...")
+        screenshot = self.take_screenshot(test_name)
+        self.assertions.assert_true(screenshot is not None, "Screenshot captured successfully")
+
+        self.logger.info(f"File testing workflow completed: {test_name}")
 
     def validate_rendering(self, test_name: str, check_overlap=True, check_spacing=True) -> bool:
         """

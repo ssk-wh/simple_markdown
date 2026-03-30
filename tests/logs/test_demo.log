@@ -1,0 +1,15 @@
+[16:41:12.200] [INFO] [START] test_demo at 2026-03-30T16:41:12.200768
+[16:41:12.523] [INFO] Killed existing SimpleMarkdown processes
+[16:41:13.524] [INFO] Opening application with test file...
+[16:41:13.524] [INFO] Launching app: D:\iflytek_projects\simple_markdown\build\app\SimpleMarkdown.exe
+[16:41:15.539] [INFO] App launched successfully
+[16:41:15.539] [INFO] Application ready for testing
+[16:41:15.539] [INFO] setUp completed
+[16:41:15.539] [INFO] Testing blockquote indentation...
+[16:41:19.596] [INFO] Taking screenshot: test_demo_quote_indent_164119.png
+[16:41:19.711] [DEBUG] Screenshot saved: tests\screenshots\test_demo_quote_indent_164119.png
+[16:41:19.711] [DEBUG] ✓ Assert condition is True
+[16:41:19.711] [INFO] test method completed successfully
+[16:41:19.723] [INFO] tearDown completed
+[16:41:19.723] [INFO] [END] test_demo - PASS
+[16:41:19.723] [INFO] Message: Test passed
