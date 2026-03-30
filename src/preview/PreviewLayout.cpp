@@ -33,6 +33,7 @@ void PreviewLayout::setFont(const QFont& baseFont)
 
 void PreviewLayout::updateMetrics(QPaintDevice* device)
 {
+    // 在高 DPI 下，必须使用 device 参数确保字体度量与渲染一致
     QFontMetricsF fm(m_baseFont, device);
     m_lineHeight = fm.height() * 1.5;
     QFontMetricsF fmCode(m_monoFont, device);

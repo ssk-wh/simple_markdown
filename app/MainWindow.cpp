@@ -5,6 +5,7 @@
 #include "ScrollSync.h"
 #include "Document.h"
 #include "RecentFiles.h"
+#include "ChangelogDialog.h"
 
 #include <QSplitter>
 #include <QMenuBar>
@@ -182,6 +183,14 @@ void MainWindow::setupMenuBar()
 
     // -- Help menu --
     QMenu* helpMenu = menuBar()->addMenu(tr("Help"));
+
+    helpMenu->addAction(tr("Update History"), this, [this]() {
+        ChangelogDialog dialog(this);
+        dialog.exec();
+    });
+
+    helpMenu->addSeparator();
+
     helpMenu->addAction(tr("About"), this, [this]() {
         QString about = QString(
             "<h2>SimpleMarkdown %1</h2>"
@@ -317,6 +326,10 @@ void MainWindow::openFile(const QString& path)
     for (int i = 0; i < m_tabs.size(); ++i) {
         if (m_tabs[i].editor->document()->filePath() == QFileInfo(path).absoluteFilePath()) {
             m_tabWidget->setCurrentIndex(i);
+            // 如果文件已打开，切换到该标签页后提升窗口
+            setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+            raise();
+            activateWindow();
             return;
         }
     }
@@ -331,6 +344,11 @@ void MainWindow::openFile(const QString& path)
 
     m_recentFiles->addFile(path);
     updateTabTitle(index);
+
+    // 加载新文件后提升窗口，确保用户能看到
+    setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+    raise();
+    activateWindow();
 }
 
 MainWindow::TabData MainWindow::createTab()
