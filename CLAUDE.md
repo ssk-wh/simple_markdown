@@ -60,6 +60,31 @@ QFontMetricsF defaultFm(font, p->device()); // 内联文本
 QFontMetricsF fm(seg.font, viewport());
 ```
 
+#### 4. 高度估计（PreviewLayout.cpp）
+
+**陷阱：** 布局阶段的高度估计不能动态调整行高！
+
+```cpp
+// ✗ 错误：在 estimateParagraphHeight 中根据每个 run 动态调整
+qreal lineHeight = m_lineHeight;
+for (const auto& run : runs) {
+    QFontMetricsF fm(run.font);  // 没有 device 参数，逻辑像素
+    qreal runLineH = fm.height() * 1.5;
+    if (runLineH > lineHeight)
+        lineHeight = runLineH;  // ← 高 DPI 时与 updateMetrics 不一致
+}
+
+// ✓ 正确：使用在 updateMetrics 中预先计算的 m_lineHeight
+qreal lineHeight = m_lineHeight;
+for (const auto& run : runs) {
+    QFontMetricsF fm(run.font);
+    totalWidth += fm.horizontalAdvance(run.text);
+    // 不再调整 lineHeight，保持与 updateMetrics 一致
+}
+```
+
+**原因：** m_lineHeight 已经根据设备 DPI 调整，再次调整会导致估计高度与实际高度不匹配。
+
 ### 何时调用 updateMetrics
 
 | 场景 | 是否需要 |
@@ -78,6 +103,51 @@ QFontMetricsF fm(seg.font, viewport());
 - [ ] 鼠标命中测试使用 `QFontMetricsF(font, viewport())` 计算
 - [ ] 在 DPI 改变时（resizeEvent、updateMetrics）同步重新计算
 - [ ] 在 1x、1.25x、1.5x DPI 屏幕都验证过
+
+---
+
+## 坐标系统设计原则
+
+### 问题场景
+
+列表序号与文本基线不对齐（序号偏下）、嵌套块结构渲染位置错误。
+
+### 根本原因
+
+递归绘制时，子块使用了错误的绝对坐标：
+
+```cpp
+// ✗ 错误：子块继承了父块的 absY，而不是计算自身的绝对坐标
+for (const auto& child : block.children) {
+    paintBlock(p, child, absX, absY, ...);  // absY 是列表块的，不是列表项的
+}
+```
+
+### 修复方案
+
+所有子块必须显式计算自身的绝对坐标：
+
+```cpp
+// ✓ 正确：每个子块都计算自己的绝对 y 坐标
+for (const auto& child : block.children) {
+    qreal childAbsY = absY + child.bounds.y();  // 相对坐标 + 相对偏移
+    paintBlock(p, child, absX, childAbsY, ...);
+}
+```
+
+### 应用范围
+
+- **List 块**：列表项的绝对坐标必须包含列表的 y 偏移
+- **BlockQuote 块**：引用内容的绝对坐标必须包含引用的 y 偏移
+- **Table 块**：表格单元格的绝对坐标必须包含行的 y 偏移
+
+### 检查清单
+
+任何涉及渲染树的嵌套结构改动：
+
+- [ ] 子块的 absY 是否显式计算：`absY + child.bounds.y()`
+- [ ] 递归调用 paintBlock 时是否使用了计算出的绝对坐标
+- [ ] 序号/前缀绘制和内容绘制是否使用同一个 absY
 
 ---
 
@@ -199,6 +269,8 @@ Fixes: #123
 - [ ] **DPI 切换** - 从 1x 拖到 1.5x 屏，验证 updateMetrics 生效
 - [ ] **窗口最小化/最大化** - 检查 DPI 改变时的行为
 - [ ] **多标签页场景** - 打开多个文件后切换
+- [ ] **列表序号对齐** - 检查序号与文本基线是否对齐（A 和 B 屏）
+- [ ] **嵌套结构** - 测试引用内的列表、表格中的复杂内容
 
 ---
 
@@ -210,6 +282,8 @@ Fixes: #123
 - [x] 双击选中坐标偏差（2026-03-30 修复）
 - [x] 反引号过多空白（2026-03-30 修复）
 - [x] 打开文件时窗口未提升（2026-03-30 修复）
+- [x] 列表序号与文本基线不对齐（2026-03-30 修复 - 坐标系统统一）
+- [x] 高 DPI 屏上行间距不均匀（2026-03-30 修复 - 高度估计一致性）
 
 ### 待观察
 
