@@ -1,7 +1,6 @@
 #include "PreviewPainter.h"
 
 #include <QFontMetricsF>
-#include <QDebug>
 
 PreviewPainter::PreviewPainter()
     : m_theme(Theme::light())
@@ -94,7 +93,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         monoFont.setStyleHint(QFont::Monospace);
         p->setFont(monoFont);
         p->setPen(m_theme.previewCodeFg);
-        QFontMetricsF fm(monoFont);
+        QFontMetricsF fm(monoFont, p->device());  // 使用 painter 的设备确保高 DPI 下度量正确
         qreal textHeight = fm.ascent() + fm.descent();  // 文本实际高度
         qreal lineH = fm.height() * 1.4;  // 行高（包括间距）
         qreal textX = drawX + 8;
@@ -330,7 +329,9 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             continue;
         }
 
-        QFontMetricsF fm(run.font);
+        // 关键修复：使用 painter 的设备来计算度量，确保与实际绘制宽度一致
+        // 原因：painter 会根据目标设备调整字体渲染，度量必须与之匹配
+        QFontMetricsF fm(run.font, p->device());
 
         bool hasBg = run.bgColor.isValid() && run.bgColor != Qt::transparent;
 
@@ -341,17 +342,6 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             // 文本范围 Y：从 curY 到 curY + fm.height()
             // 背景、选区高亮必须使用一致的高度，避免 DPI 切换时产生空白
             qreal textHeight = fm.height();  // 文本实际高度
-
-            // DEBUG：输出 backtick 的宽度
-            if (hasBg && (seg.contains("QFuture") || seg.contains("Future"))) {
-                qDebug() << "[BACKTICK DEBUG] seg=" << seg
-                         << "segW=" << segW
-                         << "fm.horizontalAdvance(seg)=" << fm.horizontalAdvance(seg)
-                         << "curX=" << curX
-                         << "textHeight=" << textHeight
-                         << "fm.height()=" << fm.height()
-                         << "DPR=" << p->device()->devicePixelRatioF();
-            }
 
             if (hasBg) {
                 p->fillRect(QRectF(curX, curY, segW, textHeight), run.bgColor);
