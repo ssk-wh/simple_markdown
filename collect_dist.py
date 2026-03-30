@@ -117,8 +117,23 @@ def collect(build_dir):
     # Step 1: Clean dist
     print("[1/5] Cleaning dist directory...")
     if DIST_DIR.exists():
-        shutil.rmtree(DIST_DIR)
-    DIST_DIR.mkdir(parents=True)
+        try:
+            shutil.rmtree(DIST_DIR)
+        except PermissionError:
+            # Directory in use, just clear its contents
+            import glob
+            for item in glob.glob(str(DIST_DIR / "*")):
+                if os.path.isdir(item):
+                    try:
+                        shutil.rmtree(item)
+                    except PermissionError:
+                        pass
+                else:
+                    try:
+                        os.remove(item)
+                    except PermissionError:
+                        pass
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
 
     # Step 2: Copy exe and documentation
     print(f"[2/5] Copying {EXE_NAME} and documentation...")

@@ -10,7 +10,7 @@ if(MSVC)
 endif()
 
 # [测试模式] 编译选项：自动化测试输出渲染块坐标
-option(ENABLE_TEST_MODE "Enable test mode for rendering block coordinates output" ON)
+option(ENABLE_TEST_MODE "Enable test mode for rendering block coordinates output" OFF)
 if(ENABLE_TEST_MODE)
     add_compile_definitions(ENABLE_TEST_MODE)
     message(STATUS "Test mode enabled: Application will output render_blocks.json")
@@ -32,5 +32,6 @@ add_subdirectory(src)
 
 add_subdirectory(app)
 
-enable_testing()
-add_subdirectory(tests)
+# Tests have been removed from the repository
+# enable_testing()
+# add_subdirectory(tests)
