@@ -1,9 +1,0 @@
-[15:00:40.180] [INFO] [START] edge_001 at 2026-03-30T15:00:40.180315
-[15:00:40.180] [INFO] Launching app: D:\iflytek_projects\simple_markdown\build\app\SimpleMarkdown.exe
-[15:00:42.519] [INFO] App launched successfully
-[15:00:42.519] [INFO] setUp completed
-[15:00:42.519] [INFO] Testing deep nesting...
-[15:00:42.519] [ERROR] Exception: Fixture not found: tests\markdown_fixtures\nested_structures.md
-[15:00:42.519] [INFO] tearDown completed
-[15:00:42.519] [INFO] [END] edge_001 - ERROR
-[15:00:42.519] [INFO] Message: Unexpected error: Fixture not found: tests\markdown_fixtures\nested_structures.md

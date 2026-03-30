@@ -1,9 +1,0 @@
-[14:59:44.968] [INFO] [START] render_010 at 2026-03-30T14:59:44.968305
-[14:59:44.968] [INFO] Launching app: D:\iflytek_projects\simple_markdown\build\app\SimpleMarkdown.exe
-[14:59:46.991] [INFO] App launched successfully
-[14:59:46.991] [INFO] setUp completed
-[14:59:46.992] [INFO] Testing blockquote indentation...
-[14:59:46.992] [ERROR] Exception: Fixture not found: tests\markdown_fixtures\quotes.md
-[14:59:46.992] [INFO] tearDown completed
-[14:59:46.992] [INFO] [END] render_010 - ERROR
-[14:59:46.992] [INFO] Message: Unexpected error: Fixture not found: tests\markdown_fixtures\quotes.md

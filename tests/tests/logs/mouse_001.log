@@ -1,9 +1,0 @@
-[15:00:26.000] [INFO] [START] mouse_001 at 2026-03-30T15:00:26.000341
-[15:00:26.000] [INFO] Launching app: D:\iflytek_projects\simple_markdown\build\app\SimpleMarkdown.exe
-[15:00:28.515] [INFO] App launched successfully
-[15:00:28.515] [INFO] setUp completed
-[15:00:28.515] [INFO] Testing clear marks feature...
-[15:00:28.515] [ERROR] Exception: Fixture not found: tests\markdown_fixtures\marking_feature.md
-[15:00:28.515] [INFO] tearDown completed
-[15:00:28.515] [INFO] [END] mouse_001 - ERROR
-[15:00:28.515] [INFO] Message: Unexpected error: Fixture not found: tests\markdown_fixtures\marking_feature.md
