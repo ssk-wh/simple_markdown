@@ -127,6 +127,19 @@ if exist %BUILD_DIR%\app\SimpleMarkdown.exe (
     echo   Build succeeded: %BUILD_DIR%\app\SimpleMarkdown.exe
     echo   Size: !EXE_SIZE! bytes
     echo ================================================
+
+    REM ---- Copy Qt DLLs for running locally ----
+    echo.
+    echo [4/4] Copying Qt dependencies...
+    if exist copy_qt_dlls.py (
+        python copy_qt_dlls.py %BUILD_DIR%\app
+        if errorlevel 1 (
+            echo [WARN] Failed to copy Qt DLLs, but build succeeded
+        )
+    ) else (
+        echo [WARN] copy_qt_dlls.py not found, skipping DLL copy
+    )
+
     exit /b 0
 ) else (
     echo [ERROR] Build completed but executable not found!
