@@ -374,6 +374,12 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
     if (runs.empty()) return m_lineHeight;
 
     qreal totalWidth = 0;
+    // [高 DPI 修复] 高度估计必须使用 m_lineHeight，保持与 updateMetrics 的一致性
+    // 原因：
+    //   - m_lineHeight 在 updateMetrics 中已经根据 device DPI 调整
+    //   - 这里不应该基于每个 run 重新计算行高，因为没有 device 信息
+    //   - 否则高 DPI 屏上会导致估计高度与实际高度不匹配
+    // 注意：这样做会放弃对某些混合字体大小的优化，但能保证 DPI 一致性
     qreal lineHeight = m_lineHeight;
     int newlineCount = 0;
 
@@ -384,8 +390,7 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
         }
         QFontMetricsF fm(run.font);
         totalWidth += fm.horizontalAdvance(run.text);
-        qreal runLineH = fm.height() * 1.5;
-        if (runLineH > lineHeight) lineHeight = runLineH;
+        // 不再根据 run 的字体重新计算 lineHeight，确保使用统一的 m_lineHeight
     }
 
     int wrappedLines = qMax(1, static_cast<int>(qCeil(totalWidth / qMax(maxWidth, 1.0))));

@@ -159,9 +159,10 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         // Left bar
         p->fillRect(QRectF(drawX, drawY, 3, block.bounds.height()), m_theme.previewBlockQuoteBorder);
 
-        // Children
+        // Children - 传入正确的子块绝对 y 坐标
         for (const auto& child : block.children) {
-            paintBlock(p, child, absX, absY, scrollY, viewportHeight, viewportWidth);
+            qreal childAbsY = absY + child.bounds.y();
+            paintBlock(p, child, absX, childAbsY, scrollY, viewportHeight, viewportWidth);
         }
         break;
     }
@@ -172,7 +173,9 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal itemDrawY = itemAbsY - scrollY;
             qreal bulletX = drawX;
 
-            // Draw bullet/number
+            // 修复：序号应该与列表项内容对齐，使用列表项的绝对 y 坐标
+            // 原因：ListItem 块的绝对坐标应该是 absY + child.bounds.y()
+            // 而不是沿用列表块的 absY，这样才能保证序号和内容的基线一致
             QFont baseFont("Segoe UI", 10);
             p->setFont(baseFont);
             p->setPen(m_theme.previewFg);
@@ -187,8 +190,8 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                             QStringLiteral("\u2022"));
             }
 
-            // Paint child block contents
-            paintBlock(p, child, absX, absY, scrollY, viewportHeight, viewportWidth);
+            // Paint child block contents - 传入正确的项目绝对 y 坐标
+            paintBlock(p, child, absX, itemAbsY, scrollY, viewportHeight, viewportWidth);
             itemIndex++;
         }
         break;
@@ -220,10 +223,12 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             p->drawLine(QPointF(drawX, rowDrawY + rowHeight),
                         QPointF(drawX + block.bounds.width(), rowDrawY + rowHeight));
 
-            // Cells
+            // Cells - 传入正确的单元格绝对坐标
             for (const auto& cell : row.children) {
-                qreal cellX = drawX + cell.bounds.x();
-                qreal cellY = rowDrawY;
+                qreal cellAbsX = absX + cell.bounds.x();
+                qreal cellAbsY = rowAbsY;  // 单元格使用行的绝对 y
+                qreal cellX = cellAbsX;
+                qreal cellY = cellAbsY - scrollY;
 
                 // Column border
                 p->setPen(QPen(m_theme.previewTableBorder, 1));
