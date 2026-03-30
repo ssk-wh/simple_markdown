@@ -20,6 +20,11 @@ void PreviewPainter::setSelection(int selStart, int selEnd)
     m_selEnd = qMax(selStart, selEnd);
 }
 
+void PreviewPainter::setHighlights(const QVector<QPair<int,int>>& highlights)
+{
+    m_highlights = highlights;
+}
+
 void PreviewPainter::recordSegment(const QRectF& rect, int charStart, int charLen,
                                     const QString& text, const QFont& font)
 {
@@ -88,8 +93,9 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         monoFont.setStyleHint(QFont::Monospace);
         p->setFont(monoFont);
         p->setPen(m_theme.previewCodeFg);
-        QFontMetricsF fm(monoFont, p->device());
-        qreal lineH = fm.height() * 1.4;
+        QFontMetricsF fm(monoFont);
+        qreal textHeight = fm.ascent() + fm.descent();  // 文本实际高度
+        qreal lineH = fm.height() * 1.4;  // 行高（包括间距）
         qreal textX = drawX + 8;
         qreal textY = drawY + 8;
 
@@ -101,18 +107,32 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                 break;
 
             qreal w = fm.horizontalAdvance(line);
-            QRectF segRect(textX, textY, w, lineH);
+            // segRect 用于鼠标点击定位，必须与选区高亮矩形高度一致
+            QRectF segRect(textX, textY, w, textHeight);
 
-            // 选区高亮
+            int segStart = m_charCounter;
+            int segEnd = segStart + line.length();
+
+            // 标记高亮（先绘制，作为底层）
+            for (const auto& hl : m_highlights) {
+                int hlS = qMax(segStart, hl.first);
+                int hlE = qMin(segEnd, hl.second);
+                if (hlS < hlE) {
+                    qreal x1 = fm.horizontalAdvance(line.left(hlS - segStart));
+                    qreal x2 = fm.horizontalAdvance(line.left(hlE - segStart));
+                    p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
+                                m_theme.previewHighlight);
+                }
+            }
+
+            // 选区高亮 - 使用文本实际高度而不是行高
             if (m_selStart >= 0 && m_selEnd > m_selStart) {
-                int segStart = m_charCounter;
-                int segEnd = segStart + line.length();
                 int hlStart = qMax(segStart, m_selStart);
                 int hlEnd = qMin(segEnd, m_selEnd);
                 if (hlStart < hlEnd) {
                     qreal x1 = fm.horizontalAdvance(line.left(hlStart - segStart));
                     qreal x2 = fm.horizontalAdvance(line.left(hlEnd - segStart));
-                    p->fillRect(QRectF(textX + x1, textY, x2 - x1, lineH),
+                    p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
                                 QColor(0, 120, 215, 80));
                 }
             }
@@ -149,7 +169,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             QFont baseFont("Segoe UI", 10);
             p->setFont(baseFont);
             p->setPen(m_theme.previewFg);
-            QFontMetricsF fm(baseFont, p->device());
+            QFontMetricsF fm(baseFont);
 
             if (block.ordered) {
                 QString num = QString::number(block.listStart + itemIndex) + ".";
@@ -259,7 +279,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
 
     qreal curX = x;
     qreal curY = y;
-    QFontMetricsF defaultFm(block.inlineRuns[0].font, p->device());
+    QFontMetricsF defaultFm(block.inlineRuns[0].font);
     qreal lineHeight = defaultFm.height() * 1.5;
 
     QColor selColor(0, 120, 215, 80);
@@ -267,13 +287,30 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
     auto drawSelectionHighlight = [&](const QString& segText, qreal sx, qreal sy, qreal sw, qreal sh, int charStart, int charLen) {
         QFont curFont = p->font();
         recordSegment(QRectF(sx, sy, sw, sh), charStart, charLen, segText, curFont);
+
+        // 标记高亮（先绘制，作为底层）
+        if (charLen > 0) {
+            int segEnd = charStart + charLen;
+            for (const auto& hl : m_highlights) {
+                int hlS = qMax(charStart, hl.first);
+                int hlE = qMin(segEnd, hl.second);
+                if (hlS < hlE) {
+                    QFontMetricsF segFm(curFont);
+                    qreal x1 = segFm.horizontalAdvance(segText.left(hlS - charStart));
+                    qreal x2 = segFm.horizontalAdvance(segText.left(hlE - charStart));
+                    p->fillRect(QRectF(sx + x1, sy, x2 - x1, sh), m_theme.previewHighlight);
+                }
+            }
+        }
+
+        // 选区高亮（后绘制，叠加在上）
         if (m_selStart >= 0 && m_selEnd > m_selStart && charLen > 0) {
             int segEnd = charStart + charLen;
             int hlStart = qMax(charStart, m_selStart);
             int hlEnd = qMin(segEnd, m_selEnd);
             if (hlStart < hlEnd) {
                 // 使用字体度量精确定位高亮区域
-                QFontMetricsF segFm(curFont, p->device());
+                QFontMetricsF segFm(curFont);
                 qreal x1 = segFm.horizontalAdvance(segText.left(hlStart - charStart));
                 qreal x2 = segFm.horizontalAdvance(segText.left(hlEnd - charStart));
                 p->fillRect(QRectF(sx + x1, sy, x2 - x1, sh), selColor);
@@ -292,15 +329,21 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             continue;
         }
 
-        QFontMetricsF fm(run.font, p->device());
+        QFontMetricsF fm(run.font);
 
         bool hasBg = run.bgColor.isValid() && run.bgColor != Qt::transparent;
 
         // Helper: draw a segment with background, selection, decorations
         auto drawSegment = [&](const QString& seg, qreal segW, int segOffset) {
-            if (hasBg)
-                p->fillRect(QRectF(curX - 2, curY, segW + 4, lineHeight), run.bgColor);
-            drawSelectionHighlight(seg, curX, curY, segW, lineHeight,
+            // 反引号和内联代码背景色绘制
+            // drawText 在 (curX, curY + fm.ascent()) 以基线绘制
+            // 文本范围 Y：从 curY 到 curY + fm.height()
+            // 背景、选区高亮必须使用一致的高度，避免 DPI 切换时产生空白
+            qreal textHeight = fm.height();  // 文本实际高度
+            if (hasBg) {
+                p->fillRect(QRectF(curX, curY, segW, textHeight), run.bgColor);
+            }
+            drawSelectionHighlight(seg, curX, curY, segW, textHeight,
                                    m_charCounter + segOffset, seg.length());
             p->drawText(QPointF(curX, curY + fm.ascent()), seg);
             if (!run.linkUrl.isEmpty())
