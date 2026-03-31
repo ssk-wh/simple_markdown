@@ -126,9 +126,12 @@ void TocPanel::reposition()
     move(btnX, btnY);
 
     int panelW = 260;
-    int panelH = qBound(100, p->height() / 2, p->height() - btnY - m_toggleBtn->height() - 20);
-    int panelX = p->width() - panelW - 10;
     int panelY = btnY + m_toggleBtn->height() + 6;
+    int maxH = p->height() - panelY - 10;
+    // 面板高度自适应内容：每个条目约 30px + 上下 padding 12px
+    int contentH = m_entries.size() * 30 + 12;
+    int panelH = qBound(60, contentH, maxH);
+    int panelX = p->width() - panelW - 10;
     m_panel->setFixedSize(panelW, panelH);
     m_panel->move(panelX, panelY);
 }
@@ -204,7 +207,6 @@ void TocPanel::buildList()
         m_listLayout->addWidget(btn);
     }
 
-    m_listLayout->addStretch();
     reposition();
 }
 
