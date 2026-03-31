@@ -153,8 +153,9 @@ void EditorLayout::ensureLayout(int line) const
         QTextLine tline = tl->createLine();
         if (!tline.isValid())
             break;
-        if (m_wrapWidth > 0)
-            tline.setLineWidth(m_wrapWidth);
+        // 必须调用 setLineWidth 才会触发 Qt 的行排版计算（计算 height 等）
+        // NoWrap 模式用足够大的宽度，让文本不换行
+        tline.setLineWidth(m_wrapWidth > 0 ? m_wrapWidth : 32767);
         tline.setPosition(QPointF(0, y));
         y += tline.height() * m_lineSpacingFactor;
     }

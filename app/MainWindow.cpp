@@ -183,7 +183,8 @@ void MainWindow::setupMenuBar()
     m_wordWrapAct = viewMenu->addAction(tr("Word Wrap"));
     m_wordWrapAct->setCheckable(true);
     m_wordWrapAct->setChecked(true);
-    connect(m_wordWrapAct, &QAction::toggled, this, [this](bool checked) {
+    connect(m_wordWrapAct, &QAction::triggered, this, [this]() {
+        bool checked = m_wordWrapAct->isChecked();
         for (auto& tab : m_tabs) {
             tab.editor->setWordWrap(checked);
             tab.preview->setWordWrap(checked);

@@ -170,7 +170,7 @@ void EditorWidget::setWordWrap(bool enabled)
         m_layout->setWrapWidth(textAreaWidth > 50 ? textAreaWidth : 50);
         horizontalScrollBar()->setValue(0);
     } else {
-        m_layout->setWrapWidth(-1);  // 用 -1 而非 0，确保 qFuzzyCompare 不误判为"没变"
+        m_layout->setWrapWidth(-1);
         horizontalScrollBar()->setValue(0);
     }
 
@@ -468,6 +468,7 @@ void EditorWidget::updateScrollBars()
     } else {
         horizontalScrollBar()->setRange(0, 0);
     }
+
 }
 
 void EditorWidget::updateGutterWidth()
