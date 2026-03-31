@@ -56,6 +56,29 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_tabWidget, &QTabWidget::currentChanged,
             this, &MainWindow::saveSessionLater);
 
+    // Tab 右键菜单
+    m_tabWidget->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_tabWidget->tabBar(), &QWidget::customContextMenuRequested,
+            this, [this](const QPoint& pos) {
+        int idx = m_tabWidget->tabBar()->tabAt(pos);
+        if (idx < 0) return;
+        QMenu menu;
+        menu.addAction(tr("Close"), [this, idx]() { onCloseTab(idx); });
+        menu.addAction(tr("Close Others"), [this, idx]() {
+            for (int i = m_tabs.size() - 1; i >= 0; --i)
+                if (i != idx) onCloseTab(i);
+        });
+        menu.addAction(tr("Close to the Left"), [this, idx]() {
+            for (int i = idx - 1; i >= 0; --i)
+                onCloseTab(i);
+        });
+        menu.addAction(tr("Close to the Right"), [this, idx]() {
+            for (int i = m_tabs.size() - 1; i > idx; --i)
+                onCloseTab(i);
+        });
+        menu.exec(m_tabWidget->tabBar()->mapToGlobal(pos));
+    });
+
     // 延迟保存定时器（debounce 1秒，避免频繁写磁盘）
     m_saveSessionTimer.setSingleShot(true);
     m_saveSessionTimer.setInterval(1000);
