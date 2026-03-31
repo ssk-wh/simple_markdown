@@ -510,7 +510,7 @@ void MainWindow::applyTheme(const Theme& theme)
         setStyleSheet(QStringLiteral(
             "QMainWindow { background: #2b2b2b; }"
             // 菜单栏
-            "QMenuBar { background: #2b2b2b; color: #ccc; border-bottom: 1px solid #3c3f41; }"
+            "QMenuBar { background: #2b2b2b; color: #ccc; border: none; }"
             "QMenuBar::item { padding: 6px 10px; }"
             "QMenuBar::item:selected { background: #3c3f41; border-bottom: 2px solid #4a9eff; }"
             // 菜单（包括右键菜单）
@@ -552,7 +552,7 @@ void MainWindow::applyTheme(const Theme& theme)
     } else {
         setStyleSheet(QStringLiteral(
             // 菜单栏
-            "QMenuBar { border-bottom: 1px solid #e0e0e0; }"
+            "QMenuBar { border: none; }"
             "QMenuBar::item { padding: 6px 10px; }"
             "QMenuBar::item:selected { background: #e8e8e8; border-bottom: 2px solid #0078d4; }"
             // 菜单
