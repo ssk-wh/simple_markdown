@@ -44,6 +44,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_tabWidget->setTabsClosable(true);
     m_tabWidget->setMovable(true);
     m_tabWidget->setDocumentMode(true);
+    m_tabWidget->tabBar()->setDrawBase(false);
     setCentralWidget(m_tabWidget);
 
     connect(m_tabWidget, &QTabWidget::tabCloseRequested,
@@ -91,6 +92,8 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&m_saveSessionTimer, &QTimer::timeout, this, &MainWindow::saveSettings);
 
     setupMenuBar();
+    // 强制 menuBar 使用样式表绘制，避免原生样式画底部分隔线
+    menuBar()->setAttribute(Qt::WA_StyledBackground, true);
     setupDragDrop();
     loadSettings();
 }
@@ -519,8 +522,9 @@ void MainWindow::applyTheme(const Theme& theme)
             "QMenu::item:selected { background: #3c3f41; border-left: 2px solid #4a9eff; }"
             "QMenu::separator { background: #555; height: 1px; margin: 4px 8px; }"
             // Tab 栏
+            "QTabWidget { border: none; }"
             "QTabWidget::pane { border: none; }"
-            "QTabBar { background: #2b2b2b; }"
+            "QTabBar { background: #2b2b2b; border: none; }"
             "QTabBar::tab { background: #2b2b2b; color: #aaa; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; }"
             "QTabBar::tab:selected { color: #fff; border-bottom: 2px solid #4a9eff; }"
             "QTabBar::tab:hover { color: #ddd; background: #353535; }"
@@ -561,8 +565,9 @@ void MainWindow::applyTheme(const Theme& theme)
             "QMenu::item:selected { background: #e8f0fe; border-left: 2px solid #0078d4; }"
             "QMenu::separator { background: #e0e0e0; height: 1px; margin: 4px 8px; }"
             // Tab 栏
+            "QTabWidget { border: none; }"
             "QTabWidget::pane { border: none; }"
-            "QTabBar { background: #f0f0f0; }"
+            "QTabBar { background: #f0f0f0; border: none; }"
             "QTabBar::tab { background: #f0f0f0; color: #666; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; }"
             "QTabBar::tab:selected { color: #333; border-bottom: 2px solid #0078d4; background: #fff; }"
             "QTabBar::tab:hover { color: #333; background: #e8e8e8; }"
