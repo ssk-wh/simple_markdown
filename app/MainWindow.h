@@ -2,6 +2,7 @@
 #include <QMainWindow>
 #include <QTabWidget>
 #include <QVector>
+#include <QTimer>
 #include "Theme.h"
 
 class EditorWidget;
@@ -64,7 +65,9 @@ private:
     qreal m_lineSpacingFactor = 1.0;
 
     void saveSettings();
+    void saveSessionLater();  // 延迟保存会话（debounce 1秒）
     void loadSettings();
+    QTimer m_saveSessionTimer;
 
     void setupMenuBar();
     void setupDragDrop();

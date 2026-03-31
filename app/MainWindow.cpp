@@ -49,7 +49,17 @@ MainWindow::MainWindow(QWidget* parent)
             this, [this](int from, int to) {
         if (from >= 0 && from < m_tabs.size() && to >= 0 && to < m_tabs.size())
             m_tabs.move(from, to);
+        saveSessionLater();
     });
+
+    // 切换标签时实时保存会话
+    connect(m_tabWidget, &QTabWidget::currentChanged,
+            this, &MainWindow::saveSessionLater);
+
+    // 延迟保存定时器（debounce 1秒，避免频繁写磁盘）
+    m_saveSessionTimer.setSingleShot(true);
+    m_saveSessionTimer.setInterval(1000);
+    connect(&m_saveSessionTimer, &QTimer::timeout, this, &MainWindow::saveSettings);
 
     setupMenuBar();
     setupDragDrop();
@@ -353,10 +363,11 @@ void MainWindow::openFile(const QString& path)
     updateTabTitle(index);
 
     // [修复] 加载新文件后必须提升窗口，确保用户能看到
-    // 这特别重要，因为从文件管理器、浏览器等外部应用打开时，本应用可能在后台
     setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
     raise();
     activateWindow();
+
+    saveSessionLater();
 }
 
 MainWindow::TabData MainWindow::createTab()
@@ -568,6 +579,8 @@ void MainWindow::onCloseTab(int index)
     // If no tabs left, create a new one
     if (m_tabs.isEmpty())
         newTab();
+
+    saveSessionLater();
 }
 
 void MainWindow::onTabChanged(int index)
@@ -639,6 +652,11 @@ void MainWindow::startLocalServer(const char* serverName)
         raise();
         activateWindow();
     });
+}
+
+void MainWindow::saveSessionLater()
+{
+    m_saveSessionTimer.start();  // (重新)启动 1 秒倒计时
 }
 
 void MainWindow::saveSettings()
