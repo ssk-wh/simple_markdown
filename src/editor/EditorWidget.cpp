@@ -168,7 +168,6 @@ void EditorWidget::setWordWrap(bool enabled)
     if (enabled) {
         qreal textAreaWidth = viewport()->width() - m_gutterWidth - 16;
         m_layout->setWrapWidth(textAreaWidth > 50 ? textAreaWidth : 50);
-        horizontalScrollBar()->setRange(0, 0);
     } else {
         m_layout->setWrapWidth(0);
     }
@@ -443,6 +442,18 @@ void EditorWidget::updateScrollBars()
     verticalScrollBar()->setRange(0, qMax(0, (int)(totalH - viewH)));
     verticalScrollBar()->setPageStep((int)viewH);
     verticalScrollBar()->setSingleStep((int)m_layout->defaultLineHeight());
+
+    // 水平滚动条（非换行模式）
+    if (!m_wordWrap) {
+        qreal textAreaW = viewport()->width() - m_gutterWidth - 16;
+        qreal contentW = m_layout->maxLineWidth() + 32;  // 加右侧边距
+        int hRange = qMax(0, (int)(contentW - textAreaW));
+        horizontalScrollBar()->setRange(0, hRange);
+        horizontalScrollBar()->setPageStep((int)textAreaW);
+        horizontalScrollBar()->setSingleStep(20);
+    } else {
+        horizontalScrollBar()->setRange(0, 0);
+    }
 }
 
 void EditorWidget::updateGutterWidth()

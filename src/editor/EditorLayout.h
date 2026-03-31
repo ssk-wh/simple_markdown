@@ -55,6 +55,9 @@ public:
     // 默认行高（未创建 QTextLayout 的行使用这个估计值）
     qreal defaultLineHeight() const;
 
+    // 最大行宽（非换行模式下用于水平滚动范围）
+    qreal maxLineWidth() const;
+
 
 private:
     struct LineInfo {

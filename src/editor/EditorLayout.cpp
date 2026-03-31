@@ -340,3 +340,16 @@ qreal EditorLayout::defaultLineHeight() const
     return m_defaultLineHeight * m_lineSpacingFactor;
 }
 
+qreal EditorLayout::maxLineWidth() const
+{
+    qreal maxW = 0;
+    for (int i = 0; i < (int)m_lines.size(); ++i) {
+        ensureLayout(i);
+        if (m_lines[i].layout) {
+            qreal w = m_lines[i].layout->boundingRect().width();
+            if (w > maxW) maxW = w;
+        }
+    }
+    return maxW;
+}
+
