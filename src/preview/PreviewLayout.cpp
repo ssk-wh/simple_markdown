@@ -112,6 +112,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
         case 3: scale = 1.3; break;
         case 4: scale = 1.15; break;
         case 5: scale = 1.05; break;
+        case 6: scale = 1.02; break;
         default: scale = 1.0; break;
         }
         headingFont.setPointSizeF(m_baseFont.pointSizeF() * scale);
