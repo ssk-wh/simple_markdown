@@ -56,6 +56,7 @@ static bool sendToRunningInstance(const QString& filePath)
     if (!socket.waitForConnected(500))
         return false;
 
+    // 发送文件路径（空路径也发，用于激活窗口）
     QByteArray data = filePath.toUtf8();
     socket.write(data);
     socket.waitForBytesWritten(1000);
@@ -87,14 +88,13 @@ int main(int argc, char* argv[])
     if (argc > 1)
         filePath = QFileInfo(QString::fromLocal8Bit(argv[1])).absoluteFilePath();
 
-    // [高 DPI 修复] Try to send to existing instance
-    // NOTE: Disabled for now due to stale IPC endpoints
-    // if (sendToRunningInstance(filePath)) {
-    //     fprintf(stderr, "[4] Sent to existing instance, exiting\n");
-    //     fflush(stderr);
-    //     return 0;
-    // }
-    fprintf(stderr, "[5] Creating new window (multi-instance check disabled)\n");
+    // 单实例：如果已有实例运行，发送文件路径后退出
+    if (sendToRunningInstance(filePath)) {
+        fprintf(stderr, "[4] Sent to existing instance, exiting\n");
+        fflush(stderr);
+        return 0;
+    }
+    fprintf(stderr, "[5] Creating new window\n");
     fflush(stderr);
 
     MainWindow window;
