@@ -497,6 +497,32 @@ void MainWindow::applyTheme(const Theme& theme)
         tab.editor->setTheme(theme);
         tab.preview->setTheme(theme);
     }
+
+    // 主窗口 UI 元素跟随深色/浅色主题
+    if (theme.isDark) {
+        setStyleSheet(QStringLiteral(
+            "QMainWindow { background: #2b2b2b; }"
+            "QMenuBar { background: #2b2b2b; color: #ccc; }"
+            "QMenuBar::item:selected { background: #3c3f41; }"
+            "QMenu { background: #2b2b2b; color: #ccc; border: 1px solid #555; }"
+            "QMenu::item:selected { background: #3c3f41; }"
+            "QMenu::separator { background: #555; height: 1px; }"
+            "QTabWidget::pane { border: none; }"
+            "QTabBar { background: #2b2b2b; }"
+            "QTabBar::tab { background: #2b2b2b; color: #aaa; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; }"
+            "QTabBar::tab:selected { color: #fff; border-bottom: 2px solid #4a9eff; }"
+            "QTabBar::tab:hover { color: #ddd; background: #353535; }"
+            "QTabBar::close-button { image: url(none); }"
+            "QScrollBar:vertical { background: #2b2b2b; width: 10px; }"
+            "QScrollBar::handle:vertical { background: #555; border-radius: 4px; min-height: 20px; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+            "QScrollBar:horizontal { background: #2b2b2b; height: 10px; }"
+            "QScrollBar::handle:horizontal { background: #555; border-radius: 4px; min-width: 20px; }"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
+        ));
+    } else {
+        setStyleSheet(QString());  // 恢复系统默认
+    }
 }
 
 MainWindow::TabData* MainWindow::currentTab()
