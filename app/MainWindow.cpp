@@ -504,25 +504,38 @@ void MainWindow::applyTheme(const Theme& theme)
         tab.preview->setTheme(theme);
     }
 
-    // 主窗口 UI 元素跟随深色/浅色主题
+    // 主窗口 UI 元素跟随深色/浅色主题（含菜单栏、右键菜单、对话框）
     if (theme.isDark) {
         setStyleSheet(QStringLiteral(
             "QMainWindow { background: #2b2b2b; }"
-            "QMenuBar { background: #2b2b2b; color: #ccc; }"
-            "QMenuBar::item:selected { background: #3c3f41; }"
-            "QMenu { background: #2b2b2b; color: #ccc; border: 1px solid #555; }"
-            "QMenu::item:selected { background: #3c3f41; }"
+            // 菜单栏
+            "QMenuBar { background: #2b2b2b; color: #ccc; border-bottom: 1px solid #3c3f41; }"
+            "QMenuBar::item { padding: 6px 10px; }"
+            "QMenuBar::item:selected { background: #3c3f41; border-bottom: 2px solid #4a9eff; }"
+            // 菜单（包括右键菜单）
+            "QMenu { background: #2b2b2b; color: #ccc; border: 1px solid #555; padding: 4px 0; }"
+            "QMenu::item { padding: 6px 24px 6px 12px; }"
+            "QMenu::item:selected { background: #3c3f41; border-left: 2px solid #4a9eff; }"
             "QMenu::separator { background: #555; height: 1px; margin: 4px 8px; }"
+            // Tab 栏
             "QTabWidget::pane { border: none; }"
             "QTabBar { background: #2b2b2b; }"
             "QTabBar::tab { background: #2b2b2b; color: #aaa; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; }"
             "QTabBar::tab:selected { color: #fff; border-bottom: 2px solid #4a9eff; }"
             "QTabBar::tab:hover { color: #ddd; background: #353535; }"
             "QTabBar::close-button { image: url(none); }"
-            // 分割线（编辑区与预览区之间）
+            // 分割线
             "QSplitter::handle { background: #3c3f41; }"
             "QSplitter::handle:horizontal { width: 2px; }"
             "QSplitter::handle:vertical { height: 2px; }"
+            // 对话框（About、更新日志等）
+            "QDialog { background: #2b2b2b; color: #ccc; }"
+            "QDialog QLabel { color: #ccc; }"
+            "QDialog QTextEdit, QDialog QTextBrowser { background: #1e1e1e; color: #ccc; border: 1px solid #555; }"
+            "QDialog QPushButton { background: #3c3f41; color: #ccc; border: 1px solid #555; padding: 6px 16px; border-radius: 3px; }"
+            "QDialog QPushButton:hover { background: #4a4d50; }"
+            "QMessageBox { background: #2b2b2b; color: #ccc; }"
+            "QMessageBox QLabel { color: #ccc; }"
             // 滚动条
             "QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }"
             "QScrollBar::handle:vertical { background: rgba(255,255,255,40); border-radius: 3px; min-height: 30px; }"
@@ -536,8 +549,17 @@ void MainWindow::applyTheme(const Theme& theme)
             "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }"
         ));
     } else {
-        // 浅色模式也设置统一风格（不用系统默认）
         setStyleSheet(QStringLiteral(
+            // 菜单栏
+            "QMenuBar { border-bottom: 1px solid #e0e0e0; }"
+            "QMenuBar::item { padding: 6px 10px; }"
+            "QMenuBar::item:selected { background: #e8e8e8; border-bottom: 2px solid #0078d4; }"
+            // 菜单
+            "QMenu { border: 1px solid #d0d0d0; padding: 4px 0; }"
+            "QMenu::item { padding: 6px 24px 6px 12px; }"
+            "QMenu::item:selected { background: #e8f0fe; border-left: 2px solid #0078d4; }"
+            "QMenu::separator { background: #e0e0e0; height: 1px; margin: 4px 8px; }"
+            // Tab 栏
             "QTabWidget::pane { border: none; }"
             "QTabBar { background: #f0f0f0; }"
             "QTabBar::tab { background: #f0f0f0; color: #666; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; }"

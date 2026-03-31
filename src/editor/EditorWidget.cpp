@@ -168,8 +168,10 @@ void EditorWidget::setWordWrap(bool enabled)
     if (enabled) {
         qreal textAreaWidth = viewport()->width() - m_gutterWidth - 16;
         m_layout->setWrapWidth(textAreaWidth > 50 ? textAreaWidth : 50);
+        horizontalScrollBar()->setValue(0);
     } else {
-        m_layout->setWrapWidth(0);
+        m_layout->setWrapWidth(-1);  // 用 -1 而非 0，确保 qFuzzyCompare 不误判为"没变"
+        horizontalScrollBar()->setValue(0);
     }
 
     updateScrollBars();
@@ -446,7 +448,19 @@ void EditorWidget::updateScrollBars()
     // 水平滚动条（非换行模式）
     if (!m_wordWrap) {
         qreal textAreaW = viewport()->width() - m_gutterWidth - 16;
-        qreal contentW = m_layout->maxLineWidth() + 32;  // 加右侧边距
+        // 用粗略估算代替遍历所有行（避免大文件卡顿）
+        // 取可见行的最大宽度 * 1.5 作为估算值
+        qreal maxW = 0;
+        int first = firstVisibleLine();
+        int last = qMin(lastVisibleLine() + 50, m_layout->lineCount() - 1);
+        for (int i = first; i <= last; ++i) {
+            QTextLayout* tl = m_layout->layoutForLine(i);
+            if (tl) {
+                qreal w = tl->boundingRect().width();
+                if (w > maxW) maxW = w;
+            }
+        }
+        qreal contentW = qMax(maxW + 32, textAreaW);
         int hRange = qMax(0, (int)(contentW - textAreaW));
         horizontalScrollBar()->setRange(0, hRange);
         horizontalScrollBar()->setPageStep((int)textAreaW);
