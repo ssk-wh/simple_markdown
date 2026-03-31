@@ -45,6 +45,9 @@ private:
     void indent();
     void unindent();
 
+    // Markdown 格式化
+    void wrapSelection(const QString& before, const QString& after);
+
     // 剪贴板
     void cut();
     void copy();

@@ -78,6 +78,11 @@ bool EditorInput::keyPressEvent(QKeyEvent* event)
         case Qt::Key_V: paste(); return true;
         case Qt::Key_F: m_editor->showSearchBar(); return true;
         case Qt::Key_H: m_editor->showReplaceBar(); return true;
+        case Qt::Key_B: wrapSelection("**", "**"); return true;   // 加粗
+        case Qt::Key_I: wrapSelection("*", "*"); return true;     // 斜体
+        case Qt::Key_K: wrapSelection("[", "](url)"); return true; // 链接
+        case Qt::Key_D: wrapSelection("~~", "~~"); return true;   // 删除线
+        case Qt::Key_E: wrapSelection("`", "`"); return true;     // 行内代码
         default: break;
         }
     }
@@ -341,6 +346,38 @@ void EditorInput::paste() {
     if (!text.isEmpty()) {
         insertText(text);
     }
+}
+
+void EditorInput::wrapSelection(const QString& before, const QString& after)
+{
+    if (sel().hasSelection()) {
+        // 有选区：在选区两端包裹标记
+        TextPosition start = sel().range().start();
+        TextPosition end = sel().range().end();
+        int startOff = posToOffset(start);
+        int endOff = posToOffset(end);
+        QString selected = doc()->textAt(startOff, endOff - startOff);
+
+        doc()->remove(startOff, endOff - startOff);
+        sel().setCursorPosition(start);
+
+        QString wrapped = before + selected + after;
+        doc()->insert(startOff, wrapped);
+
+        // 选中包裹后的内容（不含标记）
+        TextPosition newStart = offsetToPos(startOff + before.length());
+        TextPosition newEnd = offsetToPos(startOff + before.length() + selected.length());
+        sel().setCursorPosition(newStart);
+        sel().extendSelection(newEnd);
+    } else {
+        // 无选区：插入标记对并把光标放中间
+        int offset = posToOffset(sel().cursorPosition());
+        QString text = before + after;
+        doc()->insert(offset, text);
+        TextPosition mid = offsetToPos(offset + before.length());
+        sel().setCursorPosition(mid);
+    }
+    sel().resetPreferredColumn();
 }
 
 void EditorInput::moveCursorTo(TextPosition pos, bool select)
