@@ -2,26 +2,24 @@
 setlocal enabledelayedexpansion
 
 REM ===============================================
-REM SimpleMarkdown - Build, Collect & Pack Script
+REM SimpleMarkdown - Windows Pack Script
+REM Usage: run build_on_win.bat first, then this script
 REM ===============================================
 
 cd /d "%~dp0"
 
-echo.
-echo ================================================
-echo   Step 1/3: Building SimpleMarkdown...
-echo ================================================
-call build_on_win.bat
-if errorlevel 1 (
-    echo [ERROR] Build failed!
+REM Check build output exists
+if not exist "build\app\SimpleMarkdown.exe" (
+    echo [ERROR] build\app\SimpleMarkdown.exe not found.
+    echo         Please run build_on_win.bat first.
     exit /b 1
 )
 
 echo.
 echo ================================================
-echo   Step 2/3: Collecting dependencies...
+echo   Step 1/2: Collecting dependencies...
 echo ================================================
-chcp.com 65001 > nul 2>&1
+chcp.com 65001 > /dev/null 2>&1
 python installer\collect_dist.py build\app
 if errorlevel 1 (
     echo [ERROR] Dependency collection failed!
@@ -30,7 +28,7 @@ if errorlevel 1 (
 
 echo.
 echo ================================================
-echo   Step 3/3: Packing NSIS installer...
+echo   Step 2/2: Packing NSIS installer...
 echo ================================================
 
 REM Determine NSIS path
@@ -60,10 +58,9 @@ cd ..
 
 echo.
 echo ================================================
-echo   SUCCESS: All steps completed!
+echo   SUCCESS: Pack completed!
 echo ================================================
 echo.
 echo Installer location:
 dir installer\SimpleMarkdown-*.exe
 echo.
-pause
