@@ -96,11 +96,9 @@ echo.
 
 REM ---- CMake configure ----
 echo [2/3] CMake configure...
-if exist %BUILD_DIR%\CMakeCache.txt (
-    del /q %BUILD_DIR%\CMakeCache.txt >nul 2>&1
-)
-if exist %BUILD_DIR%\CMakeFiles (
-    rmdir /s /q %BUILD_DIR%\CMakeFiles >nul 2>&1
+if "%FORCE_CLEAN%"=="1" (
+    if exist %BUILD_DIR%\CMakeCache.txt del /q %BUILD_DIR%\CMakeCache.txt >nul 2>&1
+    if exist %BUILD_DIR%\CMakeFiles rmdir /s /q %BUILD_DIR%\CMakeFiles >nul 2>&1
 )
 cmake -S . -B %BUILD_DIR% -G "%EXPECTED_GENERATOR%" -DCMAKE_BUILD_TYPE=%BUILD_TYPE% %QT_CMAKE_OPT% %CMAKE_OPTS%
 if errorlevel 1 (
@@ -111,8 +109,6 @@ echo.
 
 REM ---- Build ----
 echo [3/3] Building...
-
-REM ---- Build ----
 cmake --build %BUILD_DIR%
 if errorlevel 1 (
     echo [ERROR] Build failed.
