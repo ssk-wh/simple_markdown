@@ -9,8 +9,8 @@ REM ===============================================
 cd /d "%~dp0"
 
 REM Check build output exists
-if not exist "build\app\SimpleMarkdown.exe" (
-    echo [ERROR] build\app\SimpleMarkdown.exe not found.
+if not exist "build\src\app\SimpleMarkdown.exe" (
+    echo [ERROR] build\src\app\SimpleMarkdown.exe not found.
     echo         Please run build_on_win.bat first.
     exit /b 1
 )
@@ -19,8 +19,8 @@ echo.
 echo ================================================
 echo   Step 1/2: Collecting dependencies...
 echo ================================================
-chcp.com 65001 > /dev/null 2>&1
-python installer\collect_dist.py build\app
+chcp.com 65001 > nul 2>&1
+python installer\collect_dist.py build\src\app
 if errorlevel 1 (
     echo [ERROR] Dependency collection failed!
     exit /b 1

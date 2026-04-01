@@ -1,4 +1,4 @@
-add_library(easy_core STATIC
+add_library(sm_core STATIC
     MappedFile.h MappedFile.cpp
     PieceTable.h PieceTable.cpp
     LineIndex.h LineIndex.cpp
@@ -9,5 +9,5 @@ add_library(easy_core STATIC
     Theme.h Theme.cpp
 )
 
-target_include_directories(easy_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(easy_core PUBLIC Qt5::Core Qt5::Gui)
+target_include_directories(sm_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(sm_core PUBLIC Qt5::Core Qt5::Gui)

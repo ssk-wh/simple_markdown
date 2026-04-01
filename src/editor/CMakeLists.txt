@@ -1,4 +1,4 @@
-add_library(easy_editor STATIC
+add_library(sm_editor STATIC
     EditorLayout.h EditorLayout.cpp
     EditorWidget.h EditorWidget.cpp
     EditorPainter.h EditorPainter.cpp
@@ -9,5 +9,5 @@ add_library(easy_editor STATIC
     SearchBar.h SearchBar.cpp
     SearchWorker.h SearchWorker.cpp
 )
-target_include_directories(easy_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(easy_editor PUBLIC easy_core Qt5::Widgets)
+target_include_directories(sm_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(sm_editor PUBLIC sm_core Qt5::Widgets)
