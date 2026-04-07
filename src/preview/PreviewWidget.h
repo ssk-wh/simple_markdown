@@ -24,6 +24,7 @@ public:
     void setTheme(const Theme& theme);
     void setWordWrap(bool enabled);
     bool wordWrap() const { return m_wordWrap; }
+    void rebuildLayout();
 
     const QVector<TocEntry>& tocEntries() const { return m_tocEntries; }
     const QSet<int>& tocHighlightedIndices() const { return m_tocHighlighted; }
@@ -38,7 +39,6 @@ signals:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
-    void rebuildLayout();
     void scrollContentsBy(int dx, int dy) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;

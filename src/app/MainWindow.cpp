@@ -580,6 +580,8 @@ void MainWindow::applyTheme(const Theme& theme)
     if (theme.isDark) {
         setStyleSheet(QStringLiteral(
             "QMainWindow { background: #2b2b2b; }"
+            // 编辑器和预览区域去掉默认 frame 边框
+            "QAbstractScrollArea { border: none; }"
             // 菜单栏
             "QMenuBar { background: #2b2b2b; color: #ccc; border: none; }"
             "QMenuBar::item { padding: 6px 10px; }"
@@ -626,6 +628,8 @@ void MainWindow::applyTheme(const Theme& theme)
         ));
     } else {
         setStyleSheet(QStringLiteral(
+            // 编辑器和预览区域去掉默认 frame 边框
+            "QAbstractScrollArea { border: none; }"
             // 菜单栏
             "QMenuBar { border: none; }"
             "QMenuBar::item { padding: 6px 10px; }"
@@ -1169,14 +1173,15 @@ void MainWindow::zoomReset()
 
 void MainWindow::applyFontSize()
 {
-    // 编辑器默认 12pt，预览默认 10pt
+    // 编辑器和预览默认均为 12pt
     QFont editorFont("Courier New", 12 + m_fontSizeDelta);
     editorFont.setStyleHint(QFont::Monospace);
-    QFont previewFont("Segoe UI", 10 + m_fontSizeDelta);
+    QFont previewFont("Segoe UI", 12 + m_fontSizeDelta);
 
     for (auto& tab : m_tabs) {
         tab.editor->editorLayout()->setFont(editorFont);
         tab.preview->previewLayout()->setFont(previewFont);
+        tab.preview->rebuildLayout();
         tab.preview->viewport()->update();
         tab.editor->viewport()->update();
     }

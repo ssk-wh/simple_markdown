@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-04-07
+
+### Fixed
+- CI 打包缺少 Qt5PrintSupport.dll 导致程序无法启动
+- CI 版本号未从 CHANGELOG.md 提取，与本地打包不一致
+- 滚轮缩放字体后右侧预览未及时刷新布局
+- 深色模式下编辑器和预览区域有白色边框
+- 左右侧区域字体大小不一致（预览基础字号 10pt → 12pt）
+
 ## [0.2.0] - 2026-04-01
 
 ### Added

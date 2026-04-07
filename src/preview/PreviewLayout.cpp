@@ -7,7 +7,7 @@
 
 PreviewLayout::PreviewLayout()
 {
-    m_baseFont = QFont("Segoe UI", 10);
+    m_baseFont = QFont("Segoe UI", 12);
     m_monoFont = QFont("Consolas", 9);
     m_monoFont.setStyleHint(QFont::Monospace);
 

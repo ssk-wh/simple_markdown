@@ -215,7 +215,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             // 序号/圆点画在 List 左边缘（absX），内容在 absX + child.bounds.x()
             qreal bulletX = absX;
 
-            QFont baseFont("Segoe UI", 10);
+            QFont baseFont("Segoe UI", 12);
             p->setFont(baseFont);
             p->setPen(m_theme.previewFg);
             QFontMetricsF fm(baseFont, p->device());
@@ -274,7 +274,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                             QPointF(cellX, rowDrawY + rowHeight));
 
                 // Cell text
-                QFont cellFont("Segoe UI", 10);
+                QFont cellFont("Segoe UI", 12);
                 if (isFirstRow) cellFont.setWeight(QFont::Bold);
                 p->setFont(cellFont);
                 p->setPen(m_theme.previewFg);
@@ -301,7 +301,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         p->setPen(QPen(m_theme.previewImagePlaceholderBorder, 1));
         p->drawRect(rect);
         p->setPen(m_theme.previewImagePlaceholderText);
-        QFont f("Segoe UI", 10);
+        QFont f("Segoe UI", 12);
         p->setFont(f);
         QString label = block.imageUrl.isEmpty()
                             ? QStringLiteral("Loading...")
