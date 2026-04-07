@@ -43,8 +43,8 @@ jobs:
           if ("$env:GITHUB_REF" -match "^refs/tags/v(.+)$") {
             $version = $Matches[1]
           } else {
-            $content = Get-Content CMakeLists.txt -Raw
-            if ($content -match 'project\(SimpleMarkdown\s+VERSION\s+([0-9.]+)') {
+            $content = Get-Content CHANGELOG.md -Raw
+            if ($content -match '\[(\d+\.\d+\.\d+)\]') {
               $version = $Matches[1]
             } else {
               $version = "0.1.0"
