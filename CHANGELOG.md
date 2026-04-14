@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-04-14
+
+### Added
+- **一键打包**：`pack_on_win.bat` / `pack_on_linux.sh` 自动先调用 `build_on_*` release，
+  无需先手动 build。Build 失败立即终止并返回非零退出码。
+- **演示模式（Presentation Mode）**：F11 全屏化预览区（而非原来的编辑区），
+  菜单项 "Focus Mode" 改名为 "Presentation Mode" / "演示模式"
+- **预览区链接 Ctrl+点击跳转**：Markdown 中的链接按住 Ctrl+左键点击可直接打开
+  - 本地 `.md/.markdown/.txt` → 在新 Tab 打开
+  - `http/https/mailto/ftp` → 系统默认应用
+  - 其他文档类型 → 系统默认应用
+  - `.exe/.bat/.sh` 等可执行文件 → 安全拒绝并提示
+  - 文件不存在 → 友好提示不崩溃
+  - 悬停在链接上时光标变为 PointingHandCursor
+
+### Changed
+- 搜索高亮改为亮黄色（浅色 alpha 128→220，深色从暗棕 #613214 改为金黄 rgba(218,165,32,220)），搜索结果视觉上更显眼
+- 菜单项 checkable indicator 与文字间距：padding-left 从 12px 调到 32px，✓ / radio button 不再紧贴文字
+
+### Fixed
+- 预览区 Ctrl+滚轮缩放对部分元素无效：代码块、列表序号、表格单元格、图片占位符等
+  11 处硬编码 QFont 全部改为从 `PreviewLayout::baseFont()/monoFont()` 派生
+  （新增 INV-8 / INV-9：PreviewLayout::setFont 同步 m_monoFont + 新增 getter）
+- 拖拽文件到编辑区：支持无后缀纯文本文件（TODO/LICENSE/README 等，通过前 4KB sniff
+  判定），拒绝明确二进制扩展（.exe/.zip/.pdf/...），不支持时统一弹窗列出而非静默丢弃
+
 ## [0.2.3] - 2026-04-13
 
 ### Added

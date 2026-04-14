@@ -21,8 +21,8 @@ Theme Theme::dark() {
     t.editorLineNumberActive = QColor("#C6C6C6");
     t.editorGutterBg = QColor("#1E1E1E");
     t.editorCursor = QColor("#D4D4D4");
-    t.editorSearchMatch = QColor("#613214");
-    t.editorSearchMatchCurrent = QColor("#A05A2C");  // 当前匹配项（更亮的橙色）
+    t.editorSearchMatch = QColor(218, 165, 32, 220);   // 深金黄（alpha 220），深色背景上清晰可见
+    t.editorSearchMatchCurrent = QColor(255, 140, 0, 240);  // 当前匹配项（饱和橙色）
     t.editorGutterLine = QColor("#333333");
     t.editorPreeditBg = QColor(80, 80, 50);
 

@@ -16,6 +16,7 @@ struct TextSegment {
     int charLen;       // 字符长度
     QString text;      // 段内文本（用于逐字精确定位）
     QFont font;        // 段所用字体
+    QString linkUrl;   // [Spec 模块-preview/09] 链接 URL，空串表示非链接
 };
 
 // [测试模式] 行内元素信息
@@ -61,6 +62,9 @@ public:
     const Theme& theme() const { return m_theme; }
     void setImageCache(ImageCache* cache);
 
+    // Spec 模块-preview/03 INV-8/9: 绘制侧禁止构造 QFont，必须从 layout 取字体
+    void setLayout(const PreviewLayout* layout) { m_layout = layout; }
+
     void paint(QPainter* painter, const LayoutBlock& root,
                qreal scrollY, qreal viewportHeight, qreal viewportWidth);
 
@@ -88,10 +92,12 @@ private:
     void paintInlineRuns(QPainter* p, const LayoutBlock& block,
                          qreal x, qreal y, qreal maxWidth);
     void recordSegment(const QRectF& rect, int charStart, int charLen,
-                       const QString& text, const QFont& font);
+                       const QString& text, const QFont& font,
+                       const QString& linkUrl = QString());
     void countBlockChars(const LayoutBlock& block);
 
     Theme m_theme;
+    const PreviewLayout* m_layout = nullptr;  // Spec 模块-preview/03 INV-9
     ImageCache* m_imageCache = nullptr;
     QVector<TextSegment> m_textSegments;
     int m_charCounter = 0;  // 绘制期间的字符计数器

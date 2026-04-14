@@ -194,8 +194,8 @@ Please ensure CHANGELOG.md is installed with the application.</source>
         <translation>源码</translation>
     </message>
     <message>
-        <source>Focus Mode</source>
-        <translation>专注模式</translation>
+        <source>Presentation Mode</source>
+        <translation>演示模式</translation>
     </message>
     <message>
         <source>Untitled</source>
@@ -462,12 +462,12 @@ Do you want to reload it?</source>
         <translation>重置缩放</translation>
     </message>
     <message>
-        <source>Focus Mode</source>
-        <translation>专注模式</translation>
+        <source>Presentation Mode</source>
+        <translation>演示模式</translation>
     </message>
     <message>
-        <source>Exit Focus Mode</source>
-        <translation>退出专注模式</translation>
+        <source>Exit Presentation Mode</source>
+        <translation>退出演示模式</translation>
     </message>
     <message>
         <source>Toggle Preview</source>

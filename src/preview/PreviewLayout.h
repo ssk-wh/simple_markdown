@@ -70,6 +70,10 @@ public:
     void buildFromAst(const std::shared_ptr<AstNode>& root);
     qreal totalHeight() const;
     const LayoutBlock& rootBlock() const;
+
+    // Spec 模块-preview/02-布局引擎 INV-9: 供 PreviewPainter 读取字体，禁止构造
+    const QFont& baseFont() const { return m_baseFont; }
+    const QFont& monoFont() const { return m_monoFont; }
     qreal sourceLineToY(int sourceLine) const;
     int yToSourceLine(qreal y) const;
 

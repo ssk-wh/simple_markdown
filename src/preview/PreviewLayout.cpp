@@ -32,7 +32,11 @@ void PreviewLayout::setViewportWidth(qreal width)
 
 void PreviewLayout::setFont(const QFont& baseFont)
 {
+    // [Spec 模块-preview/02 INV-8 + 横切 80 INV-9]
+    // setFont 必须同步更新 m_monoFont，使其相对 m_baseFont 保持 kMonoDelta
     m_baseFont = baseFont;
+    int delta = baseFont.pointSize() - font_defaults::kDefaultBaseFontSizePt;
+    m_monoFont = font_defaults::defaultMonoFont(delta);
     QFontMetricsF fm(m_baseFont);
     m_lineHeight = fm.height() * 1.5;
 }

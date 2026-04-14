@@ -43,6 +43,8 @@ signals:
     void tocEntriesChanged(const QVector<TocEntry>& entries);
     void tocHighlightChanged(const QSet<int>& indices);
     void openInBrowserRequested();
+    // [Spec 模块-preview/09-链接点击与导航] Ctrl+click 链接
+    void linkClicked(const QString& url);
 
 protected:
     void paintEvent(QPaintEvent* event) override;

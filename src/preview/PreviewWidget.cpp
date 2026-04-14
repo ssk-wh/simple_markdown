@@ -25,6 +25,7 @@ PreviewWidget::PreviewWidget(QWidget* parent)
     m_layout->setFont(font());
 
     m_painter = new PreviewPainter();
+    m_painter->setLayout(m_layout);  // Spec 模块-preview/03 INV-9
     m_imageCache = new ImageCache(this);
     m_painter->setImageCache(m_imageCache);
 
@@ -300,12 +301,22 @@ void PreviewWidget::mousePressEvent(QMouseEvent* event)
             viewport()->repaint();
         }
 
-        m_selecting = true;
         // segment rects 在 painter translate 后的视口坐标系，鼠标也转到同一坐标系
-        // 坐标变换规则（与 paintEvent 中的 painter.translate(20 - scrollXVal, 0) 对应）：
-        // 视口坐标 -> 内容坐标 = 减去 20 的左边距，加上水平滚动值
         qreal scrollXVal = m_wordWrap ? 0 : horizontalScrollBar()->value();
         QPointF pt(event->pos().x() - 20 + scrollXVal, event->pos().y());
+
+        // [Spec 模块-preview/09 INV-1] Ctrl+LeftClick 触发链接打开
+        if (event->modifiers() & Qt::ControlModifier) {
+            for (const auto& seg : m_painter->textSegments()) {
+                if (seg.linkUrl.isEmpty()) continue;
+                if (seg.rect.contains(pt)) {
+                    emit linkClicked(seg.linkUrl);
+                    return;  // 不触发选区
+                }
+            }
+        }
+
+        m_selecting = true;
         m_selStart = m_selEnd = textIndexAtPoint(pt);
         viewport()->update();
     }
@@ -320,7 +331,20 @@ void PreviewWidget::mouseMoveEvent(QMouseEvent* event)
         QPointF pt(event->pos().x() - 20 + scrollXVal, event->pos().y());
         m_selEnd = textIndexAtPoint(pt);
         viewport()->update();
+        return;
     }
+
+    // [Spec 模块-preview/09 INV-5] 悬停链接时光标变手型（按 Ctrl 更明显）
+    qreal scrollXVal = m_wordWrap ? 0 : horizontalScrollBar()->value();
+    QPointF pt(event->pos().x() - 20 + scrollXVal, event->pos().y());
+    bool overLink = false;
+    for (const auto& seg : m_painter->textSegments()) {
+        if (!seg.linkUrl.isEmpty() && seg.rect.contains(pt)) {
+            overLink = true;
+            break;
+        }
+    }
+    viewport()->setCursor(overLink ? Qt::PointingHandCursor : Qt::IBeamCursor);
 }
 
 void PreviewWidget::mouseReleaseEvent(QMouseEvent* event)

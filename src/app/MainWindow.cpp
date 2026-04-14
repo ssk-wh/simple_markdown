@@ -18,7 +18,11 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QDragEnterEvent>
+#include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QFile>
+#include <QDesktopServices>
+#include <QUrl>
 #include <QCloseEvent>
 #include <QShowEvent>
 #include <QKeyEvent>
@@ -300,7 +304,7 @@ void MainWindow::setupMenuBar()
 
     viewMenu->addSeparator();
 
-    m_focusModeAct = viewMenu->addAction(tr("Focus Mode"));
+    m_focusModeAct = viewMenu->addAction(tr("Presentation Mode"));
     m_focusModeAct->setCheckable(true);
     m_focusModeAct->setChecked(false);
     m_focusModeAct->setShortcut(QKeySequence(Qt::Key_F11));
@@ -599,6 +603,12 @@ MainWindow::TabData MainWindow::createTab()
             m_tocPanel->setHighlightedEntries(indices);
     });
 
+    // [Spec 模块-preview/09] 预览区链接 Ctrl+click
+    connect(tab.preview, &PreviewWidget::linkClicked,
+            this, [this, editor = tab.editor](const QString& url) {
+        onPreviewLinkClicked(url, editor);
+    });
+
     // 预览区右键菜单：在浏览器中打开
     connect(tab.preview, &PreviewWidget::openInBrowserRequested,
             this, [this]() {
@@ -718,7 +728,7 @@ void MainWindow::applyTheme(const Theme& theme)
             "QMenuBar::item:selected { background: #3c3f41; border-bottom: 2px solid #4a9eff; }"
             // 菜单（包括右键菜单）
             "QMenu { background: #2b2b2b; color: #ccc; border: 1px solid #555; padding: 4px 0; }"
-            "QMenu::item { padding: 6px 24px 6px 12px; }"
+            "QMenu::item { padding: 6px 24px 6px 32px; }"  // [Spec 模块-app/10-菜单栏样式 INV-1] padding-left = indicator 占位(24) + 约1字符宽(~8)，保证 ✓ 与文字留间距
             "QMenu::item:selected { background: #3c3f41; border-left: 2px solid #4a9eff; }"
             "QMenu::separator { background: #555; height: 1px; margin: 4px 8px; }"
             "QMenu::indicator { width: 16px; height: 16px; margin-right: 8px; }"
@@ -770,7 +780,7 @@ void MainWindow::applyTheme(const Theme& theme)
             "QMenuBar::item:selected { background: #e8e8e8; border-bottom: 2px solid #0078d4; }"
             // 菜单
             "QMenu { border: 1px solid #d0d0d0; padding: 4px 0; }"
-            "QMenu::item { padding: 6px 24px 6px 12px; }"
+            "QMenu::item { padding: 6px 24px 6px 32px; }"  // [Spec 模块-app/10-菜单栏样式 INV-1] padding-left = indicator 占位(24) + 约1字符宽(~8)，保证 ✓ 与文字留间距
             "QMenu::item:selected { background: #e8f0fe; border-left: 2px solid #0078d4; }"
             "QMenu::separator { background: #e0e0e0; height: 1px; margin: 4px 8px; }"
             "QMenu::indicator { width: 16px; height: 16px; margin-right: 8px; }"
@@ -951,11 +961,12 @@ void MainWindow::onTabChanged(int index)
         if (m_tabs[index].pendingReload)
             QTimer::singleShot(0, this, [this, index]() { promptReloadTab(index); });
 
-        // 专注模式下：隐藏新 tab 的预览面板，启用打字机模式
+        // [演示模式] 切换 tab 时：隐藏编辑器、预览占满
         if (m_focusMode) {
-            m_tabs[index].preview->hide();
-            m_tabs[index].editor->setTypewriterMode(true);
-            m_tabs[index].editor->setFocus();
+            m_tabs[index].editor->hide();
+            m_tabs[index].preview->show();
+            m_tabs[index].splitter->setSizes({0, 1});
+            m_tabs[index].preview->setFocus();
         }
     } else {
         m_tocPanel->setEntries({});
@@ -980,28 +991,96 @@ static bool isImageFilePath(const QString& path)
     return exts.contains(suffix);
 }
 
-static bool isMarkdownFilePath(const QString& path)
+// 明确二进制扩展名黑名单——不做 sniff，直接拒绝
+static bool isKnownBinaryExt(const QString& path)
 {
-    return path.endsWith(".md", Qt::CaseInsensitive) ||
-           path.endsWith(".markdown", Qt::CaseInsensitive) ||
-           path.endsWith(".txt", Qt::CaseInsensitive);
+    static const QStringList exts = {
+        "exe", "dll", "so", "dylib", "zip", "rar", "7z", "tar", "gz", "bz2", "xz",
+        "pdf", "docx", "xlsx", "pptx", "odt", "ods", "odp",
+        "mp3", "mp4", "avi", "mkv", "mov", "wav", "flac", "ogg",
+        "iso", "bin", "dat", "db", "sqlite", "pyc", "class", "o", "obj",
+        "ttf", "otf", "woff", "woff2"
+    };
+    QString suffix = QFileInfo(path).suffix().toLower();
+    return exts.contains(suffix);
+}
+
+// [Spec 模块-app/03-文件操作与拖拽 Plan]
+// 前 4KB sniff 判定是否文本：NUL 即拒，控制字符占比 > 10% 即拒
+static bool sniffIsTextFile(const QString& path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+    QByteArray head = f.read(4096);
+    f.close();
+    if (head.isEmpty()) return true;  // 空文件视为文本
+    int ctrl = 0;
+    for (char c : head) {
+        unsigned char u = static_cast<unsigned char>(c);
+        if (u == 0) return false;  // 任何 NUL 即二进制
+        if (u < 0x20 && u != '\t' && u != '\n' && u != '\r') {
+            ++ctrl;
+        }
+    }
+    // 控制字符占比 > 10% 视为二进制
+    return ctrl * 10 <= head.size();
+}
+
+// 宽松文本白名单：扩展名明确允许
+static bool isKnownTextExt(const QString& path)
+{
+    static const QStringList exts = {
+        "md", "markdown", "txt", "log", "conf", "cfg", "ini",
+        "json", "yaml", "yml", "xml", "csv", "tsv",
+        "h", "hpp", "c", "cpp", "cc", "cxx", "py", "js", "ts", "java", "kt",
+        "rs", "go", "rb", "php", "sh", "bash", "zsh", "ps1",
+        "gitignore", "gitattributes", "editorconfig", "env",
+        "cmake", "mk", "makefile", "dockerfile",
+        "html", "htm", "css", "scss", "sass", "less",
+        "rst", "tex", "toml", "properties"
+    };
+    QFileInfo fi(path);
+    QString suffix = fi.suffix().toLower();
+    if (exts.contains(suffix)) return true;
+    // 特殊文件名：TODO / README / LICENSE / CHANGELOG / CMakeLists.txt 等无后缀约定名
+    static const QStringList knownNames = {
+        "todo", "readme", "license", "changelog", "authors", "contributing",
+        "cmakelists", "makefile", "dockerfile", "rakefile", "gemfile"
+    };
+    QString base = fi.completeBaseName().toLower();
+    if (fi.suffix().isEmpty() && knownNames.contains(base)) return true;
+    return false;
+}
+
+// 综合判定：能否用文本方式打开（决策 1: 宽松 + sniff 兜底）
+static bool isOpenableTextFile(const QString& path)
+{
+    // 1. 明确二进制扩展名 → 直接拒
+    if (isKnownBinaryExt(path)) return false;
+    // 2. 已知文本扩展名 / 约定文件名 → 直接允许
+    if (isKnownTextExt(path)) return true;
+    // 3. 无后缀 / 不认识的后缀 → sniff 前 4KB
+    return sniffIsTextFile(path);
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)
 {
+    // [Spec Plan 决策 2: 晚拒绝] dragEnter 全接受，drop 时再校验
     if (event->mimeData()->hasUrls()) {
-        for (const QUrl& url : event->mimeData()->urls()) {
-            QString path = url.toLocalFile();
-            if (isMarkdownFilePath(path) || isImageFilePath(path)) {
-                event->acceptProposedAction();
-                return;
-            }
-        }
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
     }
 }
 
 void MainWindow::dropEvent(QDropEvent* event)
 {
+    QStringList rejected;
     for (const QUrl& url : event->mimeData()->urls()) {
         QString path = url.toLocalFile();
         if (path.isEmpty()) continue;
@@ -1012,10 +1091,22 @@ void MainWindow::dropEvent(QDropEvent* event)
             if (tab && tab->editor) {
                 tab->editor->insertImageMarkdown(path);
             }
-        } else {
-            // Markdown/文本文件：打开
-            openFile(path);
+            continue;
         }
+
+        if (isOpenableTextFile(path)) {
+            openFile(path);
+        } else {
+            rejected.append(QFileInfo(path).fileName());
+        }
+    }
+
+    // [Spec Plan 决策 1+2] 拒绝时统一弹窗列出
+    if (!rejected.isEmpty()) {
+        QString body = tr("The following file(s) appear to be binary or unsupported. "
+                          "SimpleMarkdown only opens Markdown and plain text files:\n\n  %1")
+                           .arg(rejected.join("\n  "));
+        QMessageBox::warning(this, tr("Cannot Open File"), body);
     }
 }
 
@@ -1636,7 +1727,12 @@ void MainWindow::retranslateUi()
     // TODO: 实现运行时语言切换（当前依赖重启生效）
 }
 
-// ---- 专注模式 ----
+// ---- 演示模式 ----
+// [Spec 模块-app/11-演示模式] Plan 裁定方案 A：替换原 Focus Mode
+// 进入时：全屏 + 隐藏编辑器/菜单/Tab/TOC，只显示当前 Tab 的预览
+// 退出时：恢复所有原布局
+// 兼容：保留 m_focusMode / enterFocusMode / exitFocusMode 字段名避免大面积改动，
+//       但实际行为已改为 Presentation Mode
 
 void MainWindow::toggleFocusMode()
 {
@@ -1667,18 +1763,24 @@ void MainWindow::enterFocusMode()
     // 隐藏 TOC 面板
     m_tocPanel->hide();
 
-    // 隐藏所有 tab 的预览面板，启用打字机模式
+    // [演示模式] 隐藏编辑器、显示预览，让预览占满整个 Tab
     for (auto& t : m_tabs) {
-        t.preview->hide();
-        t.editor->setTypewriterMode(true);
+        t.editor->hide();
+        t.preview->show();
+        t.editor->setTypewriterMode(false);  // 演示模式不需要打字机
+    }
+
+    // 让预览吃掉所有宽度
+    if (tab) {
+        tab->splitter->setSizes({0, 1});  // 编辑器 0，预览 1
     }
 
     // 进入全屏
     showFullScreen();
 
-    // 给编辑器焦点
+    // 给预览焦点（用于翻页键）
     if (tab)
-        tab->editor->setFocus();
+        tab->preview->setFocus();
 }
 
 void MainWindow::exitFocusMode()
@@ -1698,10 +1800,10 @@ void MainWindow::exitFocusMode()
     // 恢复 TOC 面板
     m_tocPanel->setVisible(m_savedTocVisible);
 
-    // 恢复所有 tab 的预览面板，关闭打字机模式
+    // [演示模式] 恢复编辑器显示
     for (auto& t : m_tabs) {
+        t.editor->show();
         t.preview->show();
-        t.editor->setTypewriterMode(false);
     }
 
     // 恢复 splitter 状态
@@ -1715,4 +1817,63 @@ void MainWindow::exitFocusMode()
     // 给编辑器焦点
     if (tab)
         tab->editor->setFocus();
+}
+
+// ---- 预览区链接点击处理 [Spec 模块-preview/09] ----
+
+static bool isExecutableExt(const QString& path)
+{
+    static const QStringList exts = {
+        "exe", "bat", "cmd", "com", "ps1", "sh", "msi", "app", "scr"
+    };
+    return exts.contains(QFileInfo(path).suffix().toLower());
+}
+
+void MainWindow::onPreviewLinkClicked(const QString& url, EditorWidget* originEditor)
+{
+    if (url.isEmpty()) return;
+
+    // 1. http(s):// / mailto: / ftp:// 等 scheme → 交给系统
+    QUrl qurl(url);
+    if (qurl.scheme() == "http" || qurl.scheme() == "https"
+        || qurl.scheme() == "mailto" || qurl.scheme() == "ftp") {
+        QDesktopServices::openUrl(qurl);
+        return;
+    }
+
+    // 2. 本地路径：相对路径基于当前文件目录解析
+    QString localPath = url;
+    if (qurl.isLocalFile()) localPath = qurl.toLocalFile();
+
+    QFileInfo fi(localPath);
+    if (fi.isRelative() && originEditor) {
+        QString srcDir = QFileInfo(originEditor->document()->filePath()).absolutePath();
+        fi = QFileInfo(srcDir + "/" + localPath);
+    }
+    QString absPath = fi.absoluteFilePath();
+
+    // 3. 安全黑名单：禁止执行可执行文件
+    if (isExecutableExt(absPath)) {
+        QMessageBox::warning(this, tr("Blocked"),
+            tr("Refusing to open executable file: %1").arg(fi.fileName()));
+        return;
+    }
+
+    // 4. 文件不存在 → 提示
+    if (!fi.exists()) {
+        QMessageBox::warning(this, tr("File Not Found"),
+            tr("Cannot find file: %1").arg(absPath));
+        return;
+    }
+
+    // 5. Markdown/文本文件 → 新开 Tab
+    QString suffix = fi.suffix().toLower();
+    static const QStringList mdExts = {"md", "markdown", "txt"};
+    if (mdExts.contains(suffix)) {
+        openFile(absPath);
+        return;
+    }
+
+    // 6. 其他可打开的文档 → 交给系统默认应用
+    QDesktopServices::openUrl(QUrl::fromLocalFile(absPath));
 }

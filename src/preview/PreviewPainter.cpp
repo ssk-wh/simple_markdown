@@ -44,9 +44,10 @@ void PreviewPainter::setTargetLineHighlight(int sourceLine, qreal opacity)
 }
 
 void PreviewPainter::recordSegment(const QRectF& rect, int charStart, int charLen,
-                                    const QString& text, const QFont& font)
+                                    const QString& text, const QFont& font,
+                                    const QString& linkUrl)
 {
-    m_textSegments.append({rect, charStart, charLen, text, font});
+    m_textSegments.append({rect, charStart, charLen, text, font, linkUrl});
 }
 
 void PreviewPainter::paint(QPainter* painter, const LayoutBlock& root,
@@ -134,9 +135,8 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         p->setPen(QPen(m_theme.previewCodeBorder, 1));
         p->drawRoundedRect(bgRect, 4, 4);
 
-        // 绘制代码块文本
-        QFont monoFont("Consolas", 9);
-        monoFont.setStyleHint(QFont::Monospace);
+        // 绘制代码块文本 [Spec 模块-preview/03 INV-8: 字体来自 layout]
+        QFont monoFont = m_layout ? m_layout->monoFont() : QFont("Consolas", 9);
         p->setFont(monoFont);
         p->setPen(m_theme.previewCodeFg);
 
@@ -238,7 +238,8 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             // 序号/圆点画在 List 左边缘（absX），内容在 absX + child.bounds.x()
             qreal bulletX = absX;
 
-            QFont baseFont("Segoe UI", 12);
+            // [Spec 模块-preview/03 INV-8: 列表序号字体从 layout 取]
+            QFont baseFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
             p->setFont(baseFont);
             p->setPen(m_theme.previewFg);
             QFontMetricsF fm(baseFont, p->device());
@@ -296,8 +297,8 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                 p->drawLine(QPointF(cellX, rowDrawY),
                             QPointF(cellX, rowDrawY + rowHeight));
 
-                // Cell text
-                QFont cellFont("Segoe UI", 12);
+                // Cell text [Spec 模块-preview/03 INV-8: 表格单元格字体从 layout 取]
+                QFont cellFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
                 if (isFirstRow) cellFont.setWeight(QFont::Bold);
                 p->setFont(cellFont);
                 p->setPen(m_theme.previewFg);
@@ -344,8 +345,9 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal cx = rect.center().x();
             qreal cy = rect.center().y();
 
-            // Error icon: X mark
-            QFont iconFont("Segoe UI", 16);
+            // Error icon: X mark [Spec INV-8: 从 layout base 派生, 比例 1.33]
+            QFont iconFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+            iconFont.setPointSizeF(iconFont.pointSizeF() * 1.33);
             iconFont.setBold(true);
             p->setFont(iconFont);
             p->setPen(m_theme.previewImageErrorText);
@@ -354,8 +356,9 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal iconH = iconFm.height();
             p->drawText(QPointF(cx - iconW / 2, cy - 4), QStringLiteral("\u2717"));
 
-            // Error label
-            QFont labelFont("Segoe UI", 10);
+            // Error label [Spec INV-8: 比例 0.83]
+            QFont labelFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+            labelFont.setPointSizeF(labelFont.pointSizeF() * 0.83);
             p->setFont(labelFont);
             p->setPen(m_theme.previewImageErrorText);
             // 使用 QCoreApplication::translate 绑定 context 名称，符合 Spec INV-2
@@ -365,9 +368,10 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             p->drawText(QRectF(rect.x(), cy + iconH * 0.3, rect.width(), iconH),
                         Qt::AlignHCenter | Qt::AlignTop, errorLabel);
 
-            // File name at bottom
+            // File name at bottom [Spec INV-8: 比例 0.75]
             if (!basename.isEmpty()) {
-                QFont nameFont("Segoe UI", 9);
+                QFont nameFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+                nameFont.setPointSizeF(nameFont.pointSizeF() * 0.75);
                 p->setFont(nameFont);
                 p->setPen(m_theme.previewImageInfoText);
                 QFontMetricsF nameFm(nameFont, p->device());
@@ -385,16 +389,18 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal cx = rect.center().x();
             qreal cy = rect.center().y();
 
-            // Image icon
-            QFont iconFont("Segoe UI", 20);
+            // Image icon [Spec INV-8: 比例 1.66]
+            QFont iconFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+            iconFont.setPointSizeF(iconFont.pointSizeF() * 1.66);
             p->setFont(iconFont);
             p->setPen(m_theme.previewImagePlaceholderText);
             QFontMetricsF iconFm(iconFont, p->device());
             qreal iconW = iconFm.horizontalAdvance(QStringLiteral("\u25A3"));
             p->drawText(QPointF(cx - iconW / 2, cy - 6), QStringLiteral("\u25A3"));
 
-            // File name
-            QFont nameFont("Segoe UI", 10);
+            // File name [Spec INV-8: 比例 0.83]
+            QFont nameFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+            nameFont.setPointSizeF(nameFont.pointSizeF() * 0.83);
             nameFont.setBold(true);
             p->setFont(nameFont);
             p->setPen(m_theme.previewFg);
@@ -407,8 +413,9 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             p->drawText(QRectF(rect.x(), nameY, rect.width(), nameFm.height()),
                         Qt::AlignHCenter | Qt::AlignTop, elidedName);
 
-            // Image dimensions
-            QFont dimFont("Segoe UI", 9);
+            // Image dimensions [Spec INV-8: 比例 0.75]
+            QFont dimFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+            dimFont.setPointSizeF(dimFont.pointSizeF() * 0.75);
             p->setFont(dimFont);
             p->setPen(m_theme.previewImageInfoText);
             QString dimText = QString("%1 \u00D7 %2 px")
@@ -426,16 +433,18 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal cx = rect.center().x();
             qreal cy = rect.center().y();
 
-            // Image icon
-            QFont iconFont("Segoe UI", 20);
+            // Image icon [Spec INV-8: 比例 1.66]
+            QFont iconFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+            iconFont.setPointSizeF(iconFont.pointSizeF() * 1.66);
             p->setFont(iconFont);
             p->setPen(m_theme.previewImagePlaceholderText);
             QFontMetricsF iconFm(iconFont, p->device());
             qreal iconW = iconFm.horizontalAdvance(QStringLiteral("\u25A3"));
             p->drawText(QPointF(cx - iconW / 2, cy - 6), QStringLiteral("\u25A3"));
 
-            // File name or "Image"
-            QFont nameFont("Segoe UI", 10);
+            // File name or "Image" [Spec INV-8: 比例 0.83]
+            QFont nameFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+            nameFont.setPointSizeF(nameFont.pointSizeF() * 0.83);
             p->setFont(nameFont);
             p->setPen(m_theme.previewImagePlaceholderText);
             QFontMetricsF nameFm(nameFont, p->device());
@@ -475,9 +484,9 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
 
     QColor selColor(0, 120, 215, 80);
 
-    auto drawSelectionHighlight = [&](const QString& segText, qreal sx, qreal sy, qreal sw, qreal sh, int charStart, int charLen) {
+    auto drawSelectionHighlight = [&](const QString& segText, qreal sx, qreal sy, qreal sw, qreal sh, int charStart, int charLen, const QString& linkUrl = QString()) {
         QFont curFont = p->font();
-        recordSegment(QRectF(sx, sy, sw, sh), charStart, charLen, segText, curFont);
+        recordSegment(QRectF(sx, sy, sw, sh), charStart, charLen, segText, curFont, linkUrl);
 
         // 标记高亮（先绘制，作为底层）
         if (charLen > 0) {
@@ -538,7 +547,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
                 p->fillRect(QRectF(curX, curY, segW, textHeight), run.bgColor);
             }
             drawSelectionHighlight(seg, curX, curY, segW, textHeight,
-                                   m_charCounter + segOffset, seg.length());
+                                   m_charCounter + segOffset, seg.length(), run.linkUrl);
             p->drawText(QPointF(curX, curY + fm.ascent()), seg);
             if (!run.linkUrl.isEmpty())
                 p->drawLine(QPointF(curX, curY + fm.ascent() + 2), QPointF(curX + segW, curY + fm.ascent() + 2));

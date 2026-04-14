@@ -3,32 +3,46 @@ setlocal enabledelayedexpansion
 
 REM ===============================================
 REM SimpleMarkdown - Windows Pack Script
-REM Usage: run build_on_win.bat first, then this script
+REM Spec: specs/30-build-and-release-process.md
+REM Auto-calls build_on_win.bat release at the start.
+REM Usage: .\pack_on_win.bat  (no need to run build manually)
 REM ===============================================
 
 cd /d "%~dp0"
 
-REM Check build output exists
-if not exist "build\src\app\SimpleMarkdown.exe" (
-    echo [ERROR] build\src\app\SimpleMarkdown.exe not found.
-    echo         Please run build_on_win.bat first.
-    exit /b 1
-)
-
 echo.
 echo ================================================
-echo   Step 1/2: Collecting dependencies...
+echo   Step 1/3: Building Release...
 echo ================================================
 chcp.com 65001 > nul 2>&1
-python installer\collect_dist.py build\src\app
+REM Use cmd /c subshell to avoid setlocal nesting issues with call
+cmd /c ""%~dp0build_on_win.bat" release"
 if errorlevel 1 (
-    echo [ERROR] Dependency collection failed!
+    echo [ERROR] Build failed! Aborting pack.
+    exit /b 1
+)
+
+REM Verify build output
+if not exist "build\src\app\SimpleMarkdown.exe" (
+    echo [ERROR] build\src\app\SimpleMarkdown.exe not found after build.
     exit /b 1
 )
 
 echo.
 echo ================================================
-echo   Step 2/2: Packing NSIS installer...
+echo   Step 2/3: Collecting dependencies...
+echo ================================================
+python installer\collect_dist.py build\src\app
+set COLLECT_RC=%errorlevel%
+if not "%COLLECT_RC%"=="0" (
+    echo [ERROR] Dependency collection failed rc=%COLLECT_RC%
+    echo         (Hint: close any running SimpleMarkdown.exe first)
+    exit /b 2
+)
+
+echo.
+echo ================================================
+echo   Step 3/3: Packing NSIS installer...
 echo ================================================
 
 REM Extract version from CHANGELOG.md (first ## [x.y.z] line)

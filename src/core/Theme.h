@@ -15,8 +15,8 @@ struct Theme {
     QColor editorLineNumberActive = QColor("#333333");
     QColor editorGutterBg = QColor("#F0F0F0");
     QColor editorCursor = QColor("#333333");
-    QColor editorSearchMatch = QColor(255, 235, 59, 128);  // 半透明黄色
-    QColor editorSearchMatchCurrent = QColor(255, 152, 0, 180);  // 当前匹配项（橙色，更明显）
+    QColor editorSearchMatch = QColor(255, 235, 59, 220);  // 亮黄色（alpha 220 保证明显）
+    QColor editorSearchMatchCurrent = QColor(255, 140, 0, 240);  // 当前匹配（饱和橙色，更明显）
     QColor editorGutterLine = QColor("#E0E0E0");
     QColor editorPreeditBg = QColor(255, 255, 200);
 

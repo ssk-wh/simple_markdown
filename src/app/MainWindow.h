@@ -33,6 +33,7 @@ protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
 
@@ -53,6 +54,9 @@ private:
         ScrollSync* scrollSync = nullptr;
         bool pendingReload = false;  // 文件被外部修改，等切换到此 tab 时提示
     };
+
+    // [Spec 模块-preview/09] 预览区链接 Ctrl+click 处理
+    void onPreviewLinkClicked(const QString& url, class EditorWidget* originEditor);
 
     QTabWidget* m_tabWidget;
     QSplitter* m_mainSplitter = nullptr;
