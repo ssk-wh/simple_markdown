@@ -5,10 +5,17 @@ if(WIN32)
 endif()
 
 # 翻译文件
+# [i18n 不变量] .qm 必须与 resources.qrc 引用的源码 translations/ 路径一致，
+# 否则新翻译条目不会被 qrc 打包，运行时只能看到英文源文本。
+# 通过 OUTPUT_LOCATION 让 lrelease 直接把 .qm 输出到源码 translations/ 目录，
+# 每次 build 都自动刷新，避免"改了 .ts 却忘记 lrelease"再次翻车。
+# 参考：plans/归档/2026-04-14-欢迎页国际化缺失.md
 set(TS_FILES
     ${CMAKE_SOURCE_DIR}/translations/simple_markdown_zh_CN.ts
     ${CMAKE_SOURCE_DIR}/translations/simple_markdown_en_US.ts
 )
+set_source_files_properties(${TS_FILES} PROPERTIES
+    OUTPUT_LOCATION ${CMAKE_SOURCE_DIR}/translations)
 
 qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR}/src ${TS_FILES})
 

@@ -32,6 +32,11 @@ All notable changes to this project will be documented in this file.
   （新增 INV-8 / INV-9：PreviewLayout::setFont 同步 m_monoFont + 新增 getter）
 - 拖拽文件到编辑区：支持无后缀纯文本文件（TODO/LICENSE/README 等，通过前 4KB sniff
   判定），拒绝明确二进制扩展（.exe/.zip/.pdf/...），不支持时统一弹窗列出而非静默丢弃
+- 首次启动欢迎对话框在中文 UI 下仍显示英文：根因是 CMake 的 `qt5_create_translation` 把 .qm
+  生成到构建目录，而 `resources.qrc` 引用的是源码 `translations/` 下的旧 .qm，导致新翻译未被
+  打进资源。修复通过 `set_source_files_properties(... OUTPUT_LOCATION)` 让 lrelease 直接输出到
+  源码 translations/，每次 build 自动刷新；同步补 `specs/横切关注点/60-国际化.md` 的 INV-1.1
+  与新 UI 字符串 checklist，避免第三次翻车
 
 ## [0.2.3] - 2026-04-13
 
