@@ -91,6 +91,9 @@ private:
                     qreal scrollY, qreal viewportHeight, qreal viewportWidth);
     void paintInlineRuns(QPainter* p, const LayoutBlock& block,
                          qreal x, qreal y, qreal maxWidth);
+    // Spec: specs/模块-preview/10-Frontmatter渲染.md §4.6
+    void paintFrontmatter(QPainter* p, const LayoutBlock& block,
+                          qreal absX, qreal absY);
     void recordSegment(const QRectF& rect, int charStart, int charLen,
                        const QString& text, const QFont& font,
                        const QString& linkUrl = QString());

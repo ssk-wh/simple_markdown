@@ -56,6 +56,15 @@ struct Theme {
     QColor previewHighlight = QColor(255, 235, 59, 180);     // 标记高亮（浅色）
     QColor previewHighlightToc = QColor(255, 235, 59, 120);  // TOC标记（浅色）
 
+    // Spec: specs/模块-preview/10-Frontmatter渲染.md §4.4
+    // accentColor 优先取 QGuiApplication::palette().color(QPalette::Highlight)，
+    // 全灰时 fallback 为 #0078D4；frontmatter* 字段由 accent 与 previewBg 线性混合得到
+    QColor accentColor = QColor("#0078D4");
+    QColor frontmatterBackground = QColor("#E5F1FB");   // blend(accent, previewBg, 0.5)
+    QColor frontmatterBorder = QColor("#4DA3E1");       // blend(accent, previewBg, 0.7)
+    QColor frontmatterKeyForeground = QColor("#1F5A8A");     // 偏 accent
+    QColor frontmatterValueForeground = QColor("#333333");   // 与 previewCodeFg 一致
+
     static Theme light();
     static Theme dark();
 };

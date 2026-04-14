@@ -27,6 +27,9 @@ Thumbs.db
 # Temp (测试脚本/临时数据)
 tmp/
 
+# Claude Code per-agent worktrees
+.claude/worktrees/
+
 # Stackdump
 *.stackdump
 

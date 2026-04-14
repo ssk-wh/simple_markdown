@@ -248,6 +248,13 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
         block.bounds = QRectF(0, 0, maxWidth, 33.0);
         break;
     }
+    case AstNodeType::Frontmatter: {
+        // Spec: specs/模块-preview/10-Frontmatter渲染.md §4.3 §4.5 §5.3
+        block = layoutFrontmatter(node, maxWidth);
+        block.sourceStartLine = node->startLine;
+        block.sourceEndLine = node->endLine;
+        break;
+    }
     case AstNodeType::HtmlBlock: {
         block.type = LayoutBlock::HtmlBlock;
         block.codeText = node->literal;
@@ -266,6 +273,60 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
     }
     }
 
+    return block;
+}
+
+// Spec: specs/模块-preview/10-Frontmatter渲染.md §5.3
+// Invariants: INV-9 (monoFont), INV-10 (列宽), INV-11 (行高), INV-12 (value 按字符换行)
+// 高 DPI: QFontMetricsF 必须带 m_device 参数（specs/横切关注点/40-高DPI适配.md INV-2）
+LayoutBlock PreviewLayout::layoutFrontmatter(const AstNode* node, qreal maxWidth)
+{
+    LayoutBlock block;
+    block.type = LayoutBlock::Frontmatter;
+    block.frontmatterEntries = node->frontmatterEntries;
+    block.frontmatterRawText = node->frontmatterRawText;
+
+    // Spec §INV-9：frontmatter 使用 monoFont 字体族 + baseFont 字号
+    QFont fmFont = m_monoFont;
+    fmFont.setPointSizeF(m_baseFont.pointSizeF());
+
+    // 度量必须带 device —— 高 DPI INV-2
+    QFontMetricsF fm(fmFont, m_device);
+    // INV-11：行高由字体度量派生（baseFont 字号 > monoFont 字号，不再复用 codeLineHeight）
+    const qreal lineH = fm.height() * 1.4;
+    const qreal hPad = fm.height() * 0.5;              // 左右内边距，由字体度量派生（禁止硬编码）
+    const qreal vPad = fm.height() * 0.4;              // 上下内边距
+
+    // 最长 key 宽度
+    qreal maxKeyW = 0;
+    for (const auto& kv : block.frontmatterEntries)
+        maxKeyW = qMax(maxKeyW, fm.horizontalAdvance(kv.first));
+
+    // INV-10：首列宽度 = max(maxKey + 2*innerCellPad, innerWidth*0.5 上限)
+    const qreal innerCellPad = fm.height() * 0.25;      // 列内小内边距
+    const qreal innerWidth = qMax<qreal>(1.0, maxWidth - 2 * hPad);
+    const qreal cap = innerWidth * 0.5;
+    qreal keyColW = qMin(maxKeyW + 2 * innerCellPad, cap);
+    if (keyColW < innerCellPad * 2)
+        keyColW = innerCellPad * 2;  // 保底，即使 entries 为空
+    const qreal valColW = qMax<qreal>(1.0, innerWidth - keyColW);
+
+    // INV-12：value 按字符换行
+    const qreal avgCharW = qMax<qreal>(1.0, fm.averageCharWidth());
+    int totalLines = 0;
+    for (const auto& kv : block.frontmatterEntries) {
+        const int valCharsPerLine = qMax(1, static_cast<int>(qFloor(valColW / avgCharW)));
+        const int len = kv.second.length();
+        const int valLines = (len <= 0) ? 1 : static_cast<int>(qCeil(qreal(len) / qreal(valCharsPerLine)));
+        totalLines += qMax(1, valLines);
+    }
+    if (totalLines <= 0)
+        totalLines = 1;  // 无 entry 时仍占一行（视觉上呈现为空白带）
+
+    const qreal height = 2 * vPad + totalLines * lineH;
+
+    block.frontmatterKeyColumnWidth = keyColW;
+    block.bounds = QRectF(0, 0, maxWidth, height);
     return block;
 }
 

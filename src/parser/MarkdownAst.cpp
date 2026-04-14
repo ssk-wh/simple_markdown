@@ -15,6 +15,7 @@ bool AstNode::isBlock() const
     case AstNodeType::TableCell:
     case AstNodeType::ThematicBreak:
     case AstNodeType::HtmlBlock:
+    case AstNodeType::Frontmatter:
         return true;
     default:
         return false;

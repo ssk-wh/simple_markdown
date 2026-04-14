@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QFontMetricsF>
+#include <QtMath>
 #include <QFile>
 #include <QTextStream>
 #include <QStandardPaths>
@@ -464,6 +465,15 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         p->drawLine(QPointF(drawX, lineY), QPointF(drawX + block.bounds.width(), lineY));
         break;
     }
+    case LayoutBlock::Frontmatter: {
+        // Spec: specs/模块-preview/10-Frontmatter渲染.md §4.6 §8.10
+        // 坐标系遵循 INV-COORD-ABS：递归绝对坐标（这里无子块，直接 drawX/drawY）
+        paintFrontmatter(p, block, drawX, drawY);
+        // 选区字符计数：把整个 rawText 作为一段记入
+        m_charCounter += block.frontmatterRawText.length();
+        if (!block.frontmatterRawText.isEmpty()) m_charCounter++;  // block separator
+        break;
+    }
     default:
         for (const auto& child : block.children) {
             paintBlock(p, child, absX, absY, scrollY, viewportHeight, viewportWidth);
@@ -621,8 +631,99 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
     m_charCounter++;
 }
 
+// Spec: specs/模块-preview/10-Frontmatter渲染.md §4.6 §5.3
+// Invariants enforced: INV-8 (圆角背景), INV-9 (monoFont), INV-10 (列宽截断+ellipsis),
+//   INV-11 (行高=codeLineHeight), INV-12 (value 按字符换行)
+// 高 DPI：QFontMetricsF 必须带 p->device()（specs/横切关注点/40-高DPI适配.md INV-2）
+void PreviewPainter::paintFrontmatter(QPainter* p, const LayoutBlock& block,
+                                       qreal absX, qreal absY)
+{
+    // Spec §INV-9：frontmatter 使用 monoFont 字体族 + baseFont 字号
+    // 字体必须从 layout 取（禁止字面量字号 — specs/横切关注点/80-字体系统.md INV-5/INV-8）
+    QFont fmFont = m_layout ? m_layout->monoFont() : QFont();
+    if (m_layout)
+        fmFont.setPointSizeF(m_layout->baseFont().pointSizeF());
+    p->setFont(fmFont);
+
+    QFontMetricsF fm(fmFont, p->device());
+    const qreal lineH = fm.height() * 1.4;  // INV-11：行高由 fm 派生
+    const qreal hPad = fm.height() * 0.5;
+    const qreal vPad = fm.height() * 0.4;
+    const qreal radius = fm.height() * 0.25;        // 与 CodeBlock 一致
+
+    const qreal w = block.bounds.width();
+    const qreal h = block.bounds.height();
+
+    // Step 1：圆角背景
+    QRectF rect(absX, absY, w, h);
+    p->save();
+    p->setRenderHint(QPainter::Antialiasing, true);
+
+    p->setPen(Qt::NoPen);
+    p->setBrush(m_theme.frontmatterBackground);
+    p->drawRoundedRect(rect, radius, radius);
+
+    // Step 2：边框
+    p->setBrush(Qt::NoBrush);
+    p->setPen(QPen(m_theme.frontmatterBorder, 1.0));
+    p->drawRoundedRect(rect, radius, radius);
+
+    // Step 3：逐行绘制 key / value
+    const qreal innerX = absX + hPad;
+    const qreal innerTop = absY + vPad;
+    const qreal innerCellPad = fm.height() * 0.25;
+    const qreal keyColW = block.frontmatterKeyColumnWidth;
+    const qreal valColX = innerX + keyColW;
+    const qreal valColW = qMax<qreal>(1.0, (absX + w - hPad) - valColX);
+
+    const qreal avgCharW = qMax<qreal>(1.0, fm.averageCharWidth());
+    const int valCharsPerLine = qMax(1, static_cast<int>(qFloor(valColW / avgCharW)));
+
+    qreal y = innerTop;
+
+    for (const auto& kv : block.frontmatterEntries) {
+        const QString& key = kv.first;
+        const QString& value = kv.second;
+
+        // Value 按字符分行
+        QStringList valueLines;
+        if (value.isEmpty()) {
+            valueLines << QString();
+        } else {
+            for (int i = 0; i < value.length(); i += valCharsPerLine)
+                valueLines << value.mid(i, valCharsPerLine);
+        }
+
+        for (int li = 0; li < valueLines.size(); ++li) {
+            // 第一物理行绘 key（若非空），后续行第一列留空（INV-12）
+            if (li == 0 && !key.isEmpty()) {
+                p->setPen(m_theme.frontmatterKeyForeground);
+                const qreal keyDrawW = keyColW - 2 * innerCellPad;
+                QString elidedKey = fm.elidedText(key, Qt::ElideRight, keyDrawW);
+                p->drawText(QPointF(innerX + innerCellPad, y + fm.ascent()), elidedKey);
+            }
+
+            // Value 列
+            p->setPen(m_theme.frontmatterValueForeground);
+            p->drawText(QPointF(valColX + innerCellPad, y + fm.ascent()), valueLines[li]);
+
+            y += lineH;
+        }
+    }
+
+    p->restore();
+}
+
 void PreviewPainter::countBlockChars(const LayoutBlock& block)
 {
+    // Spec: specs/模块-preview/10-Frontmatter渲染.md §8.10
+    if (block.type == LayoutBlock::Frontmatter) {
+        m_charCounter += block.frontmatterRawText.length();
+        if (!block.frontmatterRawText.isEmpty())
+            m_charCounter++;
+        return;
+    }
+
     // Count inline runs (Paragraph, Heading, TableCell, etc.)
     for (const auto& run : block.inlineRuns) {
         m_charCounter += run.text.length();
@@ -681,6 +782,7 @@ BlockInfo PreviewPainter::buildBlockInfo(const LayoutBlock& block, qreal offsetX
     case LayoutBlock::TableCell:    info.type = "table_cell"; break;
     case LayoutBlock::Image:        info.type = "image"; break;
     case LayoutBlock::ThematicBreak: info.type = "thematic_break"; break;
+    case LayoutBlock::Frontmatter:  info.type = "frontmatter"; break;
     default:                        info.type = "unknown"; break;
     }
 

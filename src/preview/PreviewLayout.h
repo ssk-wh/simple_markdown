@@ -26,7 +26,8 @@ struct LayoutBlock {
     enum Type {
         Document, Paragraph, Heading, CodeBlock, BlockQuote,
         List, ListItem, Table, TableRow, TableCell,
-        Image, ThematicBreak, HtmlBlock
+        Image, ThematicBreak, HtmlBlock,
+        Frontmatter  // Spec: specs/模块-preview/10-Frontmatter渲染.md §4.3
     };
     Type type = Document;
     QRectF bounds;
@@ -55,6 +56,11 @@ struct LayoutBlock {
     std::vector<qreal> columnWidths;
     std::vector<int> columnAligns;
 
+    // Frontmatter (Spec §4.3)
+    std::vector<std::pair<QString, QString>> frontmatterEntries;
+    qreal frontmatterKeyColumnWidth = 0;  // 由 layout 阶段写入（INV-10）
+    QString frontmatterRawText;            // 原始 YAML，用于 INV-13 复制
+
     std::vector<LayoutBlock> children;
 };
 
@@ -77,8 +83,12 @@ public:
     qreal sourceLineToY(int sourceLine) const;
     int yToSourceLine(qreal y) const;
 
+    // Spec: specs/模块-preview/10-Frontmatter渲染.md §4.5
+    qreal codeLineHeight() const { return m_codeLineHeight; }
+
 private:
     LayoutBlock layoutBlock(const AstNode* node, qreal maxWidth);
+    LayoutBlock layoutFrontmatter(const AstNode* node, qreal maxWidth);
     void collectInlineRuns(const AstNode* node, std::vector<InlineRun>& runs,
                            QFont currentFont, QColor currentColor);
     qreal estimateParagraphHeight(const std::vector<InlineRun>& runs, qreal maxWidth) const;

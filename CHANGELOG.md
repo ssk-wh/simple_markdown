@@ -21,12 +21,17 @@ All notable changes to this project will be documented in this file.
   - `.exe/.bat/.sh` 等可执行文件 → 安全拒绝并提示
   - 文件不存在 → 友好提示不崩溃
   - 悬停在链接上时光标变为 PointingHandCursor
+- **预览区 Frontmatter 渲染**：文档头部 YAML 元数据（`---` 包裹的 key/value 块）识别为带
+  圆角背景的 2 列表格，与水平分割线 (ThematicBreak) 不冲突。key 等宽字体 + accent 色，
+  value 与代码块同色；背景/边框由系统强调色与预览背景按浅/深色主题差异化混合得到。
+  Spec: specs/模块-preview/10-Frontmatter渲染.md（19 条 T 编号，12 个 parser 单元测试全过）
 
 ### Changed
 - 搜索高亮改为亮黄色（浅色 alpha 128→220，深色从暗棕 #613214 改为金黄 rgba(218,165,32,220)），搜索结果视觉上更显眼
 - 菜单项 checkable indicator 与文字间距：padding-left 从 12px 调到 32px，✓ / radio button 不再紧贴文字
 
 ### Fixed
+- Tab 右键菜单"Close Others / Close to the Left / Close to the Right"按上下文禁用无可操作对象的项（只 1 个 tab、最左、最右时对应项置灰）
 - 预览区 Ctrl+滚轮缩放对部分元素无效：代码块、列表序号、表格单元格、图片占位符等
   11 处硬编码 QFont 全部改为从 `PreviewLayout::baseFont()/monoFont()` 派生
   （新增 INV-8 / INV-9：PreviewLayout::setFont 同步 m_monoFont + 新增 getter）

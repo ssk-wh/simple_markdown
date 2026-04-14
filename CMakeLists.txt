@@ -39,6 +39,6 @@ add_subdirectory(3rdparty/googletest)
 
 add_subdirectory(src)
 
-# Tests have been removed from the repository
-# enable_testing()
-# add_subdirectory(tests)
+# Spec: specs/模块-preview/10-Frontmatter渲染.md 要求 tests/preview/FrontmatterRenderTest.cpp
+enable_testing()
+add_subdirectory(tests)
