@@ -481,6 +481,9 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
     qreal curY = y;
     QFontMetricsF defaultFm(block.inlineRuns[0].font, p->device());  // 使用 device 参数
     qreal lineHeight = defaultFm.height() * 1.5;
+    // [Spec 模块-preview/03 INV-10] 行内所有 run 共享统一基线，防止小字号 run
+    // （如 inline code，字号 = 正文 * 0.9）按自身 ascent 定位导致基线上移、视觉偏上
+    qreal lineAscent = defaultFm.ascent();
 
     QColor selColor(0, 120, 215, 80);
 
@@ -538,7 +541,8 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
         // Helper: draw a segment with background, selection, decorations
         auto drawSegment = [&](const QString& seg, qreal segW, int segOffset) {
             // 反引号和内联代码背景色绘制
-            // drawText 在 (curX, curY + fm.ascent()) 以基线绘制
+            // [Spec 模块-preview/03 INV-10] 所有 run 共享 lineAscent（行主字体基线），
+            // 不能用 run 自身 fm.ascent()——否则 inline code 这种小字号 run 会上浮
             // 文本范围 Y：从 curY 到 curY + fm.height()
             // 背景、选区高亮必须使用一致的高度，避免 DPI 切换时产生空白
             qreal textHeight = fm.height();  // 文本实际高度
@@ -548,11 +552,11 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             }
             drawSelectionHighlight(seg, curX, curY, segW, textHeight,
                                    m_charCounter + segOffset, seg.length(), run.linkUrl);
-            p->drawText(QPointF(curX, curY + fm.ascent()), seg);
+            p->drawText(QPointF(curX, curY + lineAscent), seg);
             if (!run.linkUrl.isEmpty())
-                p->drawLine(QPointF(curX, curY + fm.ascent() + 2), QPointF(curX + segW, curY + fm.ascent() + 2));
+                p->drawLine(QPointF(curX, curY + lineAscent + 2), QPointF(curX + segW, curY + lineAscent + 2));
             if (run.isStrikethrough)
-                p->drawLine(QPointF(curX, curY + fm.ascent() / 2), QPointF(curX + segW, curY + fm.ascent() / 2));
+                p->drawLine(QPointF(curX, curY + lineAscent / 2), QPointF(curX + segW, curY + lineAscent / 2));
         };
 
         // Find how many chars fit within 'remaining' width using incremental measurement

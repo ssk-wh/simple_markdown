@@ -32,6 +32,9 @@ All notable changes to this project will be documented in this file.
   （新增 INV-8 / INV-9：PreviewLayout::setFont 同步 m_monoFont + 新增 getter）
 - 拖拽文件到编辑区：支持无后缀纯文本文件（TODO/LICENSE/README 等，通过前 4KB sniff
   判定），拒绝明确二进制扩展（.exe/.zip/.pdf/...），不支持时统一弹窗列出而非静默丢弃
+- 行内代码（反引号包围片段）垂直基线漂移：`paintInlineRuns` 原按每个 run 自身 `fm.ascent()`
+  定位 drawText，导致小字号 run（inline code 字号为正文 0.9）基线上移；改为以行主字体
+  ascent 作为统一 `lineAscent`，所有 run 共享基线（新增 INV-10 / T-10）
 
 ## [0.2.3] - 2026-04-13
 
