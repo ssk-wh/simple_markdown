@@ -38,6 +38,98 @@ Please ensure CHANGELOG.md is installed with the application.</source>
         <translation>关闭右侧</translation>
     </message>
     <message>
+        <source>Open Containing Folder</source>
+        <translation>打开所在目录</translation>
+    </message>
+    <message>
+        <source>Document Statistics...</source>
+        <translation>文档统计...</translation>
+    </message>
+    <message>
+        <source>Document Statistics</source>
+        <translation>文档统计</translation>
+    </message>
+    <message>
+        <source>Words:</source>
+        <translation>字数：</translation>
+    </message>
+    <message>
+        <source>Characters:</source>
+        <translation>字符数：</translation>
+    </message>
+    <message>
+        <source>no space</source>
+        <translation>不含空格</translation>
+    </message>
+    <message>
+        <source>Lines:</source>
+        <translation>行数：</translation>
+    </message>
+    <message>
+        <source>Paragraphs:</source>
+        <translation>段落：</translation>
+    </message>
+    <message>
+        <source>Headings:</source>
+        <translation>标题数：</translation>
+    </message>
+    <message>
+        <source>By Level:</source>
+        <translation>按级别：</translation>
+    </message>
+    <message>
+        <source>Code Blocks:</source>
+        <translation>代码块：</translation>
+    </message>
+    <message>
+        <source>Images:</source>
+        <translation>图片：</translation>
+    </message>
+    <message>
+        <source>Links:</source>
+        <translation>链接：</translation>
+    </message>
+    <message>
+        <source>Tables:</source>
+        <translation>表格：</translation>
+    </message>
+    <message>
+        <source>Block Quotes:</source>
+        <translation>引用块：</translation>
+    </message>
+    <message>
+        <source>Reading Time:</source>
+        <translation>阅读时间：</translation>
+    </message>
+    <message>
+        <source>Cannot Open File</source>
+        <translation>无法打开文件</translation>
+    </message>
+    <message>
+        <source>The following file(s) appear to be binary or unsupported. SimpleMarkdown only opens Markdown and plain text files:
+
+  %1</source>
+        <translation>以下文件似乎是二进制或不支持的类型。SimpleMarkdown 只支持 Markdown 和纯文本文件：
+
+  %1</translation>
+    </message>
+    <message>
+        <source>Blocked</source>
+        <translation>已阻止</translation>
+    </message>
+    <message>
+        <source>Refusing to open executable file: %1</source>
+        <translation>拒绝打开可执行文件：%1</translation>
+    </message>
+    <message>
+        <source>File Not Found</source>
+        <translation>找不到文件</translation>
+    </message>
+    <message>
+        <source>Cannot find file: %1</source>
+        <translation>无法找到文件：%1</translation>
+    </message>
+    <message>
         <source>File</source>
         <translation>文件</translation>
     </message>

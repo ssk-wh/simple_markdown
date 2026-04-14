@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.4] - 2026-04-14
 
 ### Added
+- **Tab 右键"打开所在目录"**：Windows 下用 `explorer /select` 高亮该文件，Linux 下打开包含目录
 - **文档统计信息弹窗**：视图菜单 "Document Statistics..." 显示当前文档的
   字数/字符数/行数/段落数/标题分级数/代码块数/图片数/链接数/表格数/引用块数/阅读时间
 - **一键打包**：`pack_on_win.bat` / `pack_on_linux.sh` 自动先调用 `build_on_*` release，

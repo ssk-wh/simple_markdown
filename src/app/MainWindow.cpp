@@ -24,6 +24,8 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QRegExp>
+#include <QProcess>
+#include <QDir>
 #include <QCloseEvent>
 #include <QShowEvent>
 #include <QKeyEvent>
@@ -148,6 +150,25 @@ MainWindow::MainWindow(QWidget* parent)
             for (int i = m_tabs.size() - 1; i > idx; --i)
                 onCloseTab(i);
         });
+
+        // [Plan plans/2026-04-14-Tab打开文件所在目录.md]
+        menu.addSeparator();
+        QString filePath = (idx < m_tabs.size())
+            ? m_tabs[idx].editor->document()->filePath() : QString();
+        QAction* openDirAct = menu.addAction(tr("Open Containing Folder"), [this, filePath]() {
+            if (filePath.isEmpty()) return;
+#ifdef Q_OS_WIN
+            // 用 explorer /select, 高亮目标文件
+            QStringList args;
+            args << "/select," << QDir::toNativeSeparators(filePath);
+            QProcess::startDetached("explorer.exe", args);
+#else
+            // Linux 大部分文件管理器不支持 select 参数，只能打开目录
+            QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(filePath).absolutePath()));
+#endif
+        });
+        if (filePath.isEmpty()) openDirAct->setEnabled(false);
+
         menu.exec(m_tabWidget->tabBar()->mapToGlobal(pos));
     });
 
