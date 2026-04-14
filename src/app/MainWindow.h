@@ -58,6 +58,9 @@ private:
     // [Spec 模块-preview/09] 预览区链接 Ctrl+click 处理
     void onPreviewLinkClicked(const QString& url, class EditorWidget* originEditor);
 
+    // [Plan 文档统计信息] 弹窗统计当前文档的结构化信息
+    void onShowDocumentStats();
+
     QTabWidget* m_tabWidget;
     QSplitter* m_mainSplitter = nullptr;
     TocPanel* m_tocPanel = nullptr;

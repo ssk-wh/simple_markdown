@@ -23,6 +23,7 @@
 #include <QFile>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QRegExp>
 #include <QCloseEvent>
 #include <QShowEvent>
 #include <QKeyEvent>
@@ -309,6 +310,11 @@ void MainWindow::setupMenuBar()
     m_focusModeAct->setChecked(false);
     m_focusModeAct->setShortcut(QKeySequence(Qt::Key_F11));
     connect(m_focusModeAct, &QAction::triggered, this, &MainWindow::toggleFocusMode);
+
+    viewMenu->addSeparator();
+
+    // [Spec/Plan 文档统计信息] 弹窗显示标题/段落/代码块/图片/链接统计
+    viewMenu->addAction(tr("Document Statistics..."), this, &MainWindow::onShowDocumentStats);
 
     viewMenu->addSeparator();
 
@@ -1876,4 +1882,133 @@ void MainWindow::onPreviewLinkClicked(const QString& url, EditorWidget* originEd
 
     // 6. 其他可打开的文档 → 交给系统默认应用
     QDesktopServices::openUrl(QUrl::fromLocalFile(absPath));
+}
+
+// ---- 文档统计弹窗 [Plan plans/2026-04-13-文档统计信息.md] ----
+
+void MainWindow::onShowDocumentStats()
+{
+    auto* tab = currentTab();
+    if (!tab) return;
+
+    const QString text = tab->editor->document()->text();
+
+    // 基础字数/字符数/行数（复用状态栏逻辑）
+    const int totalChars = text.length();
+    int charsNoSpace = 0;
+    for (const QChar& ch : text) if (!ch.isSpace()) ++charsNoSpace;
+    const int lineCount = tab->editor->document()->lineCount();
+
+    // Word count（中文按字 + 英文按词）
+    int wordCount = 0;
+    bool inWord = false;
+    for (const QChar& ch : text) {
+        ushort uc = ch.unicode();
+        bool isCJK = (uc >= 0x4E00 && uc <= 0x9FFF)
+                  || (uc >= 0x3400 && uc <= 0x4DBF)
+                  || (uc >= 0xF900 && uc <= 0xFAFF);
+        if (isCJK) {
+            if (inWord) { ++wordCount; inWord = false; }
+            ++wordCount;
+        } else if (ch.isLetterOrNumber()) {
+            inWord = true;
+        } else {
+            if (inWord) { ++wordCount; inWord = false; }
+        }
+    }
+    if (inWord) ++wordCount;
+
+    // 结构统计：用正则扫源码，避免依赖 AST 指针
+    int h1 = 0, h2 = 0, h3 = 0, h4 = 0, h5 = 0, h6 = 0;
+    int paragraphCount = 0;
+    int codeBlockCount = 0;
+    int imageCount = 0;
+    int linkCount = 0;
+    int tableCount = 0;
+    int blockQuoteCount = 0;
+
+    const QStringList lines = text.split('\n');
+    bool inCodeFence = false;
+    bool prevBlank = true;
+    for (const QString& raw : lines) {
+        QString line = raw;
+        QString trimmed = line.trimmed();
+
+        // 代码围栏
+        if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+            if (!inCodeFence) ++codeBlockCount;
+            inCodeFence = !inCodeFence;
+            prevBlank = false;
+            continue;
+        }
+        if (inCodeFence) { prevBlank = false; continue; }
+
+        // 标题
+        if (trimmed.startsWith("#")) {
+            int level = 0;
+            while (level < trimmed.size() && trimmed[level] == '#') ++level;
+            if (level >= 1 && level <= 6
+                && (level == trimmed.size() || trimmed[level] == ' ')) {
+                switch (level) {
+                    case 1: ++h1; break; case 2: ++h2; break; case 3: ++h3; break;
+                    case 4: ++h4; break; case 5: ++h5; break; case 6: ++h6; break;
+                }
+                prevBlank = false;
+                continue;
+            }
+        }
+
+        // 引用块
+        if (trimmed.startsWith(">")) ++blockQuoteCount;
+
+        // 表格（至少两行 | 分隔）
+        if (trimmed.contains('|') && trimmed.contains("---")) ++tableCount;
+
+        // 段落：非空行且前一行是空行
+        if (!trimmed.isEmpty() && prevBlank) ++paragraphCount;
+
+        prevBlank = trimmed.isEmpty();
+    }
+
+    // 图片 / 链接：用正则全文扫
+    QRegExp imgRe("!\\[[^\\]]*\\]\\([^)]+\\)");
+    int pos = 0;
+    while ((pos = imgRe.indexIn(text, pos)) != -1) { ++imageCount; pos += imgRe.matchedLength(); }
+    QRegExp linkRe("(?<!!)\\[[^\\]]*\\]\\([^)]+\\)");
+    pos = 0;
+    while ((pos = linkRe.indexIn(text, pos)) != -1) { ++linkCount; pos += linkRe.matchedLength(); }
+
+    const int minutes = qMax(1, wordCount / 300);
+
+    const QString title = tr("Document Statistics");
+    const QString body = QString(
+        "<table cellpadding='3'>"
+        "<tr><td><b>%1</b></td><td>%2</td></tr>"
+        "<tr><td><b>%3</b></td><td>%4 (%5 %6)</td></tr>"
+        "<tr><td><b>%7</b></td><td>%8</td></tr>"
+        "<tr><td><b>%9</b></td><td>%10</td></tr>"
+        "<tr><td><b>%11</b></td><td>%12</td></tr>"
+        "<tr><td><b>%13</b></td><td>H1:%14 H2:%15 H3:%16 H4:%17 H5:%18 H6:%19</td></tr>"
+        "<tr><td><b>%20</b></td><td>%21</td></tr>"
+        "<tr><td><b>%22</b></td><td>%23</td></tr>"
+        "<tr><td><b>%24</b></td><td>%25</td></tr>"
+        "<tr><td><b>%26</b></td><td>%27</td></tr>"
+        "<tr><td><b>%28</b></td><td>%29</td></tr>"
+        "<tr><td><b>%30</b></td><td>%31 min</td></tr>"
+        "</table>"
+    )
+    .arg(tr("Words:")).arg(wordCount)
+    .arg(tr("Characters:")).arg(totalChars).arg(charsNoSpace).arg(tr("no space"))
+    .arg(tr("Lines:")).arg(lineCount)
+    .arg(tr("Paragraphs:")).arg(paragraphCount)
+    .arg(tr("Headings:")).arg(h1 + h2 + h3 + h4 + h5 + h6)
+    .arg(tr("By Level:")).arg(h1).arg(h2).arg(h3).arg(h4).arg(h5).arg(h6)
+    .arg(tr("Code Blocks:")).arg(codeBlockCount)
+    .arg(tr("Images:")).arg(imageCount)
+    .arg(tr("Links:")).arg(linkCount)
+    .arg(tr("Tables:")).arg(tableCount)
+    .arg(tr("Block Quotes:")).arg(blockQuoteCount)
+    .arg(tr("Reading Time:")).arg(minutes);
+
+    QMessageBox::information(this, title, body);
 }
