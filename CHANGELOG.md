@@ -2,6 +2,51 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] - 2026-04-15
+
+### Fixed
+- **TOC DocInfoCard 与折叠按钮未国际化**：新增的 `Document Info` / `Words: %1` / `Chars: %1 (no space %2)` /
+  `Lines: %1` / `Size: %1` / `Modified: %1` / `Expand` / `Collapse` / `just now` / `%1 min ago` /
+  `%1 hr ago` / `%1 day(s) ago` 共 16 条字符串未翻译，zh_CN 下显示英文。lupdate 扫描 + 补齐 .ts +
+  lrelease 生成 .qm 全链路处理；`TocPanel` context 内与 `MainWindow` 同文字符串（如 Words/Lines）
+  单独翻译避免 "Same-text heuristic" 残留 `type=unfinished`。
+  Reference: feedback memory 「新增 UI 必须走完 i18n 全链路」
+
+### Added
+- **TOC 视觉对齐薄荷清新 mock**：TocPanel 条目按 mock_e_mint_breeze.html 设计重做：
+  - 每条目左侧绘制 bullet 圆点（lvl1 `6×6`、lvl≥2 `5×5`），active 态 bullet 变柠檬黄 + 半透明光晕
+  - hover 只改背景色不改字色（Spec T-VISUAL-2）
+  - active 态字色加深 + font-weight 600 + active 底色
+  - 条目 border-radius 7px、行间距 gap 2px
+  - 缩进阶梯 `12px/级`
+  - bullet icon 按 devicePixelRatio 高分辨率绘制，高 DPI 屏幕不模糊
+- **TOC 下方文档信息卡**：TocPanel 底部常驻文档摘要卡片（Document Info），展开显示字数/字符/行数/大小/修改时间，折叠显示一行摘要。
+  - 数据复用 `updateStatusBarStats` 已算好的 wordCount/charCount/lineCount，不重复 parse markdown（INV-TOC-DOCCARD-NO-REPARSE）
+  - 折叠态持久化到 `toc/docCardCollapsed`，重开应用保持（INV-TOC-DOCCARD-COLLAPSE-PERSIST）
+  - 颜色全部从 Theme 派生
+  - frontmatter title/tags v2 扩展（当前不显示，字段已在 DocInfo struct 中预留）
+- **TOC 宽度自适应**：目录面板宽度按标题内容动态计算，不再固定 220px。
+  - 公式：`max(文本宽 + 缩进) + padding + bullet + scrollbar + margin`，夹在 `[120px, 屏幕 1/5]`
+  - 短标题文档自动收窄、长标题扩张到完整显示（无省略号）
+  - 折叠后的子节点不参与宽度计算
+  - 用户手动拖拽分隔条后切换为手动模式，不再被 setEntries 覆盖（INV-TOC-WIDTH-USER-OVERRIDE）
+  - 窗口 resize 夹紧到屏幕 1/5 上限（INV-TOC-WIDTH-MAX）
+  - 高 DPI 通过 `QFontMetricsF(font, paintDevice)` 测算，遵循 INV-DPI-METRICS
+- **TOC 节点折叠**：深层文档 TOC 支持折叠父节点以隐藏后代，减少浏览干扰。
+  - parent 节点左侧显示 `−` / `+` 切换按钮（叶子节点无按钮，保持对齐）
+  - 折叠状态按文件路径 MD5 持久化到 `toc/collapse/<hash>`，重开文件自动恢复
+  - TocPanel 获得键盘焦点后：`←` 折叠当前 / 跳父、`→` 展开当前、`Enter` 跳转标题行
+  - 折叠子节点自动从 `preferredWidth` 公式中排除（T-COLLAPSE-5）
+  - Spec: specs/模块-preview/07-TOC面板.md INV-TOC-COLLAPSE；
+    新增 `tests/preview/TocPanelTest.cpp` 8 个单元测试（T-COLLAPSE-1/5, T-WIDTH-1/2）
+
+### Changed
+- **TOC 面板垂直对齐编辑/预览区**：Tab 栏横跨整窗宽度，TOC 顶端与编辑/预览区顶端对齐，不再占据 Tab 栏所在行。
+  架构改动：`MainWindow` 拆 `QTabWidget` 为 `QTabBar + QStackedWidget`，central widget 换成
+  `QVBoxLayout(m_tabBar + m_mainSplitter(m_contentStack | m_tocPanel))`。信号、tab 拖拽重排、
+  演示模式 tabBar 显隐、Splitter 状态持久化均一致迁移；showEvent 里加 sanity clamp 防止
+  旧 splitter state 把 TOC 宽度挤到 0。Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
+
 ## [0.2.4] - 2026-04-14
 
 ### Added

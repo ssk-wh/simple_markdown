@@ -322,7 +322,7 @@ Do you want to reload it?</source>
     </message>
     <message>
         <source>Chars: %1</source>
-        <translation type="unfinished">Chars: %1</translation>
+        <translation>Chars: %1</translation>
     </message>
     <message>
         <source>Blocked</source>
@@ -488,6 +488,29 @@ Do you want to reload it?</source>
     </message>
 </context>
 <context>
+    <name>QObject</name>
+    <message>
+        <source>-</source>
+        <translation>-</translation>
+    </message>
+    <message>
+        <source>just now</source>
+        <translation>just now</translation>
+    </message>
+    <message>
+        <source>%1 min ago</source>
+        <translation>%1 min ago</translation>
+    </message>
+    <message>
+        <source>%1 hr ago</source>
+        <translation>%1 hr ago</translation>
+    </message>
+    <message>
+        <source>%1 day(s) ago</source>
+        <translation>%1 day(s) ago</translation>
+    </message>
+</context>
+<context>
     <name>SearchBar</name>
     <message>
         <source>Search...</source>
@@ -638,6 +661,50 @@ Do you want to reload it?</source>
     <message>
         <source>Contents</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Document Info</source>
+        <translation>Document Info</translation>
+    </message>
+    <message>
+        <source>No document</source>
+        <translation>No document</translation>
+    </message>
+    <message>
+        <source>Words: %1</source>
+        <translation>Words: %1</translation>
+    </message>
+    <message>
+        <source>Chars: %1 (no space %2)</source>
+        <translation>Chars: %1 (no space %2)</translation>
+    </message>
+    <message>
+        <source>Lines: %1</source>
+        <translation>Lines: %1</translation>
+    </message>
+    <message>
+        <source>Size: %1</source>
+        <translation>Size: %1</translation>
+    </message>
+    <message>
+        <source>Modified: %1</source>
+        <translation>Modified: %1</translation>
+    </message>
+    <message>
+        <source>Title: %1</source>
+        <translation>Title: %1</translation>
+    </message>
+    <message>
+        <source>Tags: %1</source>
+        <translation>Tags: %1</translation>
+    </message>
+    <message>
+        <source>Expand</source>
+        <translation>Expand</translation>
+    </message>
+    <message>
+        <source>Collapse</source>
+        <translation>Collapse</translation>
     </message>
 </context>
 </TS>

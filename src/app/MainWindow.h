@@ -1,6 +1,5 @@
 #pragma once
 #include <QMainWindow>
-#include <QTabWidget>
 #include <QVector>
 #include <QTimer>
 #include <QFileSystemWatcher>
@@ -12,7 +11,9 @@ class ParseScheduler;
 class ScrollSync;
 class RecentFiles;
 class TocPanel;
+class TabBarWithAdd;  // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
 class QSplitter;
+class QStackedWidget;
 class QMenu;
 class QActionGroup;
 class QLocalServer;
@@ -32,6 +33,7 @@ public:
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -65,9 +67,17 @@ private:
     void onShowWelcome();
     void maybeShowWelcomeOnFirstLaunch();
 
-    QTabWidget* m_tabWidget;
+    // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
+    // central widget = QVBoxLayout(m_tabBar + m_mainSplitter)
+    // m_mainSplitter 左：m_contentStack（每页一个 editor|preview splitter）
+    //                 右：m_tocPanel
+    TabBarWithAdd* m_tabBar = nullptr;
+    QStackedWidget* m_contentStack = nullptr;
     QSplitter* m_mainSplitter = nullptr;
     TocPanel* m_tocPanel = nullptr;
+    // Tab 页与 stack 页一一对应的便利函数
+    int  addPage(QWidget* page, const QString& title);
+    void removePage(int index);
     QVector<TabData> m_tabs;
     RecentFiles* m_recentFiles;
     QMenu* m_recentMenu = nullptr;
@@ -105,6 +115,12 @@ private:
     QTimer m_saveSessionTimer;
     QByteArray m_pendingSplitterState;
     bool m_splitterInitialized = false;
+
+    // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-AUTO / INV-TOC-WIDTH-USER-OVERRIDE
+    // 用户拖拽 mainSplitter 分隔条后该 flag 为 true；此后 preferredWidthChanged 只调 minWidth
+    bool m_userDraggedToc = false;
+    void applyTocPreferredWidth(int w);
+    void clampTocWidthToScreen();
 
     QFileSystemWatcher m_fileWatcher;
     void watchFile(const QString& path);

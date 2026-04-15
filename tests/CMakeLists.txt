@@ -66,3 +66,25 @@ target_link_libraries(SyntaxHighlighterThemeCacheTest PRIVATE
     gtest
 )
 add_test(NAME SyntaxHighlighterThemeCacheTest COMMAND SyntaxHighlighterThemeCacheTest)
+
+# --- TocPanelTest ---
+# Spec: specs/模块-preview/07-TOC面板.md
+# 验收：T-COLLAPSE-1/5, T-WIDTH-1/2
+add_executable(TocPanelTest
+    preview/TocPanelTest.cpp
+)
+
+target_include_directories(TocPanelTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(TocPanelTest PRIVATE
+    sm_preview
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+)
+
+add_test(NAME TocPanelTest COMMAND TocPanelTest)

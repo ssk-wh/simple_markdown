@@ -40,6 +40,10 @@
 #include <QTimer>
 #include <QApplication>
 #include <QTabBar>
+#include <QStackedWidget>
+#include <QVBoxLayout>
+#include <QScreen>
+#include <QGuiApplication>
 #include <QToolButton>
 #include <QPainter>
 #include <QPrinter>
@@ -94,26 +98,36 @@ MainWindow::MainWindow(QWidget* parent)
 
     m_recentFiles = new RecentFiles(this);
 
-    // Spec: specs/模块-app/04-窗口焦点管理.md — Tab 栏「+」按钮紧贴最后一个 Tab
-    // Chrome/Edge 风格：「+」随 Tab 水平移动，而非固定在窗口右上角
-    auto* twa = new TabWidgetWithAdd(this);
-    m_tabWidget = twa;
-    connect(twa->customTabBar(), &TabBarWithAdd::addClicked, this, &MainWindow::onNewFile);
-    m_tabWidget->setTabsClosable(true);
-    m_tabWidget->setMovable(true);
-    m_tabWidget->setDocumentMode(true);
-    m_tabWidget->tabBar()->setDrawBase(false);
+    // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
+    // 拆 QTabWidget 为 QTabBar + QStackedWidget，TOC 不再与 tabBar 顶齐
+    // central widget = QVBoxLayout(tabBar + mainSplitter(contentStack|tocPanel))
+    m_tabBar = new TabBarWithAdd(this);
+    connect(m_tabBar, &TabBarWithAdd::addClicked, this, &MainWindow::onNewFile);
+    m_tabBar->setTabsClosable(true);
+    m_tabBar->setMovable(true);
+    m_tabBar->setDocumentMode(true);
+    m_tabBar->setDrawBase(false);
+    m_tabBar->setExpanding(false);
+
+    m_contentStack = new QStackedWidget(this);
 
     m_tocPanel = new TocPanel(this);
     m_tocPanel->setMinimumWidth(160);
 
     m_mainSplitter = new QSplitter(Qt::Horizontal, this);
-    m_mainSplitter->addWidget(m_tabWidget);
+    m_mainSplitter->addWidget(m_contentStack);
     m_mainSplitter->addWidget(m_tocPanel);
-    m_mainSplitter->setStretchFactor(0, 1);  // tabWidget 拉伸
+    m_mainSplitter->setStretchFactor(0, 1);  // content 拉伸
     m_mainSplitter->setStretchFactor(1, 0);  // tocPanel 固定宽度
     m_mainSplitter->setCollapsible(1, false);  // 防止 TOC 面板被折叠
-    setCentralWidget(m_mainSplitter);
+
+    auto* centralContainer = new QWidget(this);
+    auto* vbox = new QVBoxLayout(centralContainer);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    vbox->setSpacing(0);
+    vbox->addWidget(m_tabBar);
+    vbox->addWidget(m_mainSplitter, /*stretch=*/1);
+    setCentralWidget(centralContainer);
 
     // TocPanel 点击 → 跳转到当前 tab 的 preview 对应位置
     connect(m_tocPanel, &TocPanel::headingClicked, this, [this](int sourceLine) {
@@ -122,27 +136,52 @@ MainWindow::MainWindow(QWidget* parent)
             tab->preview->smoothScrollToSourceLine(sourceLine);
     });
 
-    connect(m_tabWidget, &QTabWidget::tabCloseRequested,
+    // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-AUTO
+    // TocPanel 宽度自适应：每次 setEntries 后重算偏好宽度，应用到 mainSplitter
+    connect(m_tocPanel, &TocPanel::preferredWidthChanged,
+            this, &MainWindow::applyTocPreferredWidth);
+
+    // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-USER-OVERRIDE
+    // 监听用户拖拽 mainSplitter 分隔条，之后禁用宽度自适应
+    connect(m_mainSplitter, &QSplitter::splitterMoved,
+            this, [this](int, int) {
+        // 只在 splitter 已完成初始化之后接收用户拖拽事件
+        if (m_splitterInitialized) m_userDraggedToc = true;
+    });
+
+    connect(m_tabBar, &QTabBar::tabCloseRequested,
             this, &MainWindow::onCloseTab);
-    connect(m_tabWidget, &QTabWidget::currentChanged,
+    connect(m_tabBar, &QTabBar::currentChanged,
+            m_contentStack, &QStackedWidget::setCurrentIndex);
+    connect(m_tabBar, &QTabBar::currentChanged,
             this, &MainWindow::onTabChanged);
-    // 拖拽重排 tab 时同步 m_tabs 顺序
-    connect(m_tabWidget->tabBar(), &QTabBar::tabMoved,
+    // 拖拽重排 tab 时同步 m_tabs 顺序与 contentStack 顺序
+    connect(m_tabBar, &QTabBar::tabMoved,
             this, [this](int from, int to) {
         if (from >= 0 && from < m_tabs.size() && to >= 0 && to < m_tabs.size())
             m_tabs.move(from, to);
+        // QStackedWidget 没有 moveWidget，需要 remove + insert
+        if (m_contentStack && from >= 0 && to >= 0
+            && from < m_contentStack->count() && to < m_contentStack->count() && from != to) {
+            QWidget* w = m_contentStack->widget(from);
+            if (w) {
+                m_contentStack->removeWidget(w);
+                m_contentStack->insertWidget(to, w);
+                m_contentStack->setCurrentIndex(m_tabBar->currentIndex());
+            }
+        }
         saveSessionLater();
     });
 
     // 切换标签时实时保存会话
-    connect(m_tabWidget, &QTabWidget::currentChanged,
+    connect(m_tabBar, &QTabBar::currentChanged,
             this, &MainWindow::saveSessionLater);
 
     // Tab 右键菜单
-    m_tabWidget->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_tabWidget->tabBar(), &QWidget::customContextMenuRequested,
+    m_tabBar->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_tabBar, &QWidget::customContextMenuRequested,
             this, [this](const QPoint& pos) {
-        int idx = m_tabWidget->tabBar()->tabAt(pos);
+        int idx = m_tabBar->tabAt(pos);
         if (idx < 0) return;
         QMenu menu(this);
         menu.addAction(tr("Close"), [this, idx]() { onCloseTab(idx); });
@@ -181,7 +220,7 @@ MainWindow::MainWindow(QWidget* parent)
         });
         if (filePath.isEmpty()) openDirAct->setEnabled(false);
 
-        menu.exec(m_tabWidget->tabBar()->mapToGlobal(pos));
+        menu.exec(m_tabBar->mapToGlobal(pos));
     });
 
     // 延迟保存定时器（debounce 1秒，避免频繁写磁盘）
@@ -406,13 +445,80 @@ void MainWindow::setupDragDrop()
     setAcceptDrops(true);
 }
 
+// Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-AUTO
+// 应用 TocPanel 偏好宽度到 mainSplitter 第二栏
+// - 未被用户拖拽过：setSizes(content, toc)
+// - 被用户拖拽过：只更新 minimumWidth，不覆盖用户意图
+void MainWindow::applyTocPreferredWidth(int w)
+{
+    if (!m_mainSplitter || !m_tocPanel) return;
+    // 保证 TOC 至少能显示内容（minimumWidth 始终跟随 preferred width 但不低于 160）
+    m_tocPanel->setMinimumWidth(qMin(160, w));
+
+    if (m_userDraggedToc) return;
+
+    const int totalW = m_mainSplitter->width();
+    if (totalW <= 0) return;  // 尚未 layout
+    // 夹紧到屏幕 1/5
+    const QScreen* scr = QGuiApplication::screenAt(mapToGlobal(QPoint(0, 0)));
+    if (!scr) scr = QGuiApplication::primaryScreen();
+    const int maxW = scr ? scr->availableGeometry().width() / 5 : 400;
+    const int tocW = qMin(qMax(w, 120), maxW);
+
+    // 忽略信号防止 splitterMoved 把 m_userDraggedToc 置 true
+    m_mainSplitter->blockSignals(true);
+    m_mainSplitter->setSizes({qMax(0, totalW - tocW), tocW});
+    m_mainSplitter->blockSignals(false);
+}
+
+// Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-MAX
+// 窗口 resize：若 TOC 当前宽度 > 屏幕 1/5，夹紧到上限
+void MainWindow::clampTocWidthToScreen()
+{
+    if (!m_mainSplitter) return;
+    auto sizes = m_mainSplitter->sizes();
+    if (sizes.size() != 2) return;
+    const QScreen* scr = QGuiApplication::screenAt(mapToGlobal(QPoint(0, 0)));
+    if (!scr) scr = QGuiApplication::primaryScreen();
+    if (!scr) return;
+    const int maxW = scr->availableGeometry().width() / 5;
+    if (sizes[1] > maxW) {
+        const int totalW = m_mainSplitter->width();
+        m_mainSplitter->blockSignals(true);
+        m_mainSplitter->setSizes({qMax(0, totalW - maxW), maxW});
+        m_mainSplitter->blockSignals(false);
+    }
+}
+
+// Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
+// 拆分 QTabWidget 后，addTab/removeTab 需同时操作 m_tabBar 与 m_contentStack
+int MainWindow::addPage(QWidget* page, const QString& title)
+{
+    int i = m_tabBar->addTab(title);
+    m_contentStack->insertWidget(i, page);
+    // 首个 tab 添加后手动同步 current，避免 stack 未定位
+    if (m_tabBar->count() == 1) {
+        m_contentStack->setCurrentIndex(0);
+        m_tabBar->setCurrentIndex(0);
+    }
+    return i;
+}
+
+void MainWindow::removePage(int index)
+{
+    if (index < 0 || index >= m_tabBar->count()) return;
+    QWidget* w = m_contentStack->widget(index);
+    m_tabBar->removeTab(index);
+    if (w) m_contentStack->removeWidget(w);
+}
+
 void MainWindow::newTab()
 {
     TabData tab = createTab();
-    int index = m_tabWidget->addTab(tab.splitter, tr("Untitled"));
+    int index = addPage(tab.splitter, tr("Untitled"));
     m_tabs.append(tab);
     setTabCloseButton(index);
-    m_tabWidget->setCurrentIndex(index);
+    m_tabBar->setCurrentIndex(index);
 
     // Insert sample text for new empty tabs
     tab.editor->document()->insert(0,
@@ -448,7 +554,7 @@ void MainWindow::restoreSession(const QString& requestedFile)
                 if (fp == QFileInfo(requestedFile).absoluteFilePath()) continue;
                 if (!fp.isEmpty() && QFileInfo::exists(fp)) {
                     openFile(fp);
-                    int idx = m_tabWidget->count() - 1;
+                    int idx = m_tabBar->count() - 1;
                     int es = s.value("editorScroll", 0).toInt();
                     int ehs = s.value("editorHScroll", 0).toInt();
                     int ps = s.value("previewScroll", 0).toInt();
@@ -528,8 +634,8 @@ void MainWindow::restoreSession(const QString& requestedFile)
         if (opened) {
             // 恢复当前标签
             int activeTab = s.value("session/activeTab", 0).toInt();
-            if (activeTab >= 0 && activeTab < m_tabWidget->count())
-                m_tabWidget->setCurrentIndex(activeTab);
+            if (activeTab >= 0 && activeTab < m_tabBar->count())
+                m_tabBar->setCurrentIndex(activeTab);
 
             // 延迟恢复所有标签页的光标位置和滚动位置
             QTimer::singleShot(200, this, [this, tabStates]() {
@@ -560,7 +666,7 @@ void MainWindow::openFile(const QString& path)
     // 检查文件是否已在某个标签页打开
     for (int i = 0; i < m_tabs.size(); ++i) {
         if (m_tabs[i].editor->document()->filePath() == QFileInfo(path).absoluteFilePath()) {
-            m_tabWidget->setCurrentIndex(i);
+            m_tabBar->setCurrentIndex(i);
 
             // [修复] 如果文件已打开，切换到该标签页后必须提升窗口
             // 场景：用户在浏览器中打开 markdown 文件时，应用加载文件但窗口被其他应用遮挡
@@ -577,10 +683,10 @@ void MainWindow::openFile(const QString& path)
 
     // 创建新标签页并加载文件
     TabData tab = createTab();
-    int index = m_tabWidget->addTab(tab.splitter, QFileInfo(path).fileName());
+    int index = addPage(tab.splitter, QFileInfo(path).fileName());
     m_tabs.append(tab);
     setTabCloseButton(index);
-    m_tabWidget->setCurrentIndex(index);
+    m_tabBar->setCurrentIndex(index);
 
     tab.editor->document()->loadFromFile(path);
     tab.scheduler->parseNow();
@@ -673,7 +779,7 @@ MainWindow::TabData MainWindow::createTab()
     // Track modifications for tab title
     connect(tab.editor->document(), &Document::modifiedChanged,
             this, [this](bool) {
-        int idx = m_tabWidget->currentIndex();
+        int idx = m_tabBar->currentIndex();
         if (idx >= 0)
             updateTabTitle(idx);
     });
@@ -699,11 +805,11 @@ void MainWindow::updateTabTitle(int index)
     if (doc->isModified())
         title = "* " + title;
 
-    m_tabWidget->setTabText(index, title);
-    m_tabWidget->setTabToolTip(index, doc->filePath().isEmpty() ? tr("Untitled") : QFileInfo(doc->filePath()).absoluteFilePath());
+    m_tabBar->setTabText(index, title);
+    m_tabBar->setTabToolTip(index, doc->filePath().isEmpty() ? tr("Untitled") : QFileInfo(doc->filePath()).absoluteFilePath());
 
     // Update window title
-    if (index == m_tabWidget->currentIndex())
+    if (index == m_tabBar->currentIndex())
         setWindowTitle(title + " - SimpleMarkdown");
 }
 
@@ -893,10 +999,8 @@ void MainWindow::applyTheme(const Theme& theme)
         ).arg(mainBg, chromeFg, border, hover, accent);
 
         css += QStringLiteral(
-            // Tab 栏
-            "QTabWidget { border: none; }"
-            "QTabWidget::pane { border: none; }"
-            "QTabBar { background: %1; border: none; }"
+            // Tab 栏（拆 QTabWidget 后直接使用 QTabBar + menuBar 底部分割线）
+            "QTabBar { background: %1; border: none; border-bottom: 1px solid %7; }"
             "QTabBar::tab { background: %1; color: %2; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; }"
             "QTabBar::tab:selected { color: %3; border-bottom: 2px solid %4; background: %5; }"
             "QTabBar::tab:hover { color: %3; background: %6; }"
@@ -904,7 +1008,7 @@ void MainWindow::applyTheme(const Theme& theme)
             "QTabBar::tear { width: 0; border: none; }"
             "QTabBar QToolButton { background: %1; border: none; color: %2; width: 20px; }"
             "QTabBar QToolButton:hover { background: %6; color: %3; }"
-        ).arg(chromeBg, chromeMuted, chromeFg, accent, tabActiveBg, hover);
+        ).arg(chromeBg, chromeMuted, chromeFg, accent, tabActiveBg, hover, border);
 
         css += QStringLiteral(
             // 分割线
@@ -976,17 +1080,15 @@ void MainWindow::applyTheme(const Theme& theme)
         ).arg(mainBg, chromeFg, border, hover, accent);
 
         css += QStringLiteral(
-            // TabBar
-            "QTabWidget { border: none; }"
-            "QTabWidget::pane { border: none; }"
-            "QTabBar { background: %1; border: none; }"
+            // TabBar（拆 QTabWidget 后直接使用 QTabBar + 底部分割线）
+            "QTabBar { background: %1; border: none; border-bottom: 1px solid %7; }"
             "QTabBar::tab { background: %1; color: %2; padding: 6px 12px; border: none; border-bottom: 2px solid transparent; }"
             "QTabBar::tab:selected { color: %3; border-bottom: 2px solid %4; background: %5; }"
             "QTabBar::tab:hover { color: %3; background: %6; }"
             "QTabBar::tear { width: 0; border: none; }"
             "QTabBar QToolButton { background: %1; border: none; color: %2; width: 20px; }"
             "QTabBar QToolButton:hover { background: %6; color: %3; }"
-        ).arg(chromeBg, chromeMuted, chromeFg, accent, tabActiveBg, hover);
+        ).arg(chromeBg, chromeMuted, chromeFg, accent, tabActiveBg, hover, border);
 
         css += QStringLiteral(
             // splitter
@@ -1049,7 +1151,7 @@ void MainWindow::applyTheme(const Theme& theme)
 
 MainWindow::TabData* MainWindow::currentTab()
 {
-    int idx = m_tabWidget->currentIndex();
+    int idx = m_tabBar->currentIndex();
     if (idx < 0 || idx >= m_tabs.size())
         return nullptr;
     return &m_tabs[idx];
@@ -1122,7 +1224,7 @@ void MainWindow::onSaveFile()
         QString fp = doc->filePath();
         unwatchFile(fp);
         doc->saveToFile();
-        updateTabTitle(m_tabWidget->currentIndex());
+        updateTabTitle(m_tabBar->currentIndex());
         // 延迟重新监控，避免捕获自身保存产生的文件变更事件
         QTimer::singleShot(500, this, [this, fp]() { watchFile(fp); });
     }
@@ -1145,7 +1247,7 @@ void MainWindow::onSaveFileAs()
     QString absFp = QFileInfo(path).absoluteFilePath();
     QTimer::singleShot(500, this, [this, absFp]() { watchFile(absFp); });
     m_recentFiles->addFile(path);
-    updateTabTitle(m_tabWidget->currentIndex());
+    updateTabTitle(m_tabBar->currentIndex());
 }
 
 void MainWindow::onCloseTab(int index)
@@ -1159,9 +1261,10 @@ void MainWindow::onCloseTab(int index)
         unwatchFile(fp);
 
     // Remove tab data
-    m_tabs[index].splitter->deleteLater();
+    auto* sp = m_tabs[index].splitter;
     m_tabs.removeAt(index);
-    m_tabWidget->removeTab(index);
+    removePage(index);  // 从 tabBar + contentStack 移除
+    if (sp) sp->deleteLater();
 
     // If no tabs left, create a new one
     if (m_tabs.isEmpty())
@@ -1177,6 +1280,10 @@ void MainWindow::onTabChanged(int index)
     // 切换 tab 时更新 TOC 面板
     if (index >= 0 && index < m_tabs.size()) {
         auto* preview = m_tabs[index].preview;
+        // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-COLLAPSE
+        // 切 Tab 先更新 fileKey（触发折叠状态 load），再 setEntries
+        QString fp = m_tabs[index].editor->document()->filePath();
+        m_tocPanel->setCurrentFileKey(fp);
         m_tocPanel->setEntries(preview->tocEntries());
         m_tocPanel->setHighlightedEntries(preview->tocHighlightedIndices());
 
@@ -1370,6 +1477,14 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     return QMainWindow::eventFilter(obj, event);
 }
 
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+    // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-MAX
+    // 窗口缩小时 TOC 宽度不得超过屏幕 1/5
+    clampTocWidthToScreen();
+}
+
 void MainWindow::showEvent(QShowEvent* event)
 {
     QMainWindow::showEvent(event);
@@ -1382,6 +1497,16 @@ void MainWindow::showEvent(QShowEvent* event)
             m_mainSplitter->setSizes({totalW - 220, 220});
         }
         m_pendingSplitterState.clear();
+
+        // Spec: specs/模块-preview/07-TOC面板.md 风险条目
+        // 拆 QTabWidget 后，旧 restoreState 的 sizes 可能把 TOC 挤到 <= 0
+        // 此处 sanity clamp：若 TOC 宽度 < 100，强制恢复成默认 220
+        auto sizes = m_mainSplitter->sizes();
+        if (sizes.size() == 2 && sizes[1] < 100) {
+            int totalW = m_mainSplitter->width();
+            if (totalW <= 0) totalW = width();
+            m_mainSplitter->setSizes({qMax(0, totalW - 220), 220});
+        }
 
         // [Plan plans/2026-04-13-首次启动引导.md] 首次启动弹欢迎页
         // 延迟到下一个事件循环，避免和窗口初始化竞争
@@ -1454,7 +1579,7 @@ void MainWindow::saveSettings()
 
     // 会话恢复
     s.setValue("session/restoreLastFile", m_restoreSessionAct ? m_restoreSessionAct->isChecked() : true);
-    s.setValue("session/activeTab", m_tabWidget->currentIndex());
+    s.setValue("session/activeTab", m_tabBar->currentIndex());
 
     // 保存所有标签页
     s.beginWriteArray("session/tabs");
@@ -1584,20 +1709,20 @@ void MainWindow::setTabCloseButton(int index)
 
     connect(btn, &QToolButton::clicked, this, [this, btn]() {
         // 通过按钮找到对应的 tab 索引
-        for (int i = 0; i < m_tabWidget->count(); ++i) {
-            if (m_tabWidget->tabBar()->tabButton(i, QTabBar::RightSide) == btn) {
+        for (int i = 0; i < m_tabBar->count(); ++i) {
+            if (m_tabBar->tabButton(i, QTabBar::RightSide) == btn) {
                 onCloseTab(i);
                 return;
             }
         }
     });
 
-    m_tabWidget->tabBar()->setTabButton(index, QTabBar::RightSide, btn);
+    m_tabBar->setTabButton(index, QTabBar::RightSide, btn);
 }
 
 void MainWindow::updateAllTabCloseButtons()
 {
-    for (int i = 0; i < m_tabWidget->count(); ++i)
+    for (int i = 0; i < m_tabBar->count(); ++i)
         setTabCloseButton(i);
 }
 
@@ -1634,7 +1759,7 @@ void MainWindow::onFileChangedExternally(const QString& path)
     watchFile(path);
 
     // 非当前 tab：标记待重载，切换时再弹窗
-    if (tabIndex != m_tabWidget->currentIndex()) {
+    if (tabIndex != m_tabBar->currentIndex()) {
         m_tabs[tabIndex].pendingReload = true;
         return;
     }
@@ -1767,6 +1892,24 @@ void MainWindow::updateStatusBarStats()
         m_statusReadTime->setText(tr("Read: <1 min"));
     else
         m_statusReadTime->setText(tr("Read: %1 min").arg(minutes));
+
+    // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-DOCCARD-NO-REPARSE
+    // 同步推送文档摘要到 TocPanel 的 DocInfoCard（复用上面算好的结果，不重复 parse）
+    DocInfo di;
+    di.wordCount = wordCount;
+    di.charCount = text.length();
+    di.charCountNoSpace = charsNoSpace;
+    di.lineCount = lineCount;
+    const QString fp = tab->editor->document()->filePath();
+    if (!fp.isEmpty()) {
+        QFileInfo fi(fp);
+        if (fi.exists()) {
+            di.sizeBytes = fi.size();
+            di.mtime = fi.lastModified();
+        }
+    }
+    // frontmatter title/tags 留待 v2 从 AST 提取，当前传空
+    m_tocPanel->setDocumentInfo(di);
 }
 
 // ---- 字体缩放 ----
@@ -1984,7 +2127,7 @@ void MainWindow::enterFocusMode()
     // 隐藏菜单栏、状态栏、tab 栏
     menuBar()->hide();
     statusBar()->hide();
-    m_tabWidget->tabBar()->hide();
+    m_tabBar->hide();
 
     // 隐藏 TOC 面板
     m_tocPanel->hide();
@@ -2021,7 +2164,7 @@ void MainWindow::exitFocusMode()
     // 恢复菜单栏、状态栏、tab 栏
     menuBar()->show();
     statusBar()->show();
-    m_tabWidget->tabBar()->show();
+    m_tabBar->show();
 
     // 恢复 TOC 面板
     m_tocPanel->setVisible(m_savedTocVisible);

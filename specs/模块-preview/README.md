@@ -18,7 +18,7 @@
 | 04 | 块级渲染缓存 | draft | `PreviewBlockCache.h/cpp` |
 | 05 | 图片缓存 | draft | `ImageCache.h/cpp` |
 | 06 | 代码块渲染 | draft | `CodeBlockRenderer.h/cpp` |
-| 07 | TOC 面板 | draft | `TocPanel.h/cpp` |
+| 07 | TOC 面板 | draft | `TocPanel.h/cpp`, `MainWindow.cpp` |
 | 08 | 内容标记（Marking） | draft | `PreviewWidget.h/cpp`, `PreviewPainter.h/cpp` |
 | 09 | 链接点击与导航 | draft | `PreviewWidget.h/cpp`, `PreviewPainter.cpp`, `MainWindow.cpp` |
 | 10 | Frontmatter 渲染 | draft | `PreviewLayout.cpp`, `PreviewPainter.cpp`, `MarkdownAst.h`, `MarkdownParser.cpp`, `Theme.h/cpp` |

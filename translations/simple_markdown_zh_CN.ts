@@ -494,6 +494,29 @@ Do you want to reload it?</source>
     </message>
 </context>
 <context>
+    <name>QObject</name>
+    <message>
+        <source>-</source>
+        <translation>-</translation>
+    </message>
+    <message>
+        <source>just now</source>
+        <translation>刚刚</translation>
+    </message>
+    <message>
+        <source>%1 min ago</source>
+        <translation>%1 分钟前</translation>
+    </message>
+    <message>
+        <source>%1 hr ago</source>
+        <translation>%1 小时前</translation>
+    </message>
+    <message>
+        <source>%1 day(s) ago</source>
+        <translation>%1 天前</translation>
+    </message>
+</context>
+<context>
     <name>SearchBar</name>
     <message>
         <source>Search...</source>
@@ -644,6 +667,50 @@ Do you want to reload it?</source>
     <message>
         <source>Contents</source>
         <translation>目录</translation>
+    </message>
+    <message>
+        <source>Document Info</source>
+        <translation>文档信息</translation>
+    </message>
+    <message>
+        <source>No document</source>
+        <translation>无文档</translation>
+    </message>
+    <message>
+        <source>Words: %1</source>
+        <translation>字数: %1</translation>
+    </message>
+    <message>
+        <source>Chars: %1 (no space %2)</source>
+        <translation>字符：%1（不含空格 %2）</translation>
+    </message>
+    <message>
+        <source>Lines: %1</source>
+        <translation>行数: %1</translation>
+    </message>
+    <message>
+        <source>Size: %1</source>
+        <translation>大小：%1</translation>
+    </message>
+    <message>
+        <source>Modified: %1</source>
+        <translation>修改：%1</translation>
+    </message>
+    <message>
+        <source>Title: %1</source>
+        <translation>标题：%1</translation>
+    </message>
+    <message>
+        <source>Tags: %1</source>
+        <translation>标签：%1</translation>
+    </message>
+    <message>
+        <source>Expand</source>
+        <translation>展开</translation>
+    </message>
+    <message>
+        <source>Collapse</source>
+        <translation>折叠</translation>
     </message>
 </context>
 </TS>
