@@ -11,6 +11,7 @@
 #include "EditorLayout.h"
 #include "PreviewLayout.h"
 #include "FontDefaults.h"
+#include "SnapSplitter.h"
 
 #include <QSplitter>
 #include <QMenuBar>
@@ -707,7 +708,11 @@ MainWindow::TabData MainWindow::createTab()
 {
     TabData tab;
 
-    tab.splitter = new QSplitter(Qt::Horizontal);
+    // Spec: specs/模块-app/13-分隔条吸附刻度.md
+    // 用 SnapSplitter 替代 QSplitter，启用 1/4、1/2、3/4 吸附刻度
+    auto* snap = new app::SnapSplitter(Qt::Horizontal);
+    snap->setAccentColor(m_currentTheme.accentColor);
+    tab.splitter = snap;
     tab.editor = new EditorWidget(tab.splitter);
     tab.splitter->addWidget(tab.editor);
 
@@ -951,6 +956,9 @@ void MainWindow::applyTheme(const Theme& theme)
     for (auto& tab : m_tabs) {
         tab.editor->setTheme(theme);
         tab.preview->setTheme(theme);
+        // Spec: specs/模块-app/13-分隔条吸附刻度.md INV-SNAP-THEME
+        if (auto* snap = qobject_cast<app::SnapSplitter*>(tab.splitter))
+            snap->setAccentColor(theme.accentColor);
     }
     m_tocPanel->setTheme(theme);
 

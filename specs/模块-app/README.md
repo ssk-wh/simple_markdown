@@ -24,6 +24,7 @@
 | 10 | 菜单栏样式 | draft | `MainWindow.cpp` |
 | 11 | 演示模式 | draft | `MainWindow.h/cpp`, `PreviewWidget.cpp` |
 | 12 | 主题插件系统 | draft | `Theme.h/cpp`, `ThemeLoader.h/cpp`, `MainWindow.cpp` |
+| 13 | 编辑/预览分隔条吸附刻度 | draft | `SnapSplitter.h/cpp`, `MainWindow.cpp` |
 
 ## 依赖关系
 

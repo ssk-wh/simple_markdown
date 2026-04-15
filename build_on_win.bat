@@ -116,6 +116,20 @@ if errorlevel 1 (
 )
 echo.
 
+REM ---- Deploy Qt runtime next to exe (so we can launch from build dir) ----
+REM 首次构建或缺依赖时会拷贝 Qt DLL + platforms\qwindows.dll；已存在则 windeployqt 自行跳过。
+REM 不拷贝依赖直接运行会以 0xC0000135 (STATUS_DLL_NOT_FOUND) 秒退。
+if defined QT_DIR (
+    if exist "%QT_DIR%\bin\windeployqt.exe" (
+        if exist %BUILD_DIR%\src\app\SimpleMarkdown.exe (
+            if not exist %BUILD_DIR%\src\app\platforms\qwindows.dll (
+                echo [+] Deploying Qt runtime...
+                "%QT_DIR%\bin\windeployqt.exe" --release --no-translations --no-system-d3d-compiler --no-opengl-sw --no-quick-import %BUILD_DIR%\src\app\SimpleMarkdown.exe >nul 2>&1
+            )
+        )
+    )
+)
+
 REM ---- Verify output ----
 if exist %BUILD_DIR%\src\app\SimpleMarkdown.exe (
     for %%A in (%BUILD_DIR%\src\app\SimpleMarkdown.exe) do set EXE_SIZE=%%~zA
