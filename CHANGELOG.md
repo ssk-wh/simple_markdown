@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.7] - 2026-04-17
+
+### Added
+- Windows 标题栏跟随主题配色：通过 DWM API（DWMWA_CAPTION_COLOR / DWMWA_TEXT_COLOR）让系统标题栏背景和文字颜色自动匹配当前主题，弹窗标题栏同步适配（需 Win11 22H2+）
+
 ## [0.2.6] - 2026-04-17
 
 ### Added

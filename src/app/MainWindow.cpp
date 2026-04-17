@@ -1284,9 +1284,20 @@ void MainWindow::applyTheme(const Theme& theme)
 
     updateAllTabCloseButtons();
 
-    // Windows 深色标题栏
+    // Windows 标题栏配色：深色模式 + 背景/文字颜色匹配主题
 #ifdef _WIN32
     setDarkTitleBar(theme.isDark);
+    // Win11 22H2+: DWMWA_CAPTION_COLOR(35) / DWMWA_TEXT_COLOR(36)
+    if (auto hwnd = reinterpret_cast<HWND>(winId())) {
+        COLORREF captionColor = RGB(theme.editorGutterBg.red(),
+                                    theme.editorGutterBg.green(),
+                                    theme.editorGutterBg.blue());
+        COLORREF textColor    = RGB(theme.editorFg.red(),
+                                    theme.editorFg.green(),
+                                    theme.editorFg.blue());
+        ::DwmSetWindowAttribute(hwnd, 35, &captionColor, sizeof(captionColor));
+        ::DwmSetWindowAttribute(hwnd, 36, &textColor, sizeof(textColor));
+    }
 #endif
 
     // Spec: specs/模块-app/15-状态栏布局.md
@@ -1615,13 +1626,22 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     }
 
 #ifdef _WIN32
-    // 为所有弹窗（QDialog、QMessageBox 等）自动设置深色标题栏
+    // 为所有弹窗（QDialog、QMessageBox 等）自动设置标题栏配色
     if (event->type() == QEvent::Show) {
         QWidget* w = qobject_cast<QWidget*>(obj);
         if (w && w->isWindow() && w != this) {
             HWND hwnd = reinterpret_cast<HWND>(w->winId());
             BOOL useDark = m_currentTheme.isDark ? TRUE : FALSE;
             ::DwmSetWindowAttribute(hwnd, 20, &useDark, sizeof(useDark));
+            // Win11: 标题栏背景/文字颜色匹配主题
+            COLORREF captionColor = RGB(m_currentTheme.editorGutterBg.red(),
+                                        m_currentTheme.editorGutterBg.green(),
+                                        m_currentTheme.editorGutterBg.blue());
+            COLORREF textColor    = RGB(m_currentTheme.editorFg.red(),
+                                        m_currentTheme.editorFg.green(),
+                                        m_currentTheme.editorFg.blue());
+            ::DwmSetWindowAttribute(hwnd, 35, &captionColor, sizeof(captionColor));
+            ::DwmSetWindowAttribute(hwnd, 36, &textColor, sizeof(textColor));
         }
     }
 #endif
