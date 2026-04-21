@@ -27,6 +27,23 @@ PreviewLayout::PreviewLayout()
 
 PreviewLayout::~PreviewLayout() = default;
 
+// 性能优化方案 B：缓存 QFontMetricsF，避免每个 InlineRun 重复构造
+// 使用 qHash(QFont) 作为 key，同一字体只构造一次 QFontMetricsF
+const QFontMetricsF& PreviewLayout::cachedFontMetrics(const QFont& font) const
+{
+    size_t key = qHash(font);
+    auto it = m_fontMetricsCache.find(key);
+    if (it != m_fontMetricsCache.end())
+        return it->second;
+    auto [inserted, _] = m_fontMetricsCache.emplace(key, QFontMetricsF(font, m_device));
+    return inserted->second;
+}
+
+void PreviewLayout::clearFontMetricsCache()
+{
+    m_fontMetricsCache.clear();
+}
+
 void PreviewLayout::setViewportWidth(qreal width)
 {
     m_viewportWidth = width;
@@ -60,9 +77,13 @@ bool PreviewLayout::updateMetrics(QPaintDevice* device)
     bool changed = !qFuzzyCompare(newLineHeight, m_lineHeight)
                 || !qFuzzyCompare(newCodeLineHeight, m_codeLineHeight);
 
+    bool deviceChanged = (m_device != device);
     m_device = device;
     m_lineHeight = newLineHeight;
     m_codeLineHeight = newCodeLineHeight;
+
+    if (changed || deviceChanged)
+        clearFontMetricsCache();
 
     return changed;
 }
@@ -324,8 +345,8 @@ LayoutBlock PreviewLayout::layoutFrontmatter(const AstNode* node, qreal maxWidth
     QFont fmFont = m_monoFont;
     fmFont.setPointSizeF(m_baseFont.pointSizeF());
 
-    // 度量必须带 device —— 高 DPI INV-2
-    QFontMetricsF fm(fmFont, m_device);
+    // 度量必须带 device —— 高 DPI INV-2（性能优化 B：缓存复用）
+    const QFontMetricsF& fm = cachedFontMetrics(fmFont);
     // INV-11：行高由字体度量派生（baseFont 字号 > monoFont 字号，不再复用 codeLineHeight）
     const qreal lineH = fm.height() * 1.4;
     const qreal hPad = fm.height() * 0.5;              // 左右内边距，由字体度量派生（禁止硬编码）
@@ -505,7 +526,7 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
         //   - updateMetrics 中 m_lineHeight = fm.height() * 1.5（物理像素）
         //   - 这里如果用逻辑像素的 fm.height()，DPI 改变时两者单位变得不一致
         //   - 比较 maxRunHeight > m_lineHeight * 0.8 失效，导致块重合
-        QFontMetricsF fm(run.font, m_device);  // [高 DPI 修复] 必须与 m_lineHeight 使用相同度量系统
+        const QFontMetricsF& fm = cachedFontMetrics(run.font);  // [性能优化 B] 缓存复用，[高 DPI] 仍使用 m_device
         totalWidth += fm.horizontalAdvance(run.text);
 
         // 记录最大的字体高度，用于混合字体情况下的调整

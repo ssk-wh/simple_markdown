@@ -1,11 +1,13 @@
 #pragma once
 
 #include <QFont>
+#include <QFontMetricsF>
 #include <QColor>
 #include <QRectF>
 #include <QString>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 class QPaintDevice;
 
@@ -97,6 +99,10 @@ private:
     void collectSourceMappings(const LayoutBlock& block, qreal offsetY,
                                std::vector<std::pair<int, qreal>>& mappings) const;
 
+    // 缓存 QFontMetricsF，避免每个 InlineRun 重复构造（性能优化方案 B）
+    const QFontMetricsF& cachedFontMetrics(const QFont& font) const;
+    void clearFontMetricsCache();
+
     LayoutBlock m_root;
     QFont m_baseFont;
     QFont m_monoFont;
@@ -106,4 +112,5 @@ private:
     qreal m_codeLineHeight = 20.0;
     QPaintDevice* m_device = nullptr;  // [高 DPI 修复] 用于高度估计中的字体度量
     ImageCache* m_imageCache = nullptr;
+    mutable std::unordered_map<size_t, QFontMetricsF> m_fontMetricsCache;
 };

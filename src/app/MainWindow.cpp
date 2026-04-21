@@ -48,6 +48,8 @@
 #include <QPropertyAnimation>
 #include <QGraphicsOpacityEffect>
 #include <QVBoxLayout>
+#include <QDialog>
+#include <QPushButton>
 #include <QScreen>
 #include <QGuiApplication>
 #include <QToolButton>
@@ -3242,7 +3244,6 @@ void MainWindow::onShowDocumentStats()
 
 void MainWindow::onShowWelcome()
 {
-    const QString title = tr("Welcome to SimpleMarkdown");
     const QString body = QString(
         "<h2>SimpleMarkdown</h2>"
         "<p><i>%1</i></p>"
@@ -3270,7 +3271,22 @@ void MainWindow::onShowWelcome()
     .arg(tr("Light / dark themes with system-follow option"))
     .arg(tr("Tip: press Ctrl+/ or open Help → Keyboard Shortcuts to see all shortcuts."));
 
-    QMessageBox::information(this, title, body);
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Welcome to SimpleMarkdown"));
+    dlg.setMinimumWidth(500);
+
+    QLabel* label = new QLabel(body, &dlg);
+    label->setWordWrap(true);
+    label->setTextFormat(Qt::RichText);
+
+    QPushButton* closeBtn = new QPushButton(tr("Close"), &dlg);
+    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    QVBoxLayout* layout = new QVBoxLayout(&dlg);
+    layout->addWidget(label);
+    layout->addWidget(closeBtn);
+
+    dlg.exec();
 }
 
 void MainWindow::maybeShowWelcomeOnFirstLaunch()
