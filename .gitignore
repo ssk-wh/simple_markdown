@@ -40,3 +40,4 @@ installer/*.zip
 crash_report.txt
 crash.dmp
 easymarkdown*.log
+test_content.md
