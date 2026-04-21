@@ -25,6 +25,7 @@ public:
     QString rootPath() const;
     QStringList rootPaths() const;
     void setTheme(const Theme& theme);
+    void retranslateUi();
     void clearRoot();
     void selectFile(const QString& filePath);
 

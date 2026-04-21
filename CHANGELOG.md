@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-04-21
+
+### Improved
+- 语言切换对话框改为双按钮（立即重启 / 确认），支持切换后一键重启
+- 翻译加载从 main.cpp 移至 MainWindow，为未来运行时切换预留架构
+- 文件夹面板选中项背景色改为半透明浅色（亮色主题 15% 透明、暗色 30% 透明），不再使用深色链接色
+
 ## [1.0.2] - 2026-04-20
 
 ### Added

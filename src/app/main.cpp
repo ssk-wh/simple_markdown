@@ -3,7 +3,6 @@
 #include <QIcon>
 #include <QFileInfo>
 #include <QLocalSocket>
-#include <QTranslator>
 #include <QSettings>
 #include <QLibraryInfo>
 #include "MainWindow.h"
@@ -154,17 +153,8 @@ int main(int argc, char* argv[])
     fprintf(stderr, "[3] App properties set\n");
     fflush(stderr);
 
-    // 加载翻译文件
-    QSettings settings;
-    QString locale = settings.value("language/locale", "zh_CN").toString();
-
-    QTranslator translator;
-    if (translator.load(":/translations/simple_markdown_" + locale + ".qm")) {
-        app.installTranslator(&translator);
-        fprintf(stderr, "[3.1] Translator loaded: %s\n", locale.toUtf8().constData());
-    } else {
-        fprintf(stderr, "[3.1] Failed to load translator: %s\n", locale.toUtf8().constData());
-    }
+    // 翻译由 MainWindow 管理（支持运行时切换）
+    fprintf(stderr, "[3.1] Translator will be loaded by MainWindow\n");
     fflush(stderr);
 
     QString filePath;

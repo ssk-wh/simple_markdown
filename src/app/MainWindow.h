@@ -21,6 +21,7 @@ class QLocalServer;
 class QLabel;
 class QStatusBar;
 class QVBoxLayout;
+class QTranslator;
 class SideTabBar;
 
 class MainWindow : public QMainWindow {
@@ -36,6 +37,7 @@ public:
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void changeEvent(QEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
@@ -115,6 +117,7 @@ private:
     qreal m_lineSpacingFactor = 1.5;
 
     // 语言切换
+    QTranslator* m_translator = nullptr;
     QAction* m_zhCNAct = nullptr;
     QAction* m_enUSAct = nullptr;
     void switchLanguage(const QString& locale);

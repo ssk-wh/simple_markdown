@@ -287,6 +287,12 @@ void FolderPanel::onDirectoryChanged(const QString& path)
     }
 }
 
+void FolderPanel::retranslateUi()
+{
+    if (m_titleLabel)
+        m_titleLabel->setText(tr("Explorer"));
+}
+
 void FolderPanel::setTheme(const Theme& theme)
 {
     m_theme = theme;
@@ -297,7 +303,13 @@ void FolderPanel::applyThemeStyles()
 {
     QString bg = m_theme.previewBg.name();
     QString fg = m_theme.previewFg.name();
-    QString selBg = m_theme.previewLink.name();
+    // 选中背景：基于链接色降低不透明度，亮暗主题均柔和
+    QString selBg = QString("rgba(%1,%2,%3,%4)")
+        .arg(m_theme.previewLink.red())
+        .arg(m_theme.previewLink.green())
+        .arg(m_theme.previewLink.blue())
+        .arg(m_theme.isDark ? "0.30" : "0.15");
+    QString selFg = fg;  // 选中时保持与正常文本相同的颜色
     QString hoverCss = m_theme.hoverBgCss();
 
     setStyleSheet(QString(
@@ -308,11 +320,11 @@ void FolderPanel::applyThemeStyles()
     m_treeView->setStyleSheet(QString(
         "QTreeView { background: %1; color: %2; border: none; }"
         "QTreeView::item { padding: 2px 0; }"
-        "QTreeView::item:selected { background: %3; color: white; }"
-        "QTreeView::item:selected:hover { background: %3; color: white; }"
+        "QTreeView::item:selected { background: %3; color: %5; }"
+        "QTreeView::item:selected:hover { background: %3; color: %5; }"
         "QTreeView::item:hover:!selected { background: %4; }"
         "QTreeView::branch { background: %1; }"
-    ).arg(bg, fg, selBg, hoverCss));
+    ).arg(bg, fg, selBg, hoverCss, selFg));
 }
 
 void FolderPanel::contextMenuEvent(QContextMenuEvent* event)

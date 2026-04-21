@@ -475,8 +475,12 @@ Do you want to reload it?</source>
         <translation>语言已更改</translation>
     </message>
     <message>
-        <source>Language will be changed after restart.</source>
-        <translation>语言将在重启后更改。</translation>
+        <source>Language will take effect after restart.</source>
+        <translation>语言将在重启后生效。</translation>
+    </message>
+    <message>
+        <source>Restart Now</source>
+        <translation>立即重启</translation>
     </message>
     <message>
         <source>Ln %1, Col %2</source>

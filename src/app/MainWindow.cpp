@@ -43,6 +43,7 @@
 #include <QScrollBar>
 #include <QTimer>
 #include <QApplication>
+#include <QTranslator>
 #include <QTabBar>
 #include <QStackedWidget>
 #include <QPropertyAnimation>
@@ -103,6 +104,15 @@ MainWindow::MainWindow(QWidget* parent)
 {
     setWindowTitle("SimpleMarkdown");
     resize(1280, 800);
+
+    // 加载翻译（必须在任何 tr() 调用和子控件创建之前）
+    m_translator = new QTranslator(this);
+    {
+        QSettings s;
+        QString locale = s.value("language/locale", "zh_CN").toString();
+        if (m_translator->load(":/translations/simple_markdown_" + locale + ".qm"))
+            qApp->installTranslator(m_translator);
+    }
 
     m_recentFiles = new RecentFiles(this);
 
@@ -1936,6 +1946,13 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     clampTocWidthToScreen();
 }
 
+void MainWindow::changeEvent(QEvent* event)
+{
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QMainWindow::changeEvent(event);
+}
+
 void MainWindow::showEvent(QShowEvent* event)
 {
     QMainWindow::showEvent(event);
@@ -2793,15 +2810,31 @@ void MainWindow::setDarkTitleBar(bool dark)
 void MainWindow::switchLanguage(const QString& locale)
 {
     QSettings s;
+    QString current = s.value("language/locale", "zh_CN").toString();
+    if (current == locale) return;
+
     s.setValue("language/locale", locale);
 
-    QMessageBox::information(this, tr("Language Changed"),
-        tr("Language will be changed after restart."));
+    // 双按钮对话框：重启 / 确认
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(tr("Language Changed"));
+    msgBox.setText(tr("Language will take effect after restart."));
+    QPushButton* restartBtn = msgBox.addButton(tr("Restart Now"), QMessageBox::AcceptRole);
+    msgBox.addButton(tr("OK"), QMessageBox::RejectRole);
+    msgBox.setDefaultButton(restartBtn);
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == restartBtn) {
+        // 保存会话后重启
+        saveSettings();
+        QProcess::startDetached(QApplication::applicationFilePath(), QStringList());
+        QApplication::quit();
+    }
 }
 
 void MainWindow::retranslateUi()
 {
-    // TODO: 实现运行时语言切换（当前依赖重启生效）
+    // 预留：如果未来需要运行时语言切换，在此重建菜单和 UI 文本
 }
 
 // ---- 演示模式 ----

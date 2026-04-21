@@ -232,11 +232,15 @@ Do you want to reload it?</source>
     </message>
     <message>
         <source>Language Changed</source>
-        <translation type="unfinished"></translation>
+        <translation>Language Changed</translation>
     </message>
     <message>
-        <source>Language will be changed after restart.</source>
-        <translation type="unfinished"></translation>
+        <source>Language will take effect after restart.</source>
+        <translation>Language will take effect after restart.</translation>
+    </message>
+    <message>
+        <source>Restart Now</source>
+        <translation>Restart Now</translation>
     </message>
     <message>
         <source>Ln %1, Col %2</source>
