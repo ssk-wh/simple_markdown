@@ -27,6 +27,8 @@ target_link_libraries(SimpleMarkdown PRIVATE sm_editor sm_preview sm_parser sm_s
 
 if(UNIX AND NOT APPLE)
     set_target_properties(SimpleMarkdown PROPERTIES OUTPUT_NAME simplemarkdown)
+    # 静态链接 libstdc++/libgcc，消除对系统 C++ 运行时版本的依赖
+    target_link_options(SimpleMarkdown PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 install(TARGETS SimpleMarkdown RUNTIME DESTINATION bin)
