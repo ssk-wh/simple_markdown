@@ -2516,6 +2516,10 @@ void MainWindow::performAutoSave()
         showAutoSaveError(tr("Auto save failed: %1").arg(failedNames.join(QStringLiteral(", "))));
     }
 
+    // 自动保存时同步持久化会话状态（Tab 列表、滚动位置等），
+    // 防止进程被强杀时丢失会话信息
+    saveSettings();
+
     // Spec: specs/模块-app/15-状态栏布局.md
     updateSaveStatusOnly();
 }
