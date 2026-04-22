@@ -54,6 +54,7 @@ bool Document::saveToFile(const QString& filePath)
 
     m_filePath = path;
     bool wasModified = isModified();
+    m_forceModified = false;
     m_undoStack.setSavePoint();
     if (wasModified)
         emit modifiedChanged(false);
@@ -168,11 +169,15 @@ const Selection& Document::selection() const { return m_selection; }
 
 // --- 修改状态 ---
 
-bool Document::isModified() const { return !m_undoStack.isAtSavePoint(); }
+bool Document::isModified() const { return m_forceModified || !m_undoStack.isAtSavePoint(); }
 
 void Document::setModified(bool modified)
 {
-    if (!modified) {
+    if (modified) {
+        m_forceModified = true;
+        emit modifiedChanged(true);
+    } else {
+        m_forceModified = false;
         m_undoStack.setSavePoint();
         emit modifiedChanged(false);
     }

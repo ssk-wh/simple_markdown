@@ -464,6 +464,26 @@ Please check that the folder is writable.</translation>
         <translation>Crash Report Found</translation>
     </message>
     <message>
+        <source>File Deleted</source>
+        <translation>File Deleted</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; has been deleted by another program.
+
+You can continue editing and press Ctrl+S to save it again.</source>
+        <translation>&quot;%1&quot; has been deleted by another program.
+
+You can continue editing and press Ctrl+S to save it again.</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; has been deleted by another program.
+
+This tab will be closed.</source>
+        <translation>&quot;%1&quot; has been deleted by another program.
+
+This tab will be closed.</translation>
+    </message>
+    <message>
         <source>SimpleMarkdown unexpectedly closed last time.
 A crash report has been saved at:
 

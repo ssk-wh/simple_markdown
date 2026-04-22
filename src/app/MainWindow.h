@@ -61,6 +61,7 @@ private:
         ParseScheduler* scheduler = nullptr;
         ScrollSync* scrollSync = nullptr;
         bool pendingReload = false;  // 文件被外部修改，等切换到此 tab 时提示
+        bool pendingDelete = false;  // 文件被外部删除，等切换到此 tab 时提示并关闭
         bool lazyPending = false;    // 懒加载：尚未加载文件内容
         QString lazyFilePath;        // 懒加载时记录的文件路径
     };

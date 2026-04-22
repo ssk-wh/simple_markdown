@@ -58,6 +58,7 @@ private:
     Selection m_selection;
     QString m_filePath;
     LineEnding m_lineEnding = LF;
+    bool m_forceModified = false;  // 文件被外部删除时强制标记为已修改
 
     static QString normalizeLineEndings(const QString& text, LineEnding* detected = nullptr);
     static QString denormalizeLineEndings(const QString& text, LineEnding lineEnding);

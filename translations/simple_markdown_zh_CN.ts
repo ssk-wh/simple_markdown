@@ -609,6 +609,26 @@ Please check that the folder is writable.</source>
         <translation>发现崩溃报告</translation>
     </message>
     <message>
+        <source>File Deleted</source>
+        <translation>文件已删除</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; has been deleted by another program.
+
+You can continue editing and press Ctrl+S to save it again.</source>
+        <translation>&quot;%1&quot; 已被其他程序删除。
+
+你可以继续编辑，按 Ctrl+S 重新保存。</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; has been deleted by another program.
+
+This tab will be closed.</source>
+        <translation>&quot;%1&quot; 已被其他程序删除。
+
+此标签页将被关闭。</translation>
+    </message>
+    <message>
         <source>SimpleMarkdown unexpectedly closed last time.
 A crash report has been saved at:
 

@@ -1695,6 +1695,22 @@ void MainWindow::onTabChanged(int index)
         if (m_tabs[index].pendingReload)
             QTimer::singleShot(0, this, [this, index]() { promptReloadTab(index); });
 
+        // 切换到被外部删除的 tab 时提示并关闭
+        if (m_tabs[index].pendingDelete) {
+            QTimer::singleShot(0, this, [this, index]() {
+                if (index < 0 || index >= m_tabs.size() || !m_tabs[index].pendingDelete)
+                    return;
+                m_tabs[index].pendingDelete = false;
+                QString path = m_tabs[index].editor->document()->filePath();
+                QString name = QFileInfo(path).fileName();
+                QMessageBox::information(
+                    this, tr("File Deleted"),
+                    tr("\"%1\" has been deleted by another program.\n\n"
+                       "This tab will be closed.").arg(name));
+                onCloseTab(index);
+            });
+        }
+
         // 应用当前显示区域模式（仅编辑器/仅预览/双栏）
         if (!m_focusMode) applyDisplayMode();
 
@@ -2254,9 +2270,25 @@ void MainWindow::onFileChangedExternally(const QString& path)
     if (tabIndex < 0)
         return;
 
-    // 文件可能被删除，检查是否还存在
-    if (!QFileInfo::exists(path))
+    // 文件被删除的情况
+    if (!QFileInfo::exists(path)) {
+        // 标记为已修改（磁盘文件已不存在，内存内容需要重新保存）
+        m_tabs[tabIndex].editor->document()->setModified(true);
+        updateTabTitle(tabIndex);
+
+        if (tabIndex == m_tabBar->currentIndex()) {
+            // 当前 tab：提示用户，可继续编辑并 Ctrl+S 重新保存
+            QString name = QFileInfo(path).fileName();
+            QMessageBox::information(
+                this, tr("File Deleted"),
+                tr("\"%1\" has been deleted by another program.\n\n"
+                   "You can continue editing and press Ctrl+S to save it again.").arg(name));
+        } else {
+            // 非当前 tab：标记待删除，切换时提示并关闭
+            m_tabs[tabIndex].pendingDelete = true;
+        }
         return;
+    }
 
     // 重新添加监控（某些系统修改后会自动移除）
     watchFile(path);
@@ -2481,6 +2513,7 @@ void MainWindow::performAutoSave()
         if (!doc) continue;
         const QString fp = doc->filePath();
         if (fp.isEmpty()) continue;            // INV-1：未命名跳过
+        if (m_tabs[i].pendingDelete) continue; // 文件已被外部删除，切换时关闭，不自动重建
         if (!doc->isModified()) continue;      // 没改过的也跳过
 
         // 与手动保存对齐：先 unwatch，避免 self-trigger 文件外部修改信号

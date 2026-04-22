@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [1.0.4] - 2026-04-22
 
+### Added
+- 文件被外部删除时提示用户：当前 Tab 可继续编辑并 Ctrl+S 重新保存，非当前 Tab 切换时提示并关闭
+
 ### Changed
 - 性能日志从菜单开关改为命令行参数 `--debug` / `-d`，从终端启动时可直接看到 stderr 输出
 
