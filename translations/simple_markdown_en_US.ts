@@ -464,18 +464,6 @@ Please check that the folder is writable.</translation>
         <translation>Crash Report Found</translation>
     </message>
     <message>
-        <source>Diagnostics</source>
-        <translation>Diagnostics</translation>
-    </message>
-    <message>
-        <source>Performance Log</source>
-        <translation>Performance Log</translation>
-    </message>
-    <message>
-        <source>Print parse/layout/paint timings to stderr</source>
-        <translation>Print parse/layout/paint timings to stderr</translation>
-    </message>
-    <message>
         <source>SimpleMarkdown unexpectedly closed last time.
 A crash report has been saved at:
 

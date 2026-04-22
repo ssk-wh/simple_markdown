@@ -14,7 +14,6 @@
 #include "SnapSplitter.h"
 #include "FolderPanel.h"
 #include "SideTabBar.h"
-#include "../core/PerfProbe.h"
 
 #include <QSplitter>
 #include <QMenuBar>
@@ -576,21 +575,6 @@ void MainWindow::setupMenuBar()
     helpMenu->addAction(tr("Update History"), this, [this]() {
         ChangelogDialog dialog(m_currentTheme, this);
         dialog.exec();
-    });
-
-    helpMenu->addSeparator();
-
-    // Spec: specs/模块-app/17-性能监控.md
-    // 帮助 → 诊断 → 性能日志：toggle 向 stderr 输出关键路径耗时
-    QMenu* diagMenu = helpMenu->addMenu(tr("Diagnostics"));
-    QAction* perfAct = diagMenu->addAction(tr("Performance Log"));
-    perfAct->setCheckable(true);
-    perfAct->setChecked(core::perfEnabled());
-    perfAct->setToolTip(tr("Print parse/layout/paint timings to stderr"));
-    connect(perfAct, &QAction::toggled, this, [](bool on) {
-        core::setPerfEnabled(on);
-        fprintf(stderr, "[perf] %s via menu\n", on ? "enabled" : "disabled");
-        fflush(stderr);
     });
 
     helpMenu->addSeparator();

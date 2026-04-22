@@ -130,14 +130,27 @@ int main(int argc, char* argv[])
     fflush(stderr);
 
     // Spec: specs/模块-app/17-性能监控.md
-    // 启动时读环境变量 SM_PERF；值为 "1" / "true" / "on" 即启用
-    // 运行时也可通过 菜单 帮助 → 诊断 → 性能日志 toggle
+    // --debug / -d 命令行参数，或环境变量 SM_PERF=1 启用性能日志
     {
-        const QByteArray envPerf = qgetenv("SM_PERF");
-        if (envPerf == "1" || envPerf.compare("true",  Qt::CaseInsensitive) == 0
-                            || envPerf.compare("on",   Qt::CaseInsensitive) == 0) {
+        bool debugMode = false;
+        for (int i = 1; i < argc; ++i) {
+            if (strcmp(argv[i], "--debug") == 0 || strcmp(argv[i], "-d") == 0) {
+                debugMode = true;
+                break;
+            }
+        }
+        if (!debugMode) {
+            const QByteArray envPerf = qgetenv("SM_PERF");
+            if (envPerf == "1" || envPerf.compare("true",  Qt::CaseInsensitive) == 0
+                                || envPerf.compare("on",   Qt::CaseInsensitive) == 0) {
+                debugMode = true;
+            }
+        }
+        if (debugMode) {
             core::setPerfEnabled(true);
-            fprintf(stderr, "[perf] enabled via SM_PERF env var\n");
+            fprintf(stderr, "[perf] enabled via %s\n",
+                    (argc > 1 && (strcmp(argv[1], "--debug") == 0 || strcmp(argv[1], "-d") == 0))
+                        ? "command line" : "SM_PERF env var");
             fflush(stderr);
         }
     }

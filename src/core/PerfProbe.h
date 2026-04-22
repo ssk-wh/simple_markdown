@@ -13,8 +13,8 @@
 //   析构时若开关开启，向 stderr 写 `[perf] parser.doParse: 1234 us`
 //
 // 开关途径（任意一种开启即可）：
-//   1. 环境变量 SM_PERF=1（启动时读取一次，main.cpp 里处理）
-//   2. 菜单 帮助 → 诊断 → 性能日志（运行时 toggle）
+//   1. 命令行参数 --debug / -d（启动时读取，main.cpp 里处理）
+//   2. 环境变量 SM_PERF=1（启动时读取一次，命令行未指定时回退）
 //
 // Release 开销：开关关闭时，SM_PERF_SCOPE 只构造一个 bool + 不启动 timer，
 // 析构时一个 bool 判断即 return。编译器可在 -O2 下几乎完全消除。

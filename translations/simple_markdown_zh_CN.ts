@@ -609,18 +609,6 @@ Please check that the folder is writable.</source>
         <translation>发现崩溃报告</translation>
     </message>
     <message>
-        <source>Diagnostics</source>
-        <translation>诊断</translation>
-    </message>
-    <message>
-        <source>Performance Log</source>
-        <translation>性能日志</translation>
-    </message>
-    <message>
-        <source>Print parse/layout/paint timings to stderr</source>
-        <translation>向 stderr 打印解析 / 布局 / 绘制的耗时</translation>
-    </message>
-    <message>
         <source>SimpleMarkdown unexpectedly closed last time.
 A crash report has been saved at:
 

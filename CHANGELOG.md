@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [1.0.4] - 2026-04-22
 
+### Changed
+- 性能日志从菜单开关改为命令行参数 `--debug` / `-d`，从终端启动时可直接看到 stderr 输出
+
 ### Fixed
 - 含硬换行（尾部双空格）的段落预览间距过大，布局与渲染行高不一致
 
