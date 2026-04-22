@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2026-04-22
+
+### Fixed
+- 含硬换行（尾部双空格）的段落预览间距过大，布局与渲染行高不一致
+
 ## [1.0.3] - 2026-04-21
 
 ### Improved

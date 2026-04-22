@@ -494,53 +494,31 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
 {
     if (runs.empty()) return m_lineHeight;
 
-    qreal totalWidth = 0;
-    // [高 DPI 修复] 高度估计中的 maxRunHeight 必须与 m_lineHeight 使用同一个度量系统
-    // 关键：m_lineHeight 在 updateMetrics 中根据 device DPI 计算，
-    //       所以 estimateParagraphHeight 中的 maxRunHeight 也必须使用同一个 device
-    //
-    // 修复前的问题：
-    //   - updateMetrics(device) 计算的 m_lineHeight 使用物理像素度量
-    //   - estimateParagraphHeight 中的 maxRunHeight 用的逻辑像素度量
-    //   - DPI 切换时（B→A），比较 maxRunHeight > m_lineHeight * 0.8 变得无效
-    //   - 导致高度估计不足，块重合
-    //
-    // 修复方案：
-    //   - estimateParagraphHeight 中也使用 m_device 参数创建 QFontMetricsF
-    //   - 这样 maxRunHeight 与 m_lineHeight 使用相同的度量单位
-    //   - DPI 切换时两者会同步调整，比较结果正确
-
+    // 行高必须与 paintInlineRuns 一致：渲染侧使用 firstRun.font.height() * 1.5
+    // 与 m_lineHeight (= m_baseFont.height() * 1.5) 基本相同
+    // 之前的 maxRunHeight 膨胀逻辑会导致布局高度 > 实际渲染高度，
+    // 在包含 LineBreak 的段落底部产生多余空白
     qreal lineHeight = m_lineHeight;
-    int newlineCount = 0;
-    qreal maxRunHeight = 0.0;
+
+    // 按 LineBreak(\n) 分段，每段独立估算换行数再累加
+    // 修复前的 bug：将所有 run 宽度累加后整体除以 maxWidth，
+    // 但 \n 在渲染时会重置 x 坐标，导致高度被高估
+    qreal safeMaxWidth = qMax(maxWidth, 1.0);
+    int totalLines = 0;
+    qreal segmentWidth = 0;
 
     for (const auto& run : runs) {
         if (run.text == "\n") {
-            newlineCount++;
+            totalLines += qMax(1, static_cast<int>(qCeil(segmentWidth / safeMaxWidth)));
+            segmentWidth = 0;
             continue;
         }
-        // [高 DPI 修复] 必须使用与 m_lineHeight 相同的度量系统！
-        // 上面注释（行394-397）已明确说明需要使用 m_device 参数
-        // 如果这里用逻辑像素而 m_lineHeight 用物理像素，DPI 切换时会导致高度估计不足
-        // 原因：
-        //   - updateMetrics 中 m_lineHeight = fm.height() * 1.5（物理像素）
-        //   - 这里如果用逻辑像素的 fm.height()，DPI 改变时两者单位变得不一致
-        //   - 比较 maxRunHeight > m_lineHeight * 0.8 失效，导致块重合
-        const QFontMetricsF& fm = cachedFontMetrics(run.font);  // [性能优化 B] 缓存复用，[高 DPI] 仍使用 m_device
-        totalWidth += fm.horizontalAdvance(run.text);
-
-        // 记录最大的字体高度，用于混合字体情况下的调整
-        maxRunHeight = qMax(maxRunHeight, fm.height());
+        const QFontMetricsF& fm = cachedFontMetrics(run.font);
+        segmentWidth += fm.horizontalAdvance(run.text);
     }
+    // 最后一段（\n 之后的内容，或无 \n 时的全部内容）
+    totalLines += qMax(1, static_cast<int>(qCeil(segmentWidth / safeMaxWidth)));
 
-    // 如果最大字体高度明显大于基础行高，增加估计高度
-    // 现在 maxRunHeight 和 m_lineHeight 使用相同的 DPI 度量，比较有效
-    if (maxRunHeight > m_lineHeight * 0.8) {
-        lineHeight = maxRunHeight * 1.5;
-    }
-
-    int wrappedLines = qMax(1, static_cast<int>(qCeil(totalWidth / qMax(maxWidth, 1.0))));
-    int totalLines = wrappedLines + newlineCount;
     return totalLines * lineHeight;
 }
 
