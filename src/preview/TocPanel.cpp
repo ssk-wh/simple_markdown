@@ -397,8 +397,8 @@ int TocPanel::preferredWidth() const
     const QScreen* scr = QGuiApplication::screenAt(
         const_cast<TocPanel*>(this)->mapToGlobal(QPoint(0, 0)));
     if (!scr) scr = QGuiApplication::primaryScreen();
-    int maxW = 400;
-    if (scr) maxW = scr->availableGeometry().width() / 5;
+    int maxW = 240;
+    if (scr) maxW = scr->availableGeometry().width() / 8;
 
     int w = std::max(kMinWidth, std::min(content, maxW));
     return w;

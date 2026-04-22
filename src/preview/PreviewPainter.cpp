@@ -576,6 +576,10 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             return fit;
         };
 
+        // 删除线前后加视觉间距（不影响复制内容）
+        const qreal strikePad = run.isStrikethrough ? fm.horizontalAdvance(QChar(' ')) * 0.5 : 0;
+        if (strikePad > 0) curX += strikePad;
+
         // Draw run text with character-level line-wrap
         QString text = run.text;
         int textOffset = 0;
@@ -625,6 +629,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             text = text.mid(wrapAt);
         }
         m_charCounter += run.text.length();
+        if (strikePad > 0) curX += strikePad;  // 删除线后间距
     }
     // Block separator newline
     m_charCounter++;

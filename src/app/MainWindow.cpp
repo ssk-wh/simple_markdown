@@ -622,10 +622,10 @@ void MainWindow::applyTocPreferredWidth(int w)
 
     const int totalW = m_mainSplitter->width();
     if (totalW <= 0) return;  // 尚未 layout
-    // 夹紧到屏幕 1/5
+    // 夹紧到屏幕 1/8
     const QScreen* scr = QGuiApplication::screenAt(mapToGlobal(QPoint(0, 0)));
     if (!scr) scr = QGuiApplication::primaryScreen();
-    const int maxW = scr ? scr->availableGeometry().width() / 5 : 400;
+    const int maxW = scr ? scr->availableGeometry().width() / 8 : 240;
     const int tocW = qMin(qMax(w, 120), maxW);
 
     // 忽略信号防止 splitterMoved 把 m_userDraggedToc 置 true
@@ -650,7 +650,7 @@ void MainWindow::clampTocWidthToScreen()
     const QScreen* scr = QGuiApplication::screenAt(mapToGlobal(QPoint(0, 0)));
     if (!scr) scr = QGuiApplication::primaryScreen();
     if (!scr) return;
-    const int maxW = scr->availableGeometry().width() / 5;
+    const int maxW = scr->availableGeometry().width() / 8;
     int tocIdx = sizes.size() - 1;  // TOC 始终是最后一项
     if (sizes[tocIdx] > maxW) {
         const int totalW = m_mainSplitter->width();
@@ -1961,9 +1961,9 @@ void MainWindow::showEvent(QShowEvent* event)
         if (!m_pendingSplitterState.isEmpty()) {
             m_mainSplitter->restoreState(m_pendingSplitterState);
         } else {
-            // 自适应 TOC 默认宽度：窗口宽度 15%，夹紧到 [160, 320]
+            // 自适应 TOC 默认宽度：窗口宽度 12%，夹紧到 [120, 240]
             int totalW = m_mainSplitter->width();
-            int defaultTocW = qBound(160, totalW * 15 / 100, 320);
+            int defaultTocW = qBound(120, totalW * 12 / 100, 240);
             m_mainSplitter->setSizes({totalW - defaultTocW, defaultTocW});
         }
         m_pendingSplitterState.clear();
@@ -1972,7 +1972,7 @@ void MainWindow::showEvent(QShowEvent* event)
         // 拆 QTabWidget 后，旧 restoreState 的 sizes 可能把 TOC 挤到 <= 0
         // 此处 sanity clamp：若 TOC 宽度 < minimumTocW，强制恢复默认
         auto sizes = m_mainSplitter->sizes();
-        int minimumTocW = qBound(160, m_mainSplitter->width() * 15 / 100, 320);
+        int minimumTocW = qBound(120, m_mainSplitter->width() * 12 / 100, 240);
         if (sizes.size() == 2 && sizes[1] < 100) {
             int totalW = m_mainSplitter->width();
             if (totalW <= 0) totalW = width();

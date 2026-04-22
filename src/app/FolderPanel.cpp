@@ -37,10 +37,71 @@ public:
     }
 };
 
+// 生成 project 风格图标：带小圆点的文件夹轮廓，适配主题配色
+static QIcon makeProjectIcon(const Theme& theme)
+{
+    QPixmap pm(16, 16);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+
+    // 文件夹主体 — 根据主题调色
+    QColor outline = theme.isDark ? QColor(180, 160, 130) : QColor(130, 100, 70);
+    QColor fill    = theme.isDark ? QColor(180, 160, 130, 40) : QColor(210, 180, 140, 60);
+
+    QPen pen(outline, 1.2);
+    p.setPen(pen);
+    p.setBrush(fill);
+    // 标签页突起
+    QPolygonF tab;
+    tab << QPointF(1, 5) << QPointF(1, 3) << QPointF(6, 3) << QPointF(7, 5);
+    p.drawPolygon(tab);
+    // 文件夹矩形
+    p.drawRoundedRect(QRectF(1, 5, 14, 9), 1, 1);
+
+    // 右下角圆点标记 — 使用主题 accentColor
+    p.setPen(Qt::NoPen);
+    p.setBrush(theme.accentColor);
+    p.drawEllipse(QPointF(12, 11), 2.5, 2.5);
+    p.setBrush(theme.isDark ? QColor(40, 40, 40) : QColor(255, 255, 255));
+    p.drawEllipse(QPointF(12, 11), 1.0, 1.0);
+
+    p.end();
+    return QIcon(pm);
+}
+
 // 自定义角色：存储文件/文件夹完整路径
 static constexpr int PathRole = Qt::UserRole + 1;
 static constexpr int IsFolderRole = Qt::UserRole + 2;
 static constexpr int IsRootRole = Qt::UserRole + 3;
+
+// 缩写路径：父级目录只显示首字母，最后一级完整显示
+// C:/aaa/bbb/ccc → C/a/b/ccc,  /home/user/projects → /h/u/projects
+static QString abbreviatedPath(const QString& absPath)
+{
+    QString normalized = QDir::toNativeSeparators(absPath);
+    QChar sep = QDir::separator();
+    QStringList parts = normalized.split(sep, QString::SkipEmptyParts);
+    if (parts.isEmpty()) return absPath;
+
+#ifdef Q_OS_WIN
+    // Windows: "C:" + 中间缩写 + 最后一级
+    if (parts.size() <= 1) return absPath;
+    QString result = parts.first();  // 盘符如 "C:"
+    for (int i = 1; i < parts.size() - 1; ++i)
+        result += sep + parts[i].left(1);
+    result += sep + parts.last();
+    return result;
+#else
+    // Linux/macOS: "/" + 中间缩写 + 最后一级
+    if (parts.size() <= 1) return absPath;
+    QString result = sep;
+    for (int i = 0; i < parts.size() - 1; ++i)
+        result += parts[i].left(1) + sep;
+    result += parts.last();
+    return result;
+#endif
+}
 
 FolderPanel::FolderPanel(QWidget* parent)
     : QWidget(parent)
@@ -101,8 +162,8 @@ void FolderPanel::addFolder(const QString& path)
 
     // 创建顶层节点
     auto* folderItem = new QStandardItem();
-    folderItem->setText(QDir(absPath).dirName());
-    folderItem->setIcon(style()->standardIcon(QStyle::SP_DirOpenIcon));
+    folderItem->setText(abbreviatedPath(absPath));
+    folderItem->setIcon(makeProjectIcon(m_theme));
     folderItem->setData(absPath, PathRole);
     folderItem->setData(true, IsFolderRole);
     folderItem->setData(true, IsRootRole);
@@ -110,6 +171,7 @@ void FolderPanel::addFolder(const QString& path)
     f.setBold(true);
     folderItem->setFont(f);
     folderItem->setEditable(false);
+    folderItem->setToolTip(absPath);
 
     m_model->appendRow(folderItem);
     populateFolder(folderItem, absPath);
@@ -297,6 +359,14 @@ void FolderPanel::setTheme(const Theme& theme)
 {
     m_theme = theme;
     applyThemeStyles();
+
+    // 刷新根节点图标以匹配新主题配色
+    QIcon icon = makeProjectIcon(m_theme);
+    for (int i = 0; i < m_model->rowCount(); ++i) {
+        auto* item = m_model->item(i);
+        if (item && item->data(IsRootRole).toBool())
+            item->setIcon(icon);
+    }
 }
 
 void FolderPanel::applyThemeStyles()

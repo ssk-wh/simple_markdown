@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - 文件被外部删除时提示用户：当前 Tab 可继续编辑并 Ctrl+S 重新保存，非当前 Tab 切换时提示并关闭
+- 文件夹面板根节点使用 project 风格图标（带主题 accentColor 圆点），hover 显示完整路径
+- 根节点标题改为缩写路径格式（父级目录只显示首字母）
+
+### Improved
+- 删除线渲染前后增加半字符视觉间距，与相邻文本更易区分（不影响复制结果）
+- 文件夹面板和 TOC 面板默认宽度从窗口 15% 缩减至 12%，上限从屏幕 1/5 改为 1/8
 
 ### Changed
 - 性能日志从菜单开关改为命令行参数 `--debug` / `-d`，从终端启动时可直接看到 stderr 输出
