@@ -5,5 +5,43 @@
       "WebFetch(domain:api.kde.org)",
       "Skill(claude-md-management:revise-claude-md)"
     ]
+  },
+  "outputStyle": "Explanatory",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit:*)",
+            "command": "python .claude/hooks/check_changelog.py",
+            "timeout": 5,
+            "statusMessage": "检查 CHANGELOG..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(rtk git commit:*)",
+            "command": "python .claude/hooks/check_changelog.py",
+            "timeout": 5,
+            "statusMessage": "检查 CHANGELOG..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push:*)",
+            "command": "python .claude/hooks/pre_push_check.py",
+            "timeout": 15,
+            "statusMessage": "自动打 Tag..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(rtk git push:*)",
+            "command": "python .claude/hooks/pre_push_check.py",
+            "timeout": 15,
+            "statusMessage": "自动打 Tag..."
+          }
+        ]
+      }
+    ]
   }
 }
