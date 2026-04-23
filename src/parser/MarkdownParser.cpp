@@ -214,7 +214,7 @@ AstNodePtr MarkdownParser::convertNode(cmark_node* node)
         ast->listTight = cmark_node_get_list_tight(node);
     }
 
-    // Recurse into children
+    // 递归处理子节点
     cmark_node* child = cmark_node_first_child(node);
     while (child) {
         ast->addChild(convertNode(child));
@@ -302,7 +302,7 @@ AstNodeType MarkdownParser::mapNodeType(cmark_node* node)
         break;
     }
 
-    // Handle GFM extension node types (dynamically registered)
+    // 处理 GFM 扩展节点类型（动态注册）
     const char* typeStr = cmark_node_get_type_string(node);
     if (typeStr) {
         if (std::strcmp(typeStr, "table") == 0)

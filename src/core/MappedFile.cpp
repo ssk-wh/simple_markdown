@@ -59,7 +59,7 @@ bool MappedFile::open(const QString& filePath) {
     close();
 
 #ifdef _WIN32
-    // Open file
+    // 打开文件
     m_fileHandle = CreateFileW(
         reinterpret_cast<LPCWSTR>(filePath.utf16()),
         GENERIC_READ,
@@ -74,7 +74,7 @@ bool MappedFile::open(const QString& filePath) {
         return false;
     }
 
-    // Get file size
+    // 获取文件大小
     LARGE_INTEGER fileSize;
     if (!GetFileSizeEx(m_fileHandle, &fileSize)) {
         CloseHandle(m_fileHandle);
@@ -84,12 +84,12 @@ bool MappedFile::open(const QString& filePath) {
 
     m_size = static_cast<size_t>(fileSize.QuadPart);
 
-    // Empty file: valid open but no mapping needed
+    // 空文件：打开有效但无需映射
     if (m_size == 0) {
         return true;
     }
 
-    // Create file mapping
+    // 创建文件映射
     m_mappingHandle = CreateFileMappingW(
         m_fileHandle,
         nullptr,
@@ -104,7 +104,7 @@ bool MappedFile::open(const QString& filePath) {
         return false;
     }
 
-    // Map view
+    // 映射视图
     m_data = MapViewOfFile(m_mappingHandle, FILE_MAP_READ, 0, 0, 0);
     if (!m_data) {
         CloseHandle(m_mappingHandle);
@@ -118,7 +118,7 @@ bool MappedFile::open(const QString& filePath) {
     return true;
 
 #else
-    // Linux/macOS
+    // Linux/macOS 平台
     QByteArray pathBytes = filePath.toUtf8();
     m_fd = ::open(pathBytes.constData(), O_RDONLY);
     if (m_fd < 0) {
@@ -135,7 +135,7 @@ bool MappedFile::open(const QString& filePath) {
 
     m_size = static_cast<size_t>(st.st_size);
 
-    // Empty file
+    // 空文件
     if (m_size == 0) {
         return true;
     }

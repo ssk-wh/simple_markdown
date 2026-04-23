@@ -37,25 +37,25 @@ struct LayoutBlock {
     int sourceStartLine = -1;
     int sourceEndLine = -1;
 
-    // Paragraph/Heading: inline content
+    // 段落/标题：行内内容
     std::vector<InlineRun> inlineRuns;
 
-    // CodeBlock
+    // 代码块
     QString codeText;
     QString language;
 
-    // Image
+    // 图片
     QString imageUrl;
     bool imageLoaded = false;
 
-    // Heading
+    // 标题
     int headingLevel = 0;
 
-    // List
+    // 列表
     bool ordered = false;
     int listStart = 1;
 
-    // Table
+    // 表格
     std::vector<qreal> columnWidths;
     std::vector<int> columnAligns;
 

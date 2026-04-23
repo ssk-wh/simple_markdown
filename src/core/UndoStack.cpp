@@ -18,7 +18,7 @@ bool UndoStack::shouldMerge(const EditOperation& existing, int offset,
     if (now - existing.timestamp >= m_mergeInterval)
         return false;
 
-    // Insert merge: both are pure inserts, consecutive offset, single non-space non-newline char
+    // 插入合并：两次都是纯插入，偏移量连续，单个非空格非换行字符
     if (existing.removedText.isEmpty() && removedText.isEmpty()) {
         if (addedText.length() == 1
             && addedText != " " && addedText != "\n"
@@ -27,7 +27,7 @@ bool UndoStack::shouldMerge(const EditOperation& existing, int offset,
         }
     }
 
-    // Backspace merge: both are pure deletes, consecutive offset (going backwards), single char
+    // 退格合并：两次都是纯删除，偏移量连续（向前递减），单个字符
     if (existing.addedText.isEmpty() && addedText.isEmpty()) {
         if (removedText.length() == 1
             && offset == existing.offset - 1) {
@@ -40,9 +40,9 @@ bool UndoStack::shouldMerge(const EditOperation& existing, int offset,
 
 void UndoStack::push(int offset, const QString& removedText, const QString& addedText)
 {
-    // Clear redo stack - new edit branch
+    // 清空重做栈 - 新的编辑分支
     if (!m_redoStack.empty()) {
-        // If savePoint was in the redo future, invalidate it
+        // 如果保存点位于重做的未来位置，则使其失效
         if (m_savePoint > static_cast<int>(m_undoStack.size())) {
             m_savePoint = -1;
         }
@@ -58,10 +58,10 @@ void UndoStack::push(int offset, const QString& removedText, const QString& adde
     if (mergeAllowed) {
         auto& top = m_undoStack.back();
         if (removedText.isEmpty()) {
-            // Insert merge
+            // 插入合并
             top.addedText += addedText;
         } else {
-            // Backspace merge
+            // 退格合并
             top.removedText = removedText + top.removedText;
             top.offset = offset;
         }

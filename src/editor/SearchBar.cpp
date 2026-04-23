@@ -26,7 +26,7 @@ SearchBar::SearchBar(EditorWidget* parent)
     mainLayout->setContentsMargins(10, 8, 10, 8);
     mainLayout->setSpacing(6);
 
-    int findBtnsWidth = kBtnW * 6 + kBtnGap * 5;  // 3 navigation + 3 option buttons
+    int findBtnsWidth = kBtnW * 6 + kBtnGap * 5;  // 3个导航按钮 + 3个选项按钮
 
     // 搜索行
     auto* findRow = new QHBoxLayout();
@@ -50,7 +50,7 @@ SearchBar::SearchBar(EditorWidget* parent)
     m_replaceEdit = new QLineEdit();
     m_replaceEdit->setPlaceholderText(tr("Replace..."));
     replaceLayout->addWidget(m_replaceEdit);
-    int replBtnsWidth = kReplBtnW * 2 + kBtnGap + 60; // match info width + replace buttons
+    int replBtnsWidth = kReplBtnW * 2 + kBtnGap + 60; // 匹配信息宽度 + 替换按钮
     replaceLayout->addSpacing(replBtnsWidth);
     mainLayout->addWidget(m_replaceRow);
     m_replaceRow->hide();
@@ -289,7 +289,7 @@ void SearchBar::mouseReleaseEvent(QMouseEvent* event)
     updateButtonRects();
     auto* btn = hitTest(event->pos());
 
-    // Reset all pressed states
+    // 重置所有按下状态
     ToolButton* allBtns[] = {&m_btnPrev, &m_btnNext, &m_btnClose, &m_btnReplace, &m_btnReplaceAll,
                              &m_btnCaseSensitive, &m_btnWholeWord, &m_btnRegex};
     for (auto* b : allBtns) b->pressed = false;
@@ -357,7 +357,7 @@ void SearchBar::paintEvent(QPaintEvent*)
         drawFunc(btn.rect);
     };
 
-    // Prev button: <
+    // 上一个按钮：<
     drawIcon(m_btnPrev, [&](const QRect& r) {
         int cx = r.center().x(), cy = r.center().y();
         QPolygonF arrow;
@@ -365,7 +365,7 @@ void SearchBar::paintEvent(QPaintEvent*)
         p.drawPolyline(arrow);
     });
 
-    // Next button: >
+    // 下一个按钮：>
     drawIcon(m_btnNext, [&](const QRect& r) {
         int cx = r.center().x(), cy = r.center().y();
         QPolygonF arrow;
@@ -373,7 +373,7 @@ void SearchBar::paintEvent(QPaintEvent*)
         p.drawPolyline(arrow);
     });
 
-    // Close button: X
+    // 关闭按钮：X
     drawIcon(m_btnClose, [&](const QRect& r) {
         int cx = r.center().x(), cy = r.center().y();
         int s = 4;
@@ -381,7 +381,7 @@ void SearchBar::paintEvent(QPaintEvent*)
         p.drawLine(cx + s, cy - s, cx - s, cy + s);
     });
 
-    // Case sensitive button: Aa
+    // 区分大小写按钮：Aa
     QColor accentBg = m_theme.accentColor;
     accentBg.setAlpha(dark ? 100 : 80);
     auto drawOptionBtn = [&](const ToolButton& btn, bool active) {
@@ -400,11 +400,11 @@ void SearchBar::paintEvent(QPaintEvent*)
     p.setFont(smallFont);
     p.drawText(m_btnCaseSensitive.rect, Qt::AlignCenter, "Aa");
 
-    // Whole word button: |a|
+    // 全词匹配按钮：|a|
     drawOptionBtn(m_btnWholeWord, m_wholeWord);
     p.drawText(m_btnWholeWord.rect, Qt::AlignCenter, "|a|");
 
-    // Regex button: .*
+    // 正则表达式按钮：.*
     drawOptionBtn(m_btnRegex, m_regex);
     p.drawText(m_btnRegex.rect, Qt::AlignCenter, ".*");
 

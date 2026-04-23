@@ -35,12 +35,12 @@ EditorWidget::EditorWidget(QWidget* parent)
     // 构造函数默认字体必须走中心化常量，避免与预览默认字号不一致
     m_layout->setFont(font_defaults::defaultEditorFont());
 
-    // Viewport settings
+    // 视口设置
     viewport()->setCursor(Qt::IBeamCursor);
     viewport()->setMouseTracking(true);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    // Create default document
+    // 创建默认文档
     m_doc = new Document(this);
     m_layout->setDocument(m_doc);
 
@@ -256,10 +256,10 @@ void EditorWidget::paintEvent(QPaintEvent* event)
     int last = lastVisibleLine();
     qreal sy = scrollY();
 
-    // Draw gutter background
+    // 绘制行号栏背景
     painter.fillRect(0, 0, m_gutterWidth, viewport()->height(), m_theme.editorGutterBg);
 
-    // Draw line numbers
+    // 绘制行号
     painter.setPen(m_theme.editorLineNumber);
     QFont gutterFont = m_layout->font();
     gutterFont.setPointSize(gutterFont.pointSize() - 1);
@@ -271,11 +271,11 @@ void EditorWidget::paintEvent(QPaintEvent* event)
                          QString::number(line + 1));
     }
 
-    // Draw separator line
+    // 绘制分隔线
     painter.setPen(m_theme.editorGutterLine);
     painter.drawLine(m_gutterWidth - 1, 0, m_gutterWidth - 1, viewport()->height());
 
-    // Draw text area
+    // 绘制文本区域
     painter.save();
     painter.setClipRect(m_gutterWidth, 0, viewport()->width() - m_gutterWidth, viewport()->height());
 
@@ -782,7 +782,7 @@ void EditorWidget::updateSearchBarMatchInfo()
     m_searchBar->updateMatchInfo(m_currentMatchIndex, m_searchMatches.size());
 }
 
-// -- Drag & Drop (图片插入) --
+// -- 拖放（图片插入） --
 
 static bool isImageFile(const QString& path)
 {

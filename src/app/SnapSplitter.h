@@ -17,14 +17,14 @@ namespace app {
 
 class SnapOverlay;
 
-// Horizontal QSplitter with 1/4, 1/2, 3/4 snap guides shown while dragging
-// the middle handle. Thin wrapper — identical API to QSplitter for callers.
+// 水平 QSplitter，拖动中间 handle 时显示 1/4、1/2、3/4 吸附辅助线。
+// 薄封装 —— 对调用方保持与 QSplitter 相同的 API。
 class SnapSplitter : public QSplitter {
     Q_OBJECT
 public:
     explicit SnapSplitter(Qt::Orientation orientation, QWidget* parent = nullptr);
 
-    // Called by MainWindow::applyTheme to keep guide color in sync.
+    // 由 MainWindow::applyTheme 调用以保持辅助线颜色同步。
     void setAccentColor(const QColor& color);
 
 protected:

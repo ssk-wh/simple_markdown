@@ -26,7 +26,7 @@ private:
     struct LangDef {
         QRegularExpression keywords;
         QRegularExpression types;
-        QRegularExpression singleComment;  // e.g. //
+        QRegularExpression singleComment;  // 如 //
         QString blockCommentStart;
         QString blockCommentEnd;
         bool hasPreprocessor = false;

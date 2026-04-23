@@ -39,7 +39,7 @@ void PieceTable::insert(int offset, const QString& text)
     int offsetInPiece = 0;
     int idx = findPieceAtOffset(offset, offsetInPiece);
 
-    // offset is at the very end (past all pieces)
+    // offset 超过所有 piece 末尾，追加到最后
     if (idx < 0) {
         m_pieces.push_back(newPiece);
         updateLineFeedPrefix();
@@ -47,10 +47,10 @@ void PieceTable::insert(int offset, const QString& text)
     }
 
     if (offsetInPiece == 0) {
-        // Insert before this piece
+        // 在该 piece 之前插入
         m_pieces.insert(m_pieces.begin() + idx, newPiece);
     } else {
-        // Split the piece
+        // 拆分当前 piece
         const Piece& old = m_pieces[idx];
         Piece left;
         left.source = old.source;
@@ -85,9 +85,9 @@ void PieceTable::remove(int offset, int length)
     int endOffInPiece = 0;
     int endIdx = findPieceAtOffset(offset + length, endOffInPiece);
 
-    // If end is past all pieces, remove to the end
+    // 删除范围超出末尾，截断到末尾
     if (endIdx < 0) {
-        // Truncate start piece
+        // 截断起始 piece
         if (startOffInPiece == 0) {
             m_pieces.erase(m_pieces.begin() + startIdx, m_pieces.end());
         } else {
@@ -101,7 +101,7 @@ void PieceTable::remove(int offset, int length)
     }
 
     if (startIdx == endIdx) {
-        // Remove within the same piece
+        // 在同一个 piece 内删除
         const Piece& old = m_pieces[startIdx];
 
         std::vector<Piece> replacement;
@@ -127,10 +127,10 @@ void PieceTable::remove(int offset, int length)
         m_pieces.erase(m_pieces.begin() + startIdx);
         m_pieces.insert(m_pieces.begin() + startIdx, replacement.begin(), replacement.end());
     } else {
-        // Remove across multiple pieces
+        // 跨多个 piece 删除
         std::vector<Piece> replacement;
 
-        // Left remainder of start piece
+        // 起始 piece 的左侧保留部分
         if (startOffInPiece > 0) {
             const Piece& sp = m_pieces[startIdx];
             Piece left;
@@ -141,7 +141,7 @@ void PieceTable::remove(int offset, int length)
             replacement.push_back(left);
         }
 
-        // Right remainder of end piece
+        // 结束 piece 的右侧保留部分
         if (endOffInPiece < static_cast<int>(m_pieces[endIdx].length)) {
             const Piece& ep = m_pieces[endIdx];
             Piece right;
@@ -156,7 +156,7 @@ void PieceTable::remove(int offset, int length)
         m_pieces.insert(m_pieces.begin() + startIdx, replacement.begin(), replacement.end());
     }
 
-    // Remove zero-length pieces
+    // 清除零长度 piece
     auto it = m_pieces.begin();
     while (it != m_pieces.end()) {
         if (it->length == 0)
@@ -229,7 +229,13 @@ int PieceTable::length() const
 
 bool PieceTable::isEmpty() const
 {
-    return length() == 0;
+    if (m_pieces.empty())
+        return true;
+    for (const auto& p : m_pieces) {
+        if (p.length > 0)
+            return false;
+    }
+    return true;
 }
 
 int PieceTable::lineCount() const
@@ -250,10 +256,10 @@ QString PieceTable::lineText(int line) const
 
     if (line + 1 < lineCount()) {
         int end = lineToOffset(line + 1);
-        // end points to the first char of next line, so end-1 is the '\n'
+        // end 指向下一行首字符，end-1 是 '\n'
         return textAt(start, end - 1 - start);
     } else {
-        // Last line: from start to end of text
+        // 最后一行：从 start 到文本末尾
         return textAt(start, totalLen - start);
     }
 }
@@ -267,7 +273,7 @@ int PieceTable::offsetToLine(int offset) const
         int pieceEnd = currentOffset + static_cast<int>(p.length);
 
         if (offset < pieceEnd) {
-            // offset is within this piece
+            // offset 落在当前 piece 内
             const QString& buf = bufferFor(p.source);
             int posInPiece = offset - currentOffset;
             for (int i = 0; i < posInPiece; ++i) {
@@ -294,7 +300,7 @@ int PieceTable::lineToOffset(int line) const
 
     for (const auto& p : m_pieces) {
         if (currentLine + static_cast<int>(p.lineFeeds) >= line) {
-            // Target line starts within this piece
+            // 目标行起始位置在当前 piece 内
             const QString& buf = bufferFor(p.source);
             for (uint32_t i = 0; i < p.length; ++i) {
                 if (buf.at(p.start + i) == QChar('\n')) {
@@ -328,7 +334,7 @@ int PieceTable::findPieceAtOffset(int offset, int& offsetInPiece) const
         cumulative += pieceLen;
     }
 
-    // offset == total length (past the end)
+    // offset 等于总长度（超过末尾）
     if (offset == cumulative) {
         offsetInPiece = 0;
         return -1; // signals "past the end"

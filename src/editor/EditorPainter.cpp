@@ -32,7 +32,7 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
     const qreal margin = 8;
     qreal viewWidth = painter->clipBoundingRect().width();
 
-    // Background
+    // 背景
     painter->fillRect(painter->clipBoundingRect(), m_theme.editorBg);
 
     // 当前行高亮
@@ -84,7 +84,7 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
         }
     }
 
-    // Text (with selection highlighting via QTextLayout::draw)
+    // 文本绘制（通过 QTextLayout::draw 实现选区高亮）
     painter->setPen(m_theme.editorFg);
     painter->setFont(layout->font());
 
@@ -119,7 +119,7 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
         tl->draw(painter, QPointF(textLeft, y), selections);
     }
 
-    // Preedit 文本绘制
+    // 输入法预编辑文本绘制
     if (!preeditString.isEmpty()) {
         QRectF cr = layout->cursorRect(cursorPos);
         qreal px = cr.x() + textLeft;

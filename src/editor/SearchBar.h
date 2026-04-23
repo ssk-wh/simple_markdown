@@ -46,12 +46,12 @@ private:
     QWidget* m_replaceRow;
     QLabel* m_matchInfoLabel;
 
-    // Search options
+    // 搜索选项
     bool m_caseSensitive = false;
     bool m_wholeWord = false;
     bool m_regex = false;
 
-    // Custom painted buttons
+    // 自绘按钮
     struct ToolButton {
         QRect rect;
         bool hovered = false;

@@ -307,7 +307,7 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::setupMenuBar()
 {
-    // -- File menu --
+    // -- 文件菜单 --
     QMenu* fileMenu = menuBar()->addMenu(tr("File"));
 
     QAction* newAct = fileMenu->addAction(tr("New"), this, &MainWindow::onNewFile, QKeySequence::New);
@@ -341,7 +341,7 @@ void MainWindow::setupMenuBar()
 
     fileMenu->addAction(tr("Exit"), this, &QWidget::close, QKeySequence::Quit);
 
-    // -- Edit menu --
+    // -- 编辑菜单 --
     QMenu* editMenu = menuBar()->addMenu(tr("Edit"));
 
     editMenu->addAction(tr("Undo"), [this]() {
@@ -366,7 +366,7 @@ void MainWindow::setupMenuBar()
             tab->editor->showReplaceBar();
     }, QKeySequence(Qt::CTRL + Qt::Key_H));
 
-    // -- View menu --
+    // -- 视图菜单 --
     QMenu* viewMenu = menuBar()->addMenu(tr("View"));
 
     // Spec: specs/模块-app/12-主题插件系统.md
@@ -503,7 +503,7 @@ void MainWindow::setupMenuBar()
     m_restoreSessionAct->setCheckable(true);
     m_restoreSessionAct->setChecked(true);
 
-    // -- Settings menu --
+    // -- 设置菜单 --
     QMenu* settingsMenu = menuBar()->addMenu(tr("Settings"));
 
     // Spec: specs/模块-app/14-自动保存.md
@@ -563,7 +563,7 @@ void MainWindow::setupMenuBar()
         switchLanguage("en_US");
     });
 
-    // -- Help menu --
+    // -- 帮助菜单 --
     QMenu* helpMenu = menuBar()->addMenu(tr("Help"));
 
     helpMenu->addAction(tr("Keyboard Shortcuts"), this, &MainWindow::onShowShortcuts);
@@ -697,14 +697,14 @@ void MainWindow::newTab()
     setTabCloseButton(index);
     m_tabBar->setCurrentIndex(index);
 
-    // Insert sample text for new empty tabs
+    // 为新建空标签页插入示例文本
     tab.editor->document()->insert(0,
         "# SimpleMarkdown\n"
         "\n"
         "A **lightweight** cross-platform Markdown editor.\n"
     );
     tab.editor->document()->setModified(false);
-    // parseNow will be triggered by textChanged → debounce
+    // parseNow 会由 textChanged → debounce 自动触发
 }
 
 void MainWindow::restoreSession(const QString& requestedFile)
@@ -952,16 +952,16 @@ MainWindow::TabData MainWindow::createTab()
         });
     });
 
-    // Parse scheduler: connect document -> preview
+    // 解析调度器：关联文档到预览
     tab.scheduler = new ParseScheduler(tab.splitter);
     tab.scheduler->setDocument(tab.editor->document());
     connect(tab.scheduler, &ParseScheduler::astReady,
             tab.preview, &PreviewWidget::updateAst);
 
-    // Scroll sync: editor -> preview
+    // 滚动同步：编辑器 → 预览
     tab.scrollSync = new ScrollSync(tab.editor, tab.preview, tab.splitter);
 
-    // Apply current settings
+    // 应用当前设置
     tab.editor->setTheme(m_currentTheme);
     tab.preview->setTheme(m_currentTheme);
     tab.editor->setWordWrap(m_wordWrapAct && m_wordWrapAct->isChecked());
@@ -1013,7 +1013,7 @@ MainWindow::TabData MainWindow::createTab()
     // TocPanel 点击 → 当前 tab 的 preview 跳转
     // （在 MainWindow 构造中统一连接一次即可，不需要每个 tab 连接）
 
-    // Track modifications for tab title + status bar save status
+    // 追踪修改状态以更新标签页标题和状态栏保存状态
     connect(tab.editor->document(), &Document::modifiedChanged,
             this, [this](bool) {
         int idx = m_tabBar->currentIndex();
@@ -1053,7 +1053,7 @@ void MainWindow::updateTabTitle(int index)
     m_tabBar->setTabToolTip(index, fp.isEmpty() ? tr("Untitled") : QFileInfo(fp).absoluteFilePath());
     if (m_tabBarOnSide) m_sideTabBar->setTabText(index, title);
 
-    // Update window title
+    // 更新窗口标题
     if (index == m_tabBar->currentIndex())
         setWindowTitle(title + " - SimpleMarkdown");
 }
@@ -1561,7 +1561,7 @@ bool MainWindow::maybeSave(int index)
     return false;  // Cancel
 }
 
-// -- Slots --
+// -- 槽函数 --
 
 void MainWindow::onNewFile()
 {
@@ -1644,13 +1644,13 @@ void MainWindow::onCloseTab(int index)
     if (!fp.isEmpty())
         unwatchFile(fp);
 
-    // Remove tab data
+    // 移除标签页数据
     auto* sp = m_tabs[index].splitter;
     m_tabs.removeAt(index);
     removePage(index);  // 从 tabBar + contentStack 移除
     if (sp) sp->deleteLater();
 
-    // If no tabs left, create a new one
+    // 若无剩余标签页，新建一个
     if (m_tabs.isEmpty())
         newTab();
 
@@ -1753,7 +1753,7 @@ void MainWindow::onTabChanged(int index)
     }
 }
 
-// -- Drag & Drop --
+// -- 拖放 --
 
 static bool isImageFilePath(const QString& path)
 {
@@ -1995,7 +1995,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
     if (m_focusMode)
         exitFocusMode();
 
-    // Check all tabs for unsaved changes
+    // 检查所有标签页是否有未保存的更改
     for (int i = 0; i < m_tabs.size(); ++i) {
         if (!maybeSave(i)) {
             event->ignore();
@@ -2026,7 +2026,7 @@ void MainWindow::startLocalServer(const char* serverName)
             openFile(filePath);
         }
 
-        // Activate window
+        // 激活窗口
         setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
         raise();
         activateWindow();

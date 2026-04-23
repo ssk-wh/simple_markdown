@@ -92,13 +92,13 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
     qreal absY = offsetY + block.bounds.y();
     qreal blockBottom = absY + block.bounds.height();
 
-    // Culling: skip blocks entirely outside viewport, but count their chars
+    // 裁剪：跳过完全在视口之外的块，但仍计算其字符数
     if (blockBottom < scrollY - 50 || absY > scrollY + viewportHeight + 50) {
         countBlockChars(block);
         return;
     }
 
-    // Translate to viewport coordinates
+    // 转换为视口坐标
     qreal drawX = absX;
     qreal drawY = absY - scrollY;
 
@@ -120,7 +120,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         }
 
         paintInlineRuns(p, block, drawX, drawY, block.bounds.width());
-        // H1/H2: bottom separator line
+        // H1/H2：底部分隔线
         if (block.headingLevel <= 2) {
             qreal lineY = drawY + block.bounds.height() - 4;
             p->setPen(QPen(m_theme.previewHeadingSeparator, 1));
@@ -130,7 +130,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
     }
     case LayoutBlock::CodeBlock:
     case LayoutBlock::HtmlBlock: {
-        // Background —— Spec: specs/模块-app/12-主题插件系统.md 代码块专用色
+        // 背景色 —— Spec: specs/模块-app/12-主题插件系统.md 代码块专用色
         // （fallback 到 previewCode* 保证老主题零回归）
         QRectF bgRect(drawX, drawY, block.bounds.width(), block.bounds.height());
         p->fillRect(bgRect, m_theme.previewCodeBlockBg);
@@ -219,14 +219,14 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         break;
     }
     case LayoutBlock::BlockQuote: {
-        // Background
+        // 背景色
         QRectF bgRect(drawX, drawY, block.bounds.width(), block.bounds.height());
         p->fillRect(bgRect, m_theme.previewBlockQuoteBg);
 
-        // Left bar
+        // 左侧竖线
         p->fillRect(QRectF(drawX, drawY, 3, block.bounds.height()), m_theme.previewBlockQuoteBorder);
 
-        // Children - 传入父块绝对坐标，子块通过自身 bounds 定位
+        // 子块 - 传入父块绝对坐标���子块通过自身 bounds 定位
         for (const auto& child : block.children) {
             paintBlock(p, child, absX, absY, scrollY, viewportHeight, viewportWidth);
         }
@@ -267,7 +267,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         break;
     }
     case LayoutBlock::Table: {
-        // Draw grid
+        // 绘制表格网格
         p->setPen(QPen(m_theme.previewTableBorder, 1));
 
         bool isFirstRow = true;
@@ -276,25 +276,25 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal rowDrawY = rowAbsY - scrollY;
             qreal rowHeight = row.bounds.height();
 
-            // Header row background
+            // 表头行背景
             if (isFirstRow) {
                 p->fillRect(QRectF(drawX, rowDrawY, block.bounds.width(), rowHeight),
                             m_theme.previewTableHeaderBg);
             }
 
-            // Row border
+            // 行边框
             p->setPen(QPen(m_theme.previewTableBorder, 1));
             p->drawLine(QPointF(drawX, rowDrawY + rowHeight),
                         QPointF(drawX + block.bounds.width(), rowDrawY + rowHeight));
 
-            // Cells - 传入正确的单元格绝对坐标
+            // 单元格 - 传入正确的单元格绝���坐标
             for (const auto& cell : row.children) {
                 qreal cellAbsX = absX + cell.bounds.x();
                 qreal cellAbsY = rowAbsY;  // 单元格使用行的绝对 y
                 qreal cellX = cellAbsX;
                 qreal cellY = cellAbsY - scrollY;
 
-                // Column border
+                // 列边框
                 p->setPen(QPen(m_theme.previewTableBorder, 1));
                 p->drawLine(QPointF(cellX, rowDrawY),
                             QPointF(cellX, rowDrawY + rowHeight));
@@ -310,7 +310,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                 }
             }
 
-            // Right border
+            // 右边框
             p->setPen(QPen(m_theme.previewTableBorder, 1));
             p->drawLine(QPointF(drawX + block.bounds.width(), rowDrawY),
                         QPointF(drawX + block.bounds.width(), rowDrawY + rowHeight));
@@ -323,7 +323,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         QRectF rect(drawX, drawY, block.bounds.width(), block.bounds.height());
         const QString& url = block.imageUrl;
 
-        // Extract basename from URL
+        // 从 URL 提取文件名
         QString basename;
         if (!url.isEmpty()) {
             int lastSlash = url.lastIndexOf('/');
@@ -334,7 +334,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             if (url.startsWith("data:")) basename.clear();
         }
 
-        // Check image cache state
+        // 检查图片缓存状态
         QPixmap* pixmap = m_imageCache ? m_imageCache->get(url) : nullptr;
         bool isFailed = m_imageCache && !url.isEmpty() && m_imageCache->isFailed(url);
         bool isLoading = m_imageCache && m_imageCache->isLoading(url);
@@ -348,7 +348,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal cx = rect.center().x();
             qreal cy = rect.center().y();
 
-            // Error icon: X mark [Spec INV-8: 从 layout base 派生, 比例 1.33]
+            // 错误图标：X 标记 [Spec INV-8: 从 layout base 派��, 比例 1.33]
             QFont iconFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
             iconFont.setPointSizeF(iconFont.pointSizeF() * 1.33);
             iconFont.setBold(true);
@@ -359,7 +359,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal iconH = iconFm.height();
             p->drawText(QPointF(cx - iconW / 2, cy - 4), QStringLiteral("\u2717"));
 
-            // Error label [Spec INV-8: 比例 0.83]
+            // 错误标签 [Spec INV-8: 比例 0.83]
             QFont labelFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
             labelFont.setPointSizeF(labelFont.pointSizeF() * 0.83);
             p->setFont(labelFont);
@@ -368,7 +368,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             p->drawText(QRectF(rect.x(), cy + iconH * 0.3, rect.width(), iconH),
                         Qt::AlignHCenter | Qt::AlignTop, errorLabel);
 
-            // File name at bottom [Spec INV-8: 比例 0.75]
+            // 底部文件名 [Spec INV-8: 比例 0.75]
             if (!basename.isEmpty()) {
                 QFont nameFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
                 nameFont.setPointSizeF(nameFont.pointSizeF() * 0.75);
@@ -403,7 +403,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
             qreal cx = rect.center().x();
             qreal cy = rect.center().y();
 
-            // Loading spinner placeholder [Spec INV-8: 比例 1.33]
+            // 加载中旋转图标占位 [Spec INV-8: 比例 1.33]
             QFont iconFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
             iconFont.setPointSizeF(iconFont.pointSizeF() * 1.33);
             p->setFont(iconFont);
@@ -543,7 +543,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
 
         bool hasBg = run.bgColor.isValid() && run.bgColor != Qt::transparent;
 
-        // Helper: draw a segment with background, selection, decorations
+        // 辅助函数：绘制带背景、选区、装饰的文本段
         auto drawSegment = [&](const QString& seg, qreal segW, int segOffset) {
             // 反引号和内联代码背景色绘制
             // [Spec 模块-preview/03 INV-10] 所有 run 共享 lineAscent（行主字体基线），
@@ -564,7 +564,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
                 p->drawLine(QPointF(curX, curY + lineAscent / 2), QPointF(curX + segW, curY + lineAscent / 2));
         };
 
-        // Find how many chars fit within 'remaining' width using incremental measurement
+        // 通过逐字测量查找在剩余宽度内能容纳多少字符
         auto findFitCount = [&](const QString& str, qreal remaining) -> int {
             int fit = 0;
             qreal accW = 0;
@@ -580,16 +580,16 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
         const qreal strikePad = run.isStrikethrough ? fm.horizontalAdvance(QChar(' ')) * 0.5 : 0;
         if (strikePad > 0) curX += strikePad;
 
-        // Draw run text with character-level line-wrap
+        // 按字符级别换行绘制 run 文本
         QString text = run.text;
         int textOffset = 0;
         while (!text.isEmpty()) {
             qreal fullWidth = fm.horizontalAdvance(text);
             qreal remaining = x + maxWidth - curX;
 
-            // Fits on current line?
+            // 能放在当前行吗？
             if (fullWidth <= remaining || curX <= x) {
-                // At line start but still doesn't fit: split at char boundary
+                // 在行首但仍放不下：按字符边界拆分
                 if (fullWidth > remaining && curX <= x) {
                     int fitCount = findFitCount(text, remaining);
                     if (fitCount <= 0) fitCount = 1;
@@ -609,11 +609,11 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
                 break;
             }
 
-            // Need to wrap: find last char that fits
+            // 需要换行：找到能容纳的最后一个字符
             int wrapAt = findFitCount(text, remaining);
 
             if (wrapAt <= 0) {
-                // Nothing fits here (curX > x), move to next line and retry
+                // 此处无法容纳任何字符（curX > x），移到下一行重试
                 curX = x;
                 curY += lineHeight;
                 continue;
@@ -631,7 +631,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
         m_charCounter += run.text.length();
         if (strikePad > 0) curX += strikePad;  // 删除线后间距
     }
-    // Block separator newline
+    // 块分隔换行符
     m_charCounter++;
 }
 
@@ -749,14 +749,14 @@ void PreviewPainter::countBlockChars(const LayoutBlock& block)
         return;
     }
 
-    // Count inline runs (Paragraph, Heading, TableCell, etc.)
+    // 计算行内 run 的字符数（Paragraph、Heading、TableCell 等���
     for (const auto& run : block.inlineRuns) {
         m_charCounter += run.text.length();
     }
     if (!block.inlineRuns.empty())
         m_charCounter++; // block separator newline
 
-    // Count code block text
+    // 计算代码块文本的字符数
     if (!block.codeText.isEmpty()) {
         const QStringList lines = block.codeText.split('\n');
         for (int i = 0; i < lines.size(); ++i) {
@@ -766,7 +766,7 @@ void PreviewPainter::countBlockChars(const LayoutBlock& block)
         }
     }
 
-    // Recurse into children
+    // 递归处理子块
     for (const auto& child : block.children) {
         countBlockChars(child);
     }

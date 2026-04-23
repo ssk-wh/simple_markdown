@@ -1,6 +1,6 @@
 #include "Selection.h"
 
-// TextPosition operators
+// TextPosition 运算符
 
 bool TextPosition::operator==(const TextPosition& other) const {
     return line == other.line && column == other.column;
@@ -27,7 +27,7 @@ bool TextPosition::operator>=(const TextPosition& other) const {
     return !(*this < other);
 }
 
-// SelectionRange
+// 选区范围
 
 bool SelectionRange::isEmpty() const {
     return anchor == cursor;
@@ -45,7 +45,7 @@ TextPosition SelectionRange::end() const {
     return anchor < cursor ? cursor : anchor;
 }
 
-// Selection
+// 选区管理
 
 Selection::Selection() = default;
 

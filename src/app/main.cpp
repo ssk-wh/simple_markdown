@@ -125,7 +125,7 @@ int main(int argc, char* argv[])
     SetUnhandledExceptionFilter(crashHandler);
 #endif
 
-    // Diagnostic output to stderr (visible in console)
+    // 诊断输出到 stderr（控制台可见）
     fprintf(stderr, "[1] main() started\n");
     fflush(stderr);
 

@@ -160,6 +160,7 @@ TEST(PreviewLayoutTest, T2_NestedListAbsoluteCoordinates) { ... }
 ### 代码质量
 - **[INV-CODE-UTF8]** C++ 源文件必须是 UTF-8 无 BOM（项目现状），修改时严禁变更 BOM 状态
 - **[INV-CODE-RAII]** 禁止裸 new/delete
+- **[INV-CODE-COMMENT-ZH]** 所有代码注释必须使用中文，禁止英文注释；新增或修改代码时遇到英文注释应顺手改为中文
 
 ---
 

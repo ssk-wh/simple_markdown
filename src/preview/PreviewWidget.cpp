@@ -64,7 +64,7 @@ PreviewWidget::~PreviewWidget()
     }
     delete m_layout;
     delete m_painter;
-    // m_imageCache is owned by QObject parent
+    // m_imageCache 由 QObject 父对象管理
 }
 
 PreviewLayout* PreviewWidget::previewLayout() const
@@ -128,7 +128,7 @@ void PreviewWidget::paintEvent(QPaintEvent* /*event*/)
     qreal vpHeight = viewport()->height();
     qreal vpWidth = viewport()->width();
 
-    // Apply 20px horizontal padding, minus horizontal scroll
+    // 应用 20px 水平内边距，减去水平滚动偏移
     qreal scrollXVal = m_wordWrap ? 0 : horizontalScrollBar()->value();
     painter.translate(20 - scrollXVal, 0);
 
@@ -597,7 +597,7 @@ void PreviewWidget::extractBlockText(const LayoutBlock& block, QString& out) con
         return;  // frontmatter 无子块，防御式短路
     }
 
-    // Inline text - 匹配 paintInlineRuns 的计数：所有 run.text + 无条件分隔换行
+    // 行内文本 - 匹配 paintInlineRuns 的计数：所有 run.text + 无条件分隔换行
     if (!block.inlineRuns.empty()) {
         for (const auto& run : block.inlineRuns) {
             out += run.text;
@@ -605,7 +605,7 @@ void PreviewWidget::extractBlockText(const LayoutBlock& block, QString& out) con
         out += '\n';
     }
 
-    // Code block - 匹配 paintBlock 的逐行计数，跳过 split 产生的尾部空元素
+    // 代码块 - 匹配 paintBlock 的逐行计数，跳过 split 产生的尾部空元素
     if (!block.codeText.isEmpty()) {
         const QStringList lines = block.codeText.split('\n');
         for (int i = 0; i < lines.size(); ++i) {
@@ -616,7 +616,7 @@ void PreviewWidget::extractBlockText(const LayoutBlock& block, QString& out) con
         }
     }
 
-    // Recurse into children
+    // 递归处理子块
     for (const auto& child : block.children) {
         extractBlockText(child, out);
     }

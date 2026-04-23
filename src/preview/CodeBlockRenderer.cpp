@@ -146,7 +146,7 @@ CodeBlockRenderer::LangDef CodeBlockRenderer::getLangDef(const QString& language
         def.singleComment.setPattern("#.*$");
 
     } else if (lang == "json") {
-        // JSON: just strings, numbers, and keywords (true/false/null)
+        // JSON：仅有字符串、数字和关键字（true/false/null）
         def.keywords.setPattern(buildWordPattern({"true","false","null"}));
 
     } else if (lang == "sql") {
@@ -174,7 +174,7 @@ CodeBlockRenderer::LangDef CodeBlockRenderer::getLangDef(const QString& language
         def.blockCommentEnd = "*/";
 
     } else if (lang == "html" || lang == "xml" || lang == "svg") {
-        // Minimal: just handle < > tags and attributes
+        // 最小化实现：仅处理 < > 标签和属性
         def.blockCommentStart = "<!--";
         def.blockCommentEnd = "-->";
 
@@ -205,10 +205,10 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         return result;
     }
 
-    // Track which characters have been assigned a token
+    // 记录每个字符已分配的 token 类型
     std::vector<int> tokens(line.length(), (int)Default);
 
-    // 1. Handle block comments first
+    // 1. 优先处理块注释
     if (!def.blockCommentStart.isEmpty()) {
         int pos = 0;
         while (pos < line.length()) {
@@ -239,7 +239,7 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         }
     }
 
-    // If entire line is in block comment, emit and return
+    // 如果整行都在块注释中，直接输出并返回
     bool allComment = true;
     for (int i = 0; i < tokens.size(); ++i)
         if (tokens[i] != (int)Comment) { allComment = false; break; }
@@ -248,12 +248,12 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         return result;
     }
 
-    // 2. Single-line comments
+    // 2. 单行注释
     if (def.singleComment.isValid() && !def.singleComment.pattern().isEmpty()) {
         auto m = def.singleComment.match(line);
         if (m.hasMatch()) {
             int start = m.capturedStart();
-            // Only apply if not already in block comment
+            // 仅在不处于块注释中时应用
             bool inBC = false;
             for (int i = 0; i < start; ++i)
                 if (tokens[i] == (int)Comment) { inBC = true; break; }
@@ -264,7 +264,7 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         }
     }
 
-    // 3. Strings (double and single quoted) - skip already-commented regions
+    // 3. 字符串（双引号和单引号）- 跳过已标记为注释的区域
     {
         static QRegularExpression stringRx(R"("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')");
         auto it = stringRx.globalMatch(line);
@@ -281,7 +281,7 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         }
     }
 
-    // 4. Preprocessor directives (C/C++)
+    // 4. 预处理指令（C/C++）
     if (def.hasPreprocessor) {
         static QRegularExpression ppRx(R"(^\s*#\w+)");
         auto m = ppRx.match(line);
@@ -291,7 +291,7 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         }
     }
 
-    // 5. Numbers
+    // 5. 数字
     {
         static QRegularExpression numRx(R"(\b\d+\.?\d*[fFuUlL]?\b|0x[0-9a-fA-F]+\b)");
         auto it = numRx.globalMatch(line);
@@ -305,7 +305,7 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         }
     }
 
-    // 6. Keywords
+    // 6. 关键字
     if (def.keywords.isValid() && !def.keywords.pattern().isEmpty()) {
         auto it = def.keywords.globalMatch(line);
         while (it.hasNext()) {
@@ -318,7 +318,7 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         }
     }
 
-    // 7. Types
+    // 7. 类型名
     if (def.types.isValid() && !def.types.pattern().isEmpty()) {
         auto it = def.types.globalMatch(line);
         while (it.hasNext()) {
@@ -331,7 +331,7 @@ CodeBlockRenderer::tokenizeLine(const QString& line, const LangDef& def, bool is
         }
     }
 
-    // Build segments from token array
+    // 根据 token 数组构建段落
     if (tokens.empty()) {
         result.push_back({line, colorForToken(Default, isDark)});
         return result;

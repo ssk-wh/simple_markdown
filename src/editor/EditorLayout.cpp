@@ -80,7 +80,7 @@ void EditorLayout::rebuild()
 
     int count = m_doc->lineCount();
     m_lines.resize(count);
-    // All lines start as dirty by default (LineInfo default)
+    // 所有行初始都是 dirty 状态（LineInfo 默认值）
     m_highlighter.setLineCount(count);
     invalidateYCache();
 }
@@ -95,7 +95,7 @@ void EditorLayout::updateLines(int startLine, int endLine)
 
     if (docLines != oldSize) {
         m_lines.resize(docLines);
-        // New lines are dirty by default
+        // 新增行默认是 dirty 状态
     }
 
     m_highlighter.invalidateFromLine(startLine);
@@ -226,7 +226,7 @@ QPointF EditorLayout::positionToPoint(TextPosition pos) const
     if (!tl)
         return QPointF(0, lineY(line));
 
-    // Find which QTextLine contains this column
+    // 查找包含该列的 QTextLine
     int col = pos.column;
     for (int i = 0; i < tl->lineCount(); ++i) {
         QTextLine textLine = tl->lineAt(i);
@@ -237,7 +237,7 @@ QPointF EditorLayout::positionToPoint(TextPosition pos) const
         }
     }
 
-    // Fallback: use last text line
+    // 回退：使用最后一行
     if (tl->lineCount() > 0) {
         QTextLine lastLine = tl->lineAt(tl->lineCount() - 1);
         qreal x = lastLine.cursorToX(col);
@@ -253,7 +253,7 @@ QRectF EditorLayout::cursorRect(TextPosition pos) const
     QPointF p = positionToPoint(pos);
     qreal h = m_defaultLineHeight;
 
-    // Try to get actual line height from layout
+    // 尝试从布局获取实际行高
     if (pos.line >= 0 && pos.line < static_cast<int>(m_lines.size())) {
         ensureLayout(pos.line);
         auto* tl = m_lines[pos.line].layout.get();
@@ -310,7 +310,7 @@ int EditorLayout::lineAtY(qreal y) const
 
     ensureYCache();
 
-    // Binary search: find the last line whose Y <= y
+    // 二分查找：找到 Y 坐标 <= y 的最后一行
     auto it = std::upper_bound(m_lineYCache.begin(), m_lineYCache.end(), y);
     int idx = static_cast<int>(std::distance(m_lineYCache.begin(), it)) - 1;
 

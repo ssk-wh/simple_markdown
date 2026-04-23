@@ -172,7 +172,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
 
         collectInlineRuns(node, block.inlineRuns, headingFont, m_theme.previewHeading);
         qreal h = estimateParagraphHeight(block.inlineRuns, maxWidth);
-        // Extra bottom margin for H1/H2
+        // H1/H2 额外底部边距
         if (node->headingLevel <= 2) h += 8;
         block.bounds = QRectF(0, 0, maxWidth, h);
         break;
@@ -238,7 +238,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
     }
     case AstNodeType::Table: {
         block.type = LayoutBlock::Table;
-        // Count columns from first row
+        // 从第一行计算列数
         int cols = 0;
         if (!node->children.empty()) {
             cols = static_cast<int>(node->children[0]->children.size());
@@ -255,7 +255,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
             rowBlock.sourceStartLine = rowNode->startLine;
             rowBlock.sourceEndLine = rowNode->endLine;
 
-            // First pass: collect inline runs and compute row height
+            // 第一遍：收集行内 run 并计算行高
             qreal rowHeight = m_lineHeight + cellPadding;
             std::vector<LayoutBlock> cellBlocks;
             for (const auto& cellNode : rowNode->children) {
@@ -269,7 +269,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
                 cellBlocks.push_back(std::move(cellBlock));
             }
 
-            // Second pass: assign bounds with computed row height
+            // 第二遍：使用计算出的行高分配边界
             qreal cellX = 0;
             for (auto& cellBlock : cellBlocks) {
                 cellBlock.bounds = QRectF(cellX, 0, colWidth, rowHeight);
@@ -319,7 +319,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
         break;
     }
     default: {
-        // For unknown block types, try to layout children
+        // 未知块类型，尝试布局子节点
         block.type = LayoutBlock::Paragraph;
         collectInlineRuns(node, block.inlineRuns, m_baseFont, m_theme.previewFg);
         qreal h = estimateParagraphHeight(block.inlineRuns, maxWidth);
@@ -412,7 +412,7 @@ void PreviewLayout::collectInlineRuns(const AstNode* node, std::vector<InlineRun
         }
         case AstNodeType::Strikethrough: {
             InlineRun run;
-            // Collect child text
+            // 收集子节点文本
             std::vector<InlineRun> subRuns;
             collectInlineRuns(child.get(), subRuns, currentFont, currentColor);
             for (auto& sr : subRuns) {
@@ -435,10 +435,8 @@ void PreviewLayout::collectInlineRuns(const AstNode* node, std::vector<InlineRun
         case AstNodeType::Link: {
             QColor linkColor = m_theme.previewLink;
             collectInlineRuns(child.get(), runs, currentFont, linkColor);
-            // Set linkUrl on all runs added
-            // Find runs we just added and set their URL
-            // Simple approach: mark from current size
-            // (We already collected with blue color; set URL on them)
+            // 为刚添加的所有 run 设置 linkUrl
+            // 简单方案：从当前数组末尾向前标记颜色为链接色的 run
             for (auto it = runs.rbegin(); it != runs.rend(); ++it) {
                 if (it->color == linkColor && it->linkUrl.isEmpty()) {
                     it->linkUrl = child->url;
@@ -449,7 +447,7 @@ void PreviewLayout::collectInlineRuns(const AstNode* node, std::vector<InlineRun
             break;
         }
         case AstNodeType::Image: {
-            // Inline image - treat as text placeholder
+            // 行内图片 - 作为文本占位显示
             InlineRun run;
             run.text = child->title.isEmpty() ? QStringLiteral("[image]") : child->title;
             run.font = currentFont;
@@ -474,7 +472,7 @@ void PreviewLayout::collectInlineRuns(const AstNode* node, std::vector<InlineRun
             break;
         }
         case AstNodeType::HtmlInline: {
-            // Render as raw text
+            // 按原始文本渲染
             InlineRun run;
             run.text = child->literal;
             run.font = currentFont;
@@ -483,7 +481,7 @@ void PreviewLayout::collectInlineRuns(const AstNode* node, std::vector<InlineRun
             break;
         }
         default:
-            // Recurse into any other inline container
+            // 递归处理其他行内容器
             collectInlineRuns(child.get(), runs, currentFont, currentColor);
             break;
         }
@@ -543,7 +541,7 @@ qreal PreviewLayout::sourceLineToY(int sourceLine) const
 
     std::sort(mappings.begin(), mappings.end());
 
-    // Binary search for closest source line
+    // 二分查找最近的源码行
     auto it = std::lower_bound(mappings.begin(), mappings.end(),
                                 std::make_pair(sourceLine, 0.0));
 
@@ -557,7 +555,7 @@ qreal PreviewLayout::sourceLineToY(int sourceLine) const
         return it->second;
     }
 
-    // Interpolate between surrounding mappings
+    // 在相邻映射之间线性插值
     auto prev = std::prev(it);
     if (it->first == prev->first) return it->second;
     qreal ratio = static_cast<qreal>(sourceLine - prev->first) /
@@ -572,11 +570,11 @@ int PreviewLayout::yToSourceLine(qreal y) const
 
     if (mappings.empty()) return 0;
 
-    // Sort by Y position
+    // 按 Y 坐标排序
     std::sort(mappings.begin(), mappings.end(),
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
-    // Find closest Y
+    // 查找最近的 Y 坐标
     auto it = std::lower_bound(mappings.begin(), mappings.end(),
                                 std::make_pair(0, y),
                                 [](const auto& a, const auto& b) { return a.second < b.second; });

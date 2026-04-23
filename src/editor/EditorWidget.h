@@ -95,7 +95,7 @@ private:
     QString m_preeditString;
 
     Theme m_theme;
-    QVector<QPair<int,int>> m_searchMatches;  // (offset, length) pairs
+    QVector<QPair<int,int>> m_searchMatches;  // (偏移量, 长度) 对
     QString m_currentSearchText;
     int m_currentMatchIndex = -1;
 

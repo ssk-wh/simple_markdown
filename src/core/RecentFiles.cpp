@@ -36,7 +36,7 @@ void RecentFiles::load()
 {
     QSettings settings;
     m_files = settings.value("RecentFiles/files").toStringList();
-    // Remove entries for files that no longer exist
+    // 移除已不存在的文件条目
     m_files.erase(
         std::remove_if(m_files.begin(), m_files.end(),
                        [](const QString& f) { return !QFileInfo::exists(f); }),
