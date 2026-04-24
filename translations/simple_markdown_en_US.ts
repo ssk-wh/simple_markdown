@@ -275,6 +275,10 @@ Do you want to reload it?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Toggle Sidebar</source>
+        <translation>Toggle Sidebar</translation>
+    </message>
+    <message>
         <source>Presentation Mode</source>
         <translation type="unfinished"></translation>
     </message>
@@ -817,6 +821,10 @@ Open the crash reports folder?</translation>
     <message>
         <source>Reset Zoom</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Toggle Sidebar</source>
+        <translation>Toggle Sidebar</translation>
     </message>
     <message>
         <source>Toggle Preview</source>

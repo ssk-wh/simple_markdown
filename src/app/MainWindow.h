@@ -169,6 +169,11 @@ private:
     void updateLeftPaneVisibility();
     void syncSideTabBar();           // 从 m_tabBar 全量同步到 m_sideTabBar
 
+    // Ctrl+B 切换左侧资源管理器显隐
+    QAction* m_toggleSidebarAct = nullptr;
+    bool m_sidebarHidden = false;    // 用户手动隐藏侧边栏
+    void toggleSidebar();
+
     // 底部居中 toast 通知
     void showToast(const QString& message, int durationMs = 3000);
 

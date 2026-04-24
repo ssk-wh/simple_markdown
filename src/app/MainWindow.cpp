@@ -422,6 +422,13 @@ void MainWindow::setupMenuBar()
 
     viewMenu->addSeparator();
 
+    // Ctrl+B 切换左侧资源管理器（文件夹面板 + 侧边 Tab 栏）
+    m_toggleSidebarAct = viewMenu->addAction(tr("Toggle Sidebar"));
+    m_toggleSidebarAct->setCheckable(true);
+    m_toggleSidebarAct->setChecked(true);  // 默认显示
+    m_toggleSidebarAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
+    connect(m_toggleSidebarAct, &QAction::triggered, this, &MainWindow::toggleSidebar);
+
     m_focusModeAct = viewMenu->addAction(tr("Presentation Mode"));
     m_focusModeAct->setCheckable(true);
     m_focusModeAct->setChecked(false);
@@ -1073,6 +1080,8 @@ void MainWindow::updateRecentFilesMenu()
             m_recentMenu->addAction(display, [this, entry]() {
                 m_folderPanel->addFolder(entry);
                 m_folderPanel->setTheme(m_currentTheme);
+                m_sidebarHidden = false;
+                if (m_toggleSidebarAct) m_toggleSidebarAct->setChecked(true);
                 updateLeftPaneVisibility();
                 saveSettings();  // 文件夹路径是关键状态，立即持久化
             });
@@ -1583,6 +1592,8 @@ void MainWindow::onOpenFolder()
     if (dir.isEmpty()) return;
     m_folderPanel->addFolder(dir);
     m_folderPanel->setTheme(m_currentTheme);
+    m_sidebarHidden = false;
+    if (m_toggleSidebarAct) m_toggleSidebarAct->setChecked(true);
     updateLeftPaneVisibility();
     m_recentFiles->addFile(dir);
     saveSettings();  // 文件夹路径是关键状态，立即持久化
@@ -2118,6 +2129,7 @@ void MainWindow::loadSettings()
     bool tabOnSide = s.value("view/tabBarOnSide", false).toBool();
     bool hideTop = s.value("view/hideTopBarWhenSide", true).toBool();
     if (tabOnSide) setTabBarPosition(true, hideTop);
+
 
     // 会话恢复选项
     if (m_restoreSessionAct)
@@ -2937,6 +2949,10 @@ void MainWindow::applyDisplayMode()
 
 void MainWindow::setTabBarPosition(bool onSide, bool hideTopBar)
 {
+    // 切换 Tab 栏位置时，自动取消用户手动隐藏
+    m_sidebarHidden = false;
+    if (m_toggleSidebarAct) m_toggleSidebarAct->setChecked(true);
+
     // 关闭侧边模式
     if (!onSide) {
         if (!m_tabBarOnSide) return;  // 已经是顶部模式
@@ -3001,6 +3017,11 @@ void MainWindow::updateLeftPaneVisibility()
         m_leftPaneSplitter->hide();
         return;
     }
+    // 用户通过 Ctrl+B 手动隐藏时，保持隐藏
+    if (m_sidebarHidden) {
+        m_leftPaneSplitter->hide();
+        return;
+    }
     if (m_tabBarOnSide) {
         // 左侧模式：Tab 栏在里面，始终显示
         m_leftPaneSplitter->show();
@@ -3008,6 +3029,14 @@ void MainWindow::updateLeftPaneVisibility()
         // 顶部模式：跟随 FolderPanel 可见性（判断是否有打开的文件夹）
         m_leftPaneSplitter->setVisible(!m_folderPanel->rootPath().isEmpty());
     }
+}
+
+void MainWindow::toggleSidebar()
+{
+    m_sidebarHidden = !m_sidebarHidden;
+    m_toggleSidebarAct->setChecked(!m_sidebarHidden);
+    updateLeftPaneVisibility();
+    saveSettings();
 }
 
 // 兼容：保留 m_focusMode / enterFocusMode / exitFocusMode 字段名避免大面积改动，

@@ -97,6 +97,7 @@ void ShortcutsDialog::populateShortcuts()
         {tr("View"), tr("Zoom In"), "Ctrl++"},
         {tr("View"), tr("Zoom Out"), "Ctrl+-"},
         {tr("View"), tr("Reset Zoom"), "Ctrl+0"},
+        {tr("View"), tr("Toggle Sidebar"), "Ctrl+B"},
         {tr("View"), tr("Focus Mode"), "F11"},
         {tr("View"), tr("Exit Focus Mode"), "Esc / F11"},
         {tr("View"), tr("Toggle Preview"), ""},

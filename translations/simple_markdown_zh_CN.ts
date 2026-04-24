@@ -343,6 +343,10 @@ Please ensure CHANGELOG.md is installed with the application.</source>
         <translation>源码</translation>
     </message>
     <message>
+        <source>Toggle Sidebar</source>
+        <translation>切换侧边栏</translation>
+    </message>
+    <message>
         <source>Presentation Mode</source>
         <translation>演示模式</translation>
     </message>
@@ -836,6 +840,10 @@ Open the crash reports folder?</source>
     <message>
         <source>Reset Zoom</source>
         <translation>重置缩放</translation>
+    </message>
+    <message>
+        <source>Toggle Sidebar</source>
+        <translation>切换侧边栏</translation>
     </message>
     <message>
         <source>Toggle Preview</source>
