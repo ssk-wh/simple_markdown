@@ -76,6 +76,9 @@ public:
     void setViewportWidth(qreal width);
     void setImageCache(ImageCache* cache);
     void setFont(const QFont& baseFont);
+    // [Spec 模块-preview/02 INV-13] 正文行高乘数（默认 1.5，作用范围仅正文段落 / List / Table）
+    void setLineSpacingFactor(qreal factor);
+    qreal lineSpacingFactor() const { return m_lineSpacingFactor; }
     bool updateMetrics(QPaintDevice* device);  // 返回 true 表示度量有变化
     void setTheme(const Theme& theme);
     void buildFromAst(const std::shared_ptr<AstNode>& root);
@@ -109,6 +112,10 @@ private:
     QFont m_monoFont;
     Theme m_theme;
     qreal m_viewportWidth = 600.0;
+    // [Spec 模块-preview/02 INV-13] 默认 1.5：与 MainWindow::loadSettings 的
+    // "view/lineSpacing" 默认值保持一致，避免新构造的 PreviewLayout 在未收到
+    // setLineSpacingFactor 推送前显示出比用户预期更紧的行高
+    qreal m_lineSpacingFactor = 1.5;
     qreal m_lineHeight = 24.0;
     qreal m_codeLineHeight = 20.0;
     QPaintDevice* m_device = nullptr;  // [高 DPI 修复] 用于高度估计中的字体度量

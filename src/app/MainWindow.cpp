@@ -428,8 +428,12 @@ void MainWindow::setupMenuBar()
         qreal factor = opt.factor;
         connect(act, &QAction::triggered, this, [this, factor]() {
             m_lineSpacingFactor = factor;
-            for (auto& tab : m_tabs)
+            // [Spec 模块-preview/02 INV-13] 编辑区与预览区行高乘数必须同步推送，
+            // 否则两侧视觉错位（用户感知最直观的 bug）
+            for (auto& tab : m_tabs) {
                 tab.editor->setLineSpacing(factor);
+                tab.preview->setLineSpacingFactor(factor);
+            }
         });
     }
 
@@ -1037,6 +1041,8 @@ MainWindow::TabData MainWindow::createTab()
     tab.editor->setWordWrap(m_wordWrapAct && m_wordWrapAct->isChecked());
     tab.preview->setWordWrap(m_wordWrapAct && m_wordWrapAct->isChecked());
     tab.editor->setLineSpacing(m_lineSpacingFactor);
+    // [Spec 模块-preview/02 INV-13] 新建 tab 时同步行间距到预览区
+    tab.preview->setLineSpacingFactor(m_lineSpacingFactor);
 
     // TOC 信号：仅当此 tab 是当前活跃 tab 时更新全局 TocPanel
     connect(tab.preview, &PreviewWidget::tocEntriesChanged,
@@ -2272,6 +2278,10 @@ void MainWindow::loadSettings()
     // 应用到已有标签页
     for (auto& tab : m_tabs) {
         tab.editor->setLineSpacing(m_lineSpacingFactor);
+        // [Spec 模块-preview/02 INV-13] 重启后从 QSettings 读出的行间距
+        // 必须同步推送到预览区，否则重启后预览仍按 PreviewLayout 默认乘数
+        // 渲染（典型表现：用户上次设了 1.0，重启后预览仍是 1.5）
+        tab.preview->setLineSpacingFactor(m_lineSpacingFactor);
         tab.editor->setWordWrap(wordWrap);
         tab.preview->setWordWrap(wordWrap);
     }

@@ -84,7 +84,28 @@ void PreviewLayout::setFont(const QFont& baseFont)
     int delta = baseFont.pointSize() - font_defaults::kDefaultBaseFontSizePt;
     m_monoFont = font_defaults::defaultMonoFont(delta);
     QFontMetricsF fm(m_baseFont);
-    m_lineHeight = fm.height() * 1.5;
+    // [Spec 模块-preview/02 INV-13] 行高乘数从 m_lineSpacingFactor 读取，
+    // 而非字面量 1.5。否则用户在"视图 → 行间距"切换 1.0/2.0 后，
+    // 一旦后续 setFont 被触发（例如缩放、字体切换）会把乘数重置回历史默认。
+    m_lineHeight = fm.height() * m_lineSpacingFactor;
+}
+
+void PreviewLayout::setLineSpacingFactor(qreal factor)
+{
+    // [Spec 模块-preview/02 INV-13] 仅作用于正文段落行高
+    if (qFuzzyCompare(m_lineSpacingFactor, factor))
+        return;
+    m_lineSpacingFactor = factor;
+    if (m_device) {
+        QFontMetricsF fm(m_baseFont, m_device);
+        m_lineHeight = fm.height() * m_lineSpacingFactor;
+        // 缓存键不依赖乘数，但调用方紧接着会 rebuildLayout，
+        // estimateParagraphHeight 会用新乘数重新计算所有段落高度，
+        // 此处清缓存让语义更干净（且代价仅一次性，rebuildLayout 后会自然回填）
+        clearFontMetricsCache();
+    }
+    // 若 m_device 尚未绑定（widget 未首次绘制），保留 m_lineHeight 临时值，
+    // 下一次 updateMetrics(device) 会自动用新乘数重算
 }
 
 bool PreviewLayout::updateMetrics(QPaintDevice* device)
@@ -92,7 +113,9 @@ bool PreviewLayout::updateMetrics(QPaintDevice* device)
     // 基于 device 的实际字体度量计算行高
     // 返回 true 表示度量值发生了变化，需要重建布局
     QFontMetricsF fm(m_baseFont, device);
-    qreal newLineHeight = fm.height() * 1.5;
+    // [Spec 模块-preview/02 INV-13] 正文行高乘数 = m_lineSpacingFactor（用户可调）
+    // 代码行高 1.4 与 lineSpacingFactor 无关，是代码块密度的独立基线
+    qreal newLineHeight = fm.height() * m_lineSpacingFactor;
     QFontMetricsF fmCode(m_monoFont, device);
     qreal newCodeLineHeight = fmCode.height() * 1.4;
 
@@ -200,11 +223,52 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
         break;
     }
     case AstNodeType::CodeBlock: {
+        // [Spec 模块-preview/02 INV-14] CodeBlock 高度必须按软换行后的视觉行数计算，
+        // 与 PreviewPainter::paintCodeBlock 同构。否则超长代码行从右边界飞出，
+        // 后续 block 也会压在被裁切的代码内容上。
         block.type = LayoutBlock::CodeBlock;
         block.codeText = node->literal;
         block.language = node->fenceInfo;
-        int lineCount = qMax(1, block.codeText.count('\n') + (block.codeText.endsWith('\n') ? 0 : 1));
-        qreal h = lineCount * m_codeLineHeight + 16.0; // 8px padding top+bottom
+
+        const qreal hPad = 8.0;  // 与 painter textX = drawX + 8 同构
+        const qreal contentWidth = qMax<qreal>(1.0, maxWidth - 2 * hPad);
+        const QFontMetricsF& fmCode = cachedFontMetrics(m_monoFont);
+
+        const QStringList rawLines = block.codeText.split('\n');
+        const int rawCount = rawLines.size();
+        int visualLineCount = 0;
+        for (int li = 0; li < rawCount; ++li) {
+            // 末尾 \n 产生的空 trailing 行不计（与 painter 跳过逻辑同构）
+            if (li == rawCount - 1 && rawLines[li].isEmpty() && block.codeText.endsWith('\n'))
+                break;
+            const QString& line = rawLines[li];
+            if (line.isEmpty()) {
+                visualLineCount += 1;
+                continue;
+            }
+            qreal fullW = fmCode.horizontalAdvance(line);
+            if (fullW <= contentWidth) {
+                visualLineCount += 1;
+                continue;
+            }
+            // 字符级 wrap：与 painter 的 fit 算法同构（INV-14 / 03 INV-13）
+            int physOffset = 0;
+            while (physOffset < line.length()) {
+                int fit = 0;
+                qreal acc = 0;
+                for (int i = physOffset; i < line.length(); ++i) {
+                    qreal cw = fmCode.horizontalAdvance(QString(line[i]));
+                    if (acc + cw > contentWidth && fit > 0) break;
+                    acc += cw;
+                    fit = i + 1 - physOffset;
+                }
+                if (fit <= 0) fit = 1;  // 极窄视口下保底，防死循环
+                physOffset += fit;
+                visualLineCount += 1;
+            }
+        }
+        if (visualLineCount == 0) visualLineCount = 1;  // 空代码块仍占一行
+        qreal h = visualLineCount * m_codeLineHeight + 2 * hPad;
         block.bounds = QRectF(0, 0, maxWidth, h);
         break;
     }
@@ -519,14 +583,16 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
 {
     if (runs.empty()) return m_lineHeight;
 
-    // 行高必须与 paintInlineRuns 一致：渲染侧使用 firstRun.font.height() * 1.5
-    // [Spec 模块-preview/02 INV-10]
+    // 行高必须与 paintInlineRuns 一致：渲染侧使用 firstRun.font.height() * m_lineSpacingFactor
+    // [Spec 模块-preview/02 INV-10 + INV-13]
     // 之前直接用 m_lineHeight（基于 m_baseFont）会导致 heading 等放大字号的块严重低估
     // 高度——例如 H1 的 inlineRuns[0].font 是 1.8x m_baseFont，渲染单行高度 ≈ 1.8 *
     // m_lineHeight，而布局只记 1 * m_lineHeight，下一个 block 的 y 就压在标题文字上。
     // 改为基于 runs[0].font（与 paintInlineRuns 中 defaultFm 同构）派生行高。
+    // 乘数从 m_lineSpacingFactor 读取，而非字面量 1.5——确保用户切换"视图 → 行间距"
+    // 后 layout 与渲染端同步变化（INV-13）。
     const QFontMetricsF& firstRunFm = cachedFontMetrics(runs[0].font);
-    qreal lineHeight = firstRunFm.height() * 1.5;
+    qreal lineHeight = firstRunFm.height() * m_lineSpacingFactor;
     // 单行墨迹高度 = ascent + descent + 标准 leading（QFontMetricsF::height 已含）。
     // paintInlineRuns 的实际占用：每换一行 curY += lineHeight，最后一行画完即停。
     // 因此 N 行段落实际墨迹底部 = (N-1) * lineHeight + glyphHeight，

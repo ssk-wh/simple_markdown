@@ -159,62 +159,131 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         auto hlLines = renderer.highlight(block.codeText, block.language, m_theme.isDark);
         const QStringList rawLines = block.codeText.split('\n');
 
+        // [Spec 模块-preview/03 INV-13 + 02 INV-14] 内容可用宽度（左右各 8 px padding）
+        // 长行进入字符级 wrap 慢路径，必须与 layout 同构以避免块底部被截断
+        const qreal contentWidth = qMax<qreal>(1.0, block.bounds.width() - 16.0);
+
         for (int li = 0; li < (int)hlLines.size(); ++li) {
             // 跳过 split 产生的尾部空元素，与 extractBlockText 保持一致
             const QString& line = (li < rawLines.size()) ? rawLines[li] : QString();
             if (li == (int)hlLines.size() - 1 && line.isEmpty())
                 break;
 
-            qreal w = fm.horizontalAdvance(line);
-            QRectF segRect(textX, textY, w, lineH);
+            qreal lineFullW = fm.horizontalAdvance(line);
+            const bool needsWrap = lineFullW > contentWidth && !line.isEmpty();
 
-            int segStart = m_charCounter;
-            int segEnd = segStart + line.length();
+            if (!needsWrap) {
+                // === 快路径：单行装得下，保留 token 着色 ===
+                qreal w = lineFullW;
+                QRectF segRect(textX, textY, w, lineH);
 
-            // 标记高亮（先绘制，作为底层）
-            for (const auto& hl : m_highlights) {
-                int hlS = qMax(segStart, hl.first);
-                int hlE = qMin(segEnd, hl.second);
-                if (hlS < hlE) {
-                    qreal x1 = fm.horizontalAdvance(line.left(hlS - segStart));
-                    qreal x2 = fm.horizontalAdvance(line.left(hlE - segStart));
-                    p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
-                                m_theme.previewHighlight);
+                int segStart = m_charCounter;
+                int segEnd = segStart + line.length();
+
+                // 标记高亮（先绘制，作为底层）
+                for (const auto& hl : m_highlights) {
+                    int hlS = qMax(segStart, hl.first);
+                    int hlE = qMin(segEnd, hl.second);
+                    if (hlS < hlE) {
+                        qreal x1 = fm.horizontalAdvance(line.left(hlS - segStart));
+                        qreal x2 = fm.horizontalAdvance(line.left(hlE - segStart));
+                        p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
+                                    m_theme.previewHighlight);
+                    }
                 }
-            }
 
-            // 选区高亮
-            if (m_selStart >= 0 && m_selEnd > m_selStart) {
-                int hlStart = qMax(segStart, m_selStart);
-                int hlEnd = qMin(segEnd, m_selEnd);
-                if (hlStart < hlEnd) {
-                    qreal x1 = fm.horizontalAdvance(line.left(hlStart - segStart));
-                    qreal x2 = fm.horizontalAdvance(line.left(hlEnd - segStart));
-                    p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
-                                QColor(0, 120, 215, 80));
+                // 选区高亮
+                if (m_selStart >= 0 && m_selEnd > m_selStart) {
+                    int hlStart = qMax(segStart, m_selStart);
+                    int hlEnd = qMin(segEnd, m_selEnd);
+                    if (hlStart < hlEnd) {
+                        qreal x1 = fm.horizontalAdvance(line.left(hlStart - segStart));
+                        qreal x2 = fm.horizontalAdvance(line.left(hlEnd - segStart));
+                        p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
+                                    QColor(0, 120, 215, 80));
+                    }
                 }
-            }
 
-            recordSegment(segRect, m_charCounter, line.length(), line, monoFont);
+                recordSegment(segRect, m_charCounter, line.length(), line, monoFont);
 
-            // 按语法高亮段绘制文本
-            qreal segX = textX;
-            for (const auto& seg : hlLines[li]) {
-                p->setPen(seg.color);
-                if (seg.bold) {
-                    QFont boldFont = monoFont;
-                    boldFont.setBold(true);
-                    p->setFont(boldFont);
-                    p->drawText(QPointF(segX, textY + fm.ascent()), seg.text);
-                    p->setFont(monoFont);
-                } else {
-                    p->drawText(QPointF(segX, textY + fm.ascent()), seg.text);
+                // 按语法高亮段绘制文本
+                qreal segX = textX;
+                for (const auto& seg : hlLines[li]) {
+                    p->setPen(seg.color);
+                    if (seg.bold) {
+                        QFont boldFont = monoFont;
+                        boldFont.setBold(true);
+                        p->setFont(boldFont);
+                        p->drawText(QPointF(segX, textY + fm.ascent()), seg.text);
+                        p->setFont(monoFont);
+                    } else {
+                        p->drawText(QPointF(segX, textY + fm.ascent()), seg.text);
+                    }
+                    segX += fm.horizontalAdvance(seg.text);
                 }
-                segX += fm.horizontalAdvance(seg.text);
-            }
 
-            m_charCounter += line.length() + 1;
-            textY += lineH;
+                m_charCounter += line.length() + 1;
+                textY += lineH;
+            } else {
+                // === 慢路径：字符级 wrap + 单色绘制（INV-13 权衡） ===
+                // 超长代码行（多为 URL / 长字符串 / hash）放弃语法着色换取完整可见
+                p->setFont(monoFont);
+                int physOffset = 0;
+                while (physOffset < line.length()) {
+                    // 与 layout 同构的 fit 算法
+                    int fit = 0;
+                    qreal acc = 0;
+                    for (int i = physOffset; i < line.length(); ++i) {
+                        qreal cw = fm.horizontalAdvance(QString(line[i]));
+                        if (acc + cw > contentWidth && fit > 0) break;
+                        acc += cw;
+                        fit = i + 1 - physOffset;
+                    }
+                    if (fit <= 0) fit = 1;  // 极窄视口保底，防死循环
+
+                    QString visualSeg = line.mid(physOffset, fit);
+                    qreal visualW = fm.horizontalAdvance(visualSeg);
+                    QRectF visualRect(textX, textY, visualW, lineH);
+
+                    int visualSegStart = m_charCounter + physOffset;
+                    int visualSegEnd = visualSegStart + fit;
+
+                    // 标记高亮（按视觉行内 x 范围画）
+                    for (const auto& hl : m_highlights) {
+                        int hlS = qMax(visualSegStart, hl.first);
+                        int hlE = qMin(visualSegEnd, hl.second);
+                        if (hlS < hlE) {
+                            qreal x1 = fm.horizontalAdvance(visualSeg.left(hlS - visualSegStart));
+                            qreal x2 = fm.horizontalAdvance(visualSeg.left(hlE - visualSegStart));
+                            p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
+                                        m_theme.previewHighlight);
+                        }
+                    }
+
+                    // 选区高亮（按视觉行内 x 范围画）
+                    if (m_selStart >= 0 && m_selEnd > m_selStart) {
+                        int hlStart = qMax(visualSegStart, m_selStart);
+                        int hlEnd = qMin(visualSegEnd, m_selEnd);
+                        if (hlStart < hlEnd) {
+                            qreal x1 = fm.horizontalAdvance(visualSeg.left(hlStart - visualSegStart));
+                            qreal x2 = fm.horizontalAdvance(visualSeg.left(hlEnd - visualSegStart));
+                            p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
+                                        QColor(0, 120, 215, 80));
+                        }
+                    }
+
+                    recordSegment(visualRect, visualSegStart, fit, visualSeg, monoFont);
+
+                    // 单色绘制（放弃 token 着色）
+                    p->setPen(m_theme.previewCodeBlockFg);
+                    p->drawText(QPointF(textX, textY + fm.ascent()), visualSeg);
+
+                    physOffset += fit;
+                    textY += lineH;
+                }
+
+                m_charCounter += line.length() + 1;
+            }
         }
         break;
     }
@@ -485,7 +554,11 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
     qreal curX = x;
     qreal curY = y;
     QFontMetricsF defaultFm(block.inlineRuns[0].font, p->device());  // 使用 device 参数
-    qreal lineHeight = defaultFm.height() * 1.5;
+    // [Spec 模块-preview/03 INV-12 + 02 INV-13] 行高乘数从 layout 读取，
+    // 与 estimateParagraphHeight 同构。禁止硬编码——否则用户切换"视图 →
+    // 行间距"后预览端不会同步更新，与编辑区错位。
+    qreal lineSpacing = m_layout ? m_layout->lineSpacingFactor() : 1.5;
+    qreal lineHeight = defaultFm.height() * lineSpacing;
     // [Spec 模块-preview/03 INV-10] 行内所有 run 共享统一基线，防止小字号 run
     // （如 inline code，字号 = 正文 * 0.9）按自身 ascent 定位导致基线上移、视觉偏上
     qreal lineAscent = defaultFm.ascent();

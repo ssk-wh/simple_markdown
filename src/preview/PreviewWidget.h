@@ -28,6 +28,8 @@ public:
     void setDocumentDir(const QString& dir);
     void setWordWrap(bool enabled);
     bool wordWrap() const { return m_wordWrap; }
+    // [Spec 模块-preview/02 INV-13] 正文行高乘数转发，仅作用于段落 / List / Table 行高
+    void setLineSpacingFactor(qreal factor);
     void rebuildLayout();
     void clearHighlightsInSection(int sectionIdx);
 

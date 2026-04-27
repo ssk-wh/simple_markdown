@@ -222,6 +222,19 @@ void PreviewWidget::setWordWrap(bool enabled)
     viewport()->update();
 }
 
+// [Spec 模块-preview/02 INV-13] 把"视图 → 行间距"菜单的乘数推送到 layout，
+// 触发段落 / List / Table 高度重算与重绘。代码块和 frontmatter 行高保留 1.4 基线。
+void PreviewWidget::setLineSpacingFactor(qreal factor)
+{
+    if (!m_layout) return;
+    if (qFuzzyCompare(m_layout->lineSpacingFactor(), factor))
+        return;
+    m_layout->setLineSpacingFactor(factor);
+    if (m_currentAst)
+        rebuildLayout();
+    viewport()->update();
+}
+
 void PreviewWidget::scrollToSourceLine(int line)
 {
     qreal y = m_layout->sourceLineToY(line);
