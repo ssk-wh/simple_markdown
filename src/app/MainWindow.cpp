@@ -52,6 +52,7 @@
 #include <QPushButton>
 #include <QScreen>
 #include <QGuiApplication>
+#include <QWindow>
 #include <QToolButton>
 #include <QPainter>
 #include <QPrinter>
@@ -651,11 +652,12 @@ void MainWindow::applyTocPreferredWidth(int w)
     m_mainSplitter->blockSignals(false);
 }
 
-// Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-MAX
-// 窗口 resize：若 TOC 当前宽度 > 屏幕 1/5，夹紧到上限
+// Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-MAX, INV-TOC-WIDTH-USER-OVERRIDE
+// 窗口 resize：若 TOC 当前宽度 > 屏幕 1/8，夹紧到上限；用户曾手动调整 / 持久化的宽度不受此限制
 void MainWindow::clampTocWidthToScreen()
 {
     if (!m_mainSplitter) return;
+    if (m_userDraggedToc) return; // INV-TOC-WIDTH-USER-OVERRIDE / INV-TOC-WIDTH-PERSIST
     auto sizes = m_mainSplitter->sizes();
     if (sizes.size() < 2) return;
     const QScreen* scr = QGuiApplication::screenAt(mapToGlobal(QPoint(0, 0)));
@@ -1977,65 +1979,41 @@ void MainWindow::showEvent(QShowEvent* event)
     QMainWindow::showEvent(event);
     if (!m_splitterInitialized) {
         m_splitterInitialized = true;
+
+        // 先让 mainSplitter restoreState（仅作过渡，最终 sizes 由下方统一覆盖）
         if (!m_pendingSplitterState.isEmpty()) {
             m_mainSplitter->restoreState(m_pendingSplitterState);
-        } else {
-            // 无保存状态时的默认分配（mainSplitter 有 3 个子 widget：左面板 | 内容 | TOC）
-            int totalW = m_mainSplitter->width();
-            int defaultTocW = qBound(120, totalW * 12 / 100, 240);
-            int leftW = m_leftPaneSplitter->isVisible() ? qBound(totalW / 8, totalW / 8, totalW / 5) : 0;
-            m_mainSplitter->setSizes({leftW, totalW - leftW - defaultTocW, defaultTocW});
         }
         m_pendingSplitterState.clear();
 
-        // restoreState 后修正：左侧面板应可见但被恢复成 0 宽度的情况
-        // 场景：上次保存时左侧面板隐藏，本次启动切回 Show All 模式
+        // Spec: specs/模块-app/20-左侧面板.md INV-LP-WIDTH-DEFAULT
+        // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-DEFAULT
+        // 宽度策略：用户保存值优先；否则用"应用所在屏幕宽度 / 8"作为默认
+        // 用屏幕宽度而非 m_mainSplitter->width() 作基准，避免最大化几何过渡期 width 仍为初始 1280
+        // 导致默认值或 maxW 截断错误的时序耦合
         {
-            auto sizes = m_mainSplitter->sizes();
-            int totalW = m_mainSplitter->width();
-            if (totalW <= 0) totalW = width();
-            bool leftShouldShow = (m_tabBarOnSide && !m_sidebarHidden) ||
-                                  (!m_folderPanel->rootPaths().isEmpty() && !m_sidebarHidden);
-            // 左侧面板宽度：窗口宽度的 1/8 ~ 1/6
-            int minW = totalW / 8;
-            int maxW = totalW / 5;
-            if (sizes.size() >= 3 && leftShouldShow && sizes[0] < minW) {
-                sizes[0] = qBound(minW, totalW / 8, maxW);
-                sizes[1] = qMax(100, totalW - sizes[0] - sizes[2]);
-                m_mainSplitter->setSizes(sizes);
-            }
-        }
+            QScreen* scr = nullptr;
+            if (windowHandle()) scr = windowHandle()->screen();
+            if (!scr) scr = QGuiApplication::primaryScreen();
+            int screenW = (scr && scr->geometry().width() > 0) ? scr->geometry().width() : 1920;
+            int defaultPanelW = screenW / 8;
 
-        // Spec: specs/模块-preview/07-TOC面板.md 风险条目
-        // restoreState 后 TOC 可能被挤到 <= 0，此处 sanity clamp
-        {
-            auto sizes = m_mainSplitter->sizes();
-            int tocIdx = sizes.size() - 1;  // TOC 始终是最后一个子 widget
-            int minimumTocW = qBound(120, m_mainSplitter->width() * 12 / 100, 240);
-            if (tocIdx >= 1 && sizes[tocIdx] < 100) {
-                int totalW = m_mainSplitter->width();
-                if (totalW <= 0) totalW = width();
-                sizes[tocIdx] = minimumTocW;
-                sizes[tocIdx - 1] = qMax(100, totalW - sizes[tocIdx] - (tocIdx >= 2 ? sizes[0] : 0));
-                m_mainSplitter->setSizes(sizes);
-            }
-        }
-
-        // 显式恢复左侧面板宽度（restoreState 在面板显隐变化后可能不准）
-        {
             QSettings s;
             int savedLeftW = s.value("view/leftPanelWidth", -1).toInt();
-            if (savedLeftW > 0 && !m_folderPanel->rootPaths().isEmpty() && !m_sidebarHidden) {
-                auto sizes = m_mainSplitter->sizes();
-                if (sizes.size() >= 3) {
-                    int totalW = m_mainSplitter->width();
-                    int minW = totalW / 8;
-                    int maxW = totalW / 5;
-                    sizes[0] = qBound(minW, savedLeftW, maxW);
-                    sizes[1] = qMax(100, totalW - sizes[0] - sizes[2]);
-                    m_mainSplitter->setSizes(sizes);
-                }
-            }
+            int savedTocW = s.value("view/tocPanelWidth", -1).toInt();
+            bool leftShouldShow = !m_folderPanel->rootPaths().isEmpty() && !m_sidebarHidden;
+
+            int leftW = (savedLeftW > 0) ? savedLeftW : (leftShouldShow ? defaultPanelW : 0);
+            int tocW = (savedTocW > 0) ? savedTocW : defaultPanelW;
+
+            // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-USER-OVERRIDE
+            // 持久化的 TOC 宽度视为"用户意图"，避免启动后内容自适应（preferredWidthChanged）覆盖用户偏好
+            if (savedTocW > 0) m_userDraggedToc = true;
+
+            int totalW = m_mainSplitter->width();
+            if (totalW <= 0) totalW = width();
+            int contentW = qMax(100, totalW - leftW - tocW);
+            m_mainSplitter->setSizes({leftW, contentW, tocW});
         }
 
         updateLeftPaneVisibility();
@@ -2115,11 +2093,14 @@ void MainWindow::saveSettings()
     s.setValue("view/themeMode", themeMode);
     s.setValue("window/geometry", saveGeometry());
     s.setValue("window/mainSplitter", m_mainSplitter->saveState());
-    // 显式保存左侧面板宽度，restoreState 在面板显隐变化后可能无法正确恢复
-    if (m_leftPaneSplitter->isVisible()) {
+    // 显式保存左侧面板/TOC 面板宽度（saveState 在面板显隐变化或窗口几何转换时可能无法精确恢复）
+    // Spec: specs/模块-app/20-左侧面板.md INV-LP-WIDTH-DEFAULT、specs/模块-preview/07-TOC面板.md
+    {
         auto sizes = m_mainSplitter->sizes();
-        if (sizes.size() >= 1 && sizes[0] > 0)
+        if (m_leftPaneSplitter->isVisible() && sizes.size() >= 1 && sizes[0] > 0)
             s.setValue("view/leftPanelWidth", sizes[0]);
+        if (sizes.size() >= 3 && sizes[2] > 0)
+            s.setValue("view/tocPanelWidth", sizes[2]);
     }
     // Tab 栏位置
     s.setValue("view/tabBarOnSide", m_tabBarOnSide);
@@ -3085,22 +3066,27 @@ void MainWindow::updateLeftPaneVisibility()
     bool wasHidden = !m_leftPaneSplitter->isVisible();
     m_leftPaneSplitter->setVisible(shouldShow);
 
-    // 从隐藏变为可见时，确保宽度不低于窗口宽度的 1/8
-    // 仅在 splitter 已初始化后执行，避免在窗口未显示时干扰 restoreState
+    // 从隐藏变为可见时，若 sizes[0] 为 0 则补充宽度
+    // Spec: specs/模块-app/20-左侧面板.md INV-LP-WIDTH-DEFAULT
+    // 优先使用用户保存的宽度，否则用应用所在屏幕宽度的 1/8
     if (shouldShow && wasHidden && m_splitterInitialized && m_mainSplitter) {
         auto sizes = m_mainSplitter->sizes();
-        int totalW = m_mainSplitter->width();
-        if (totalW > 0 && sizes.size() >= 2) {
-            int minW = totalW / 8;
-            int maxW = totalW / 5;
-            if (sizes[0] < minW) {
-                sizes[0] = qBound(minW, totalW / 8, maxW);
-                // 调整中间区域宽度以补偿
-                int otherW = 0;
-                for (int i = 2; i < sizes.size(); ++i) otherW += sizes[i];
-                sizes[1] = qMax(100, totalW - sizes[0] - otherW);
-                m_mainSplitter->setSizes(sizes);
-            }
+        if (sizes.size() >= 3 && sizes[0] <= 0) {
+            QSettings s;
+            int savedLeftW = s.value("view/leftPanelWidth", -1).toInt();
+            QScreen* scr = nullptr;
+            if (windowHandle()) scr = windowHandle()->screen();
+            if (!scr) scr = QGuiApplication::primaryScreen();
+            int screenW = (scr && scr->geometry().width() > 0) ? scr->geometry().width() : 1920;
+            int leftW = (savedLeftW > 0) ? savedLeftW : (screenW / 8);
+
+            int totalW = m_mainSplitter->width();
+            if (totalW <= 0) totalW = width();
+            int otherW = 0;
+            for (int i = 2; i < sizes.size(); ++i) otherW += sizes[i];
+            sizes[0] = leftW;
+            sizes[1] = qMax(100, totalW - leftW - otherW);
+            m_mainSplitter->setSizes(sizes);
         }
     }
 }

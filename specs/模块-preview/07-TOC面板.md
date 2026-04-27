@@ -67,6 +67,14 @@ final_width   = clamp(content_width, min_width, max_width)
 
 用户拖拽 `m_mainSplitter` 分隔条视为"用户意图"，此后 `preferredWidthChanged` 只更新 `minimumWidth`，不强制改动 splitter sizes。提供菜单项「重置 TOC 宽度」可恢复自动行为。
 
+### [INV-TOC-WIDTH-PERSIST] TOC 宽度跨会话持久化
+
+用户调整后的 TOC 宽度通过 `QSettings("view/tocPanelWidth")` 持久化（`MainWindow::saveSettings` 中写入 `m_mainSplitter->sizes()[2]`）。启动时若该键存在：
+- showEvent 中将其作为 sizes[2] 应用
+- **必须强制 `m_userDraggedToc = true`**，否则后续文档加载触发 `preferredWidthChanged → applyTocPreferredWidth` 会按 INV-TOC-WIDTH-AUTO 自动夹紧到 `screenW/8`，覆盖用户偏好
+
+无 saved 值时（如全新安装），首次启动 sizes[2] 默认 = 应用所在屏幕宽度 / 8（与左侧面板对齐，参见 specs/模块-app/20-左侧面板.md INV-LP-WIDTH-DEFAULT）。
+
 ### [INV-TOC-COLLAPSE] 支持按层级折叠
 
 TocPanel 内部以 tree model 表示条目，每个有子节点的条目展示 ▸/▾ 折叠箭头。折叠后其后代不渲染（不计入布局）。

@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - 应用启动时窗口默认最大化（首次启动或无保存几何时生效；用户后续手工调整的尺寸/位置仍会被尊重并跨会话恢复）
 
+### Fixed
+- 资源管理器面板和 TOC 面板宽度在用户调整后重启不恢复（默认基准从 `m_mainSplitter->width()`（最大化过渡期仍为 1280）改为"应用所在屏幕宽度 / 8"，避免大屏下用户调到 350+ 被错误的 `maxW` 截断；TOC 持久化值同时锁定 `m_userDraggedToc`，避免 content-aware 自适应在文档加载时覆盖）
+
 ### Removed
 - 撤销编辑器焦点下 F3 / Shift+F3 跳转匹配项的尝试（多次实现均验证未通过，已废弃）
 
