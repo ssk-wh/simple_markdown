@@ -102,7 +102,11 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
     setWindowTitle("SimpleMarkdown");
+    // Spec: specs/模块-app/21-启动窗口几何.md
+    // INV-LAUNCH-NORMAL-FALLBACK: 普通状态的还原尺寸
     resize(1280, 800);
+    // INV-LAUNCH-MAXIMIZED-DEFAULT: 默认最大化；若 loadSettings 后续 restoreGeometry 命中则被覆盖（INV-LAUNCH-RESPECT-SAVED）
+    setWindowState(Qt::WindowMaximized);
 
     // 加载翻译（必须在任何 tr() 调用和子控件创建之前）
     m_translator = new QTranslator(this);

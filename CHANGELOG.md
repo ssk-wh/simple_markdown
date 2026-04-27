@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.6] - 2026-04-27
+
+### Added
+- 应用启动时窗口默认最大化（首次启动或无保存几何时生效；用户后续手工调整的尺寸/位置仍会被尊重并跨会话恢复）
+
+### Removed
+- 撤销编辑器焦点下 F3 / Shift+F3 跳转匹配项的尝试（多次实现均验证未通过，已废弃）
+
 ## [1.0.5] - 2026-04-24
 
 ### Added

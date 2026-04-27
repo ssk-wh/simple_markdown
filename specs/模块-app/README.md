@@ -31,6 +31,7 @@
 | 17 | 性能监控 | draft | `core/PerfProbe.h`, `main.cpp`, `MainWindow.cpp` + 埋点源 |
 | 18 | 区域卡片化 | aborted | —（已中止，见 plan/抛弃CSS改全自绘） |
 | 19 | Linux 深色主题检测 | draft | `MainWindow.cpp::isSystemDarkMode` |
+| 21 | 启动窗口几何 | draft | `MainWindow.cpp` ctor + loadSettings/saveSettings, `main.cpp` |
 
 ## 依赖关系
 
