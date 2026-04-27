@@ -401,13 +401,22 @@ int TocPanel::preferredWidth() const
     int content = maxText + kPaddingLeft + kPaddingRight + kBulletWidth + kScrollbarReserved + kCardMargin;
 
     // 屏幕上限（Qt 5.12 无 QWidget::screen，用 QGuiApplication 兜底）
+    // 注：测试/headless 环境下 panel 未 show()，mapToGlobal 行为不确定，screenAt 可能
+    // 返回极小虚拟屏幕（甚至小于 kMinWidth*8 = 960px）；此时若按 screen/8 计算 maxW，
+    // std::min(content, maxW) 会把内容塌到 maxW，最终 std::max(kMinWidth, maxW) 仍是
+    // kMinWidth — 长短标题、折叠/展开全部夹成同值，触发 T-WIDTH-1/2、T-COLLAPSE-5 误报。
     const QScreen* scr = QGuiApplication::screenAt(
         const_cast<TocPanel*>(this)->mapToGlobal(QPoint(0, 0)));
     if (!scr) scr = QGuiApplication::primaryScreen();
-    int maxW = 240;
+    constexpr int kFallbackMaxWidth = 400;  // 屏幕信息不可用时的上限默认值
+    int maxW = kFallbackMaxWidth;
     if (scr) maxW = scr->availableGeometry().width() / 8;
 
-    int w = std::max(kMinWidth, std::min(content, maxW));
+    // 保证 upper 至少不低于 kFallbackMaxWidth，避免 maxW 塌穿 kMinWidth 吞掉长短内容差异。
+    // 用户可见的 splitter 宽度仍由 MainWindow::applyTocPreferredWidth 按 screen/8 二次
+    // 夹紧（INV-TOC-WIDTH-MAX），所以放宽 preferredWidth 上界不会改变主流屏视觉效果。
+    int upper = std::max(maxW, kFallbackMaxWidth);
+    int w = std::max(kMinWidth, std::min(content, upper));
     return w;
 }
 

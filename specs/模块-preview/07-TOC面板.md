@@ -9,7 +9,7 @@ depends:
   - specs/横切关注点/30-主题系统.md
   - specs/横切关注点/40-高DPI适配.md
   - specs/模块-app/12-主题插件系统.md
-last_reviewed: 2026-04-15
+last_reviewed: 2026-04-27
 ---
 
 # TOC 面板（Table of Contents）
@@ -122,8 +122,18 @@ for each visible entry (折叠项跳过):
     indent = (entry.level - 1) * step_indent
     w = max(w, tw + indent + padding_left + padding_right)
 w = w + scrollbar_reserved + card_margin
-return clamp(w, min_width, floor(screen_available_width / 5))
+upper = max(floor(screen_available_width / 8), fallback_max_width)
+return clamp(w, min_width, upper)
 ```
+
+- `fallback_max_width = 400`（≈ 1920 屏 spec 公式 `screen/5 = 384` 量级）是上界保护：
+  headless 测试环境或极小屏（QGuiApplication::screenAt 在 panel 未 show 时可能返回
+  800x600 甚至更小的虚拟屏幕）下 `screen/8 < min_width`，若直接 `min(content, screen/8)`
+  会把内容塌成 < min_width，再 `max(min_width, ...)` 强制返回 min_width，导致长短标题、
+  折叠/展开宽度全部夹到同一值，触发 T-WIDTH-1/2、T-COLLAPSE-5 测试失败。提升 upper 至
+  ≥ fallback_max_width 保证内容差异可见。
+- 主流屏下用户实际可见宽度仍由 `MainWindow::applyTocPreferredWidth` 按 `screen/8`
+  二次夹紧 splitter sizes（INV-TOC-WIDTH-MAX），preferredWidth 内部上限放宽不影响视觉。
 
 ### 4.2 active（highlight）判定
 

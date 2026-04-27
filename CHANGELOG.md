@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - 资源管理器面板和 TOC 面板宽度在用户调整后重启不恢复（默认基准从 `m_mainSplitter->width()`（最大化过渡期仍为 1280）改为"应用所在屏幕宽度 / 8"，避免大屏下用户调到 350+ 被错误的 `maxW` 截断；TOC 持久化值同时锁定 `m_userDraggedToc`，避免 content-aware 自适应在文档加载时覆盖）
+- TocPanelWidthTest 在 headless 测试环境下 `LongTitleExpandsWidth` / `CollapsedChildrenDoNotAffectWidth` 用例失败（`QGuiApplication::screenAt` 在 panel 未 show 时返回小尺寸虚拟屏幕，`screen/8 < kMinWidth=120` 触发上界塌穿下界，长短标题宽度全部夹到 120；preferredWidth 上界改为 `max(screen/8, 400)`）
 
 ### Removed
 - 撤销编辑器焦点下 F3 / Shift+F3 跳转匹配项的尝试（多次实现均验证未通过，已废弃）
