@@ -2021,6 +2021,23 @@ void MainWindow::showEvent(QShowEvent* event)
             }
         }
 
+        // 显式恢复左侧面板宽度（restoreState 在面板显隐变化后可能不准）
+        {
+            QSettings s;
+            int savedLeftW = s.value("view/leftPanelWidth", -1).toInt();
+            if (savedLeftW > 0 && !m_folderPanel->rootPaths().isEmpty() && !m_sidebarHidden) {
+                auto sizes = m_mainSplitter->sizes();
+                if (sizes.size() >= 3) {
+                    int totalW = m_mainSplitter->width();
+                    int minW = totalW / 8;
+                    int maxW = totalW / 5;
+                    sizes[0] = qBound(minW, savedLeftW, maxW);
+                    sizes[1] = qMax(100, totalW - sizes[0] - sizes[2]);
+                    m_mainSplitter->setSizes(sizes);
+                }
+            }
+        }
+
         updateLeftPaneVisibility();
 
         // [Plan plans/2026-04-13-首次启动引导.md] 首次启动弹欢迎页
@@ -2098,6 +2115,12 @@ void MainWindow::saveSettings()
     s.setValue("view/themeMode", themeMode);
     s.setValue("window/geometry", saveGeometry());
     s.setValue("window/mainSplitter", m_mainSplitter->saveState());
+    // 显式保存左侧面板宽度，restoreState 在面板显隐变化后可能无法正确恢复
+    if (m_leftPaneSplitter->isVisible()) {
+        auto sizes = m_mainSplitter->sizes();
+        if (sizes.size() >= 1 && sizes[0] > 0)
+            s.setValue("view/leftPanelWidth", sizes[0]);
+    }
     // Tab 栏位置
     s.setValue("view/tabBarOnSide", m_tabBarOnSide);
     s.setValue("view/hideTopBarWhenSide", m_hideTopBarWhenSide);
@@ -3063,7 +3086,8 @@ void MainWindow::updateLeftPaneVisibility()
     m_leftPaneSplitter->setVisible(shouldShow);
 
     // 从隐藏变为可见时，确保宽度不低于窗口宽度的 1/8
-    if (shouldShow && wasHidden && m_mainSplitter) {
+    // 仅在 splitter 已初始化后执行，避免在窗口未显示时干扰 restoreState
+    if (shouldShow && wasHidden && m_splitterInitialized && m_mainSplitter) {
         auto sizes = m_mainSplitter->sizes();
         int totalW = m_mainSplitter->width();
         if (totalW > 0 && sizes.size() >= 2) {
