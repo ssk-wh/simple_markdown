@@ -4,6 +4,7 @@
 #include "FontDefaults.h"
 #include "PerfProbe.h"
 
+#include <QByteArray>
 #include <QFontMetricsF>
 #include <QtMath>
 #include <algorithm>
@@ -28,14 +29,35 @@ PreviewLayout::PreviewLayout()
 PreviewLayout::~PreviewLayout() = default;
 
 // 性能优化方案 B：缓存 QFontMetricsF，避免每个 InlineRun 重复构造
-// 使用 qHash(QFont) 作为 key，同一字体只构造一次 QFontMetricsF
+//
+// [Spec 模块-preview/02 INV-12] 字体度量缓存键必须包含所有影响度量的属性
+// ----------------------------------------------------------------------
+// 历史 bug：原先用 qHash(QFont) 作 key，Qt 5.12 的 qHash 实现对
+// "同 family、同 weight、同 italic、不同 pointSize" 的字体会返回同一 hash
+// （例如 SimSun bold size=16.2 与 SimSun bold size=9 在我机器上都得到
+// key=2476512596）。当 H1（1.8x base）先于列表项加粗段落进入缓存时，
+// 列表项 bold size=9 的查询命中 H1 的缓存项，glyphHeight 被读成 27 而非 15，
+// estimateParagraphHeight 把单行段落估为多行，ListItem.height 比实际墨迹
+// 高出 0.5~1 整行，相邻列表项之间出现一行多余空白。
+// 修复：用 (family, pointSizeF, weight, italic, stretch, styleStrategy)
+// 元组拼成的字符串作 key，确保唯一性。Qt 5.12 没有给 QString 提供
+// std::hash 特化，所以 unordered_map 用 std::string 做 key。
 const QFontMetricsF& PreviewLayout::cachedFontMetrics(const QFont& font) const
 {
-    size_t key = qHash(font);
+    char buf[256];
+    QByteArray familyUtf8 = font.family().toUtf8();
+    qsnprintf(buf, sizeof(buf), "%.*s|%.6g|%d|%d|%d|%d",
+              static_cast<int>(familyUtf8.size()), familyUtf8.constData(),
+              font.pointSizeF(),
+              font.weight(),
+              font.italic() ? 1 : 0,
+              font.stretch(),
+              static_cast<int>(font.styleStrategy()));
+    std::string key(buf);
     auto it = m_fontMetricsCache.find(key);
     if (it != m_fontMetricsCache.end())
         return it->second;
-    auto [inserted, _] = m_fontMetricsCache.emplace(key, QFontMetricsF(font, m_device));
+    auto [inserted, _] = m_fontMetricsCache.emplace(std::move(key), QFontMetricsF(font, m_device));
     return inserted->second;
 }
 
@@ -233,7 +255,12 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
             block.children.push_back(std::move(childBlock));
             isFirst = false;
         }
-        block.bounds = QRectF(0, 0, maxWidth, qMax(y, m_lineHeight));
+        // [Spec INV-11] 不要用 m_lineHeight (= baseFm.height()*1.5) 做下界保底，
+        // 否则会把单行段落 (height ≈ baseFm.height()) 抬高到 1.5 倍墨迹高，
+        // 在连续列表项之间留出半行空白。空 item 才用墨迹高度保底。
+        QFontMetricsF baseFm(m_baseFont, m_device);
+        qreal itemMinHeight = baseFm.height();
+        block.bounds = QRectF(0, 0, maxWidth, qMax(y, itemMinHeight));
         break;
     }
     case AstNodeType::Table: {
@@ -493,14 +520,23 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
     if (runs.empty()) return m_lineHeight;
 
     // 行高必须与 paintInlineRuns 一致：渲染侧使用 firstRun.font.height() * 1.5
-    // 与 m_lineHeight (= m_baseFont.height() * 1.5) 基本相同
-    // 之前的 maxRunHeight 膨胀逻辑会导致布局高度 > 实际渲染高度，
-    // 在包含 LineBreak 的段落底部产生多余空白
-    qreal lineHeight = m_lineHeight;
+    // [Spec 模块-preview/02 INV-10]
+    // 之前直接用 m_lineHeight（基于 m_baseFont）会导致 heading 等放大字号的块严重低估
+    // 高度——例如 H1 的 inlineRuns[0].font 是 1.8x m_baseFont，渲染单行高度 ≈ 1.8 *
+    // m_lineHeight，而布局只记 1 * m_lineHeight，下一个 block 的 y 就压在标题文字上。
+    // 改为基于 runs[0].font（与 paintInlineRuns 中 defaultFm 同构）派生行高。
+    const QFontMetricsF& firstRunFm = cachedFontMetrics(runs[0].font);
+    qreal lineHeight = firstRunFm.height() * 1.5;
+    // 单行墨迹高度 = ascent + descent + 标准 leading（QFontMetricsF::height 已含）。
+    // paintInlineRuns 的实际占用：每换一行 curY += lineHeight，最后一行画完即停。
+    // 因此 N 行段落实际墨迹底部 = (N-1) * lineHeight + glyphHeight，
+    // 而非 N * lineHeight（旧公式会在段落底部多留 0.5 倍墨迹高的空白，连续列表项之间最直观）。
+    // [Spec 模块-preview/02 INV-11]
+    qreal glyphHeight = firstRunFm.height();
 
     // 按 LineBreak(\n) 分段，每段独立估算换行数再累加
     // 修复前的 bug：将所有 run 宽度累加后整体除以 maxWidth，
-    // 但 \n 在渲染时会重置 x 坐标，导致高度被高估
+    // 但 \n 在渲染时会重置 x 坐标,导致高度被高估
     qreal safeMaxWidth = qMax(maxWidth, 1.0);
     int totalLines = 0;
     qreal segmentWidth = 0;
@@ -517,7 +553,8 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
     // 最后一段（\n 之后的内容，或无 \n 时的全部内容）
     totalLines += qMax(1, static_cast<int>(qCeil(segmentWidth / safeMaxWidth)));
 
-    return totalLines * lineHeight;
+    // 与渲染端实际占用保持一致：N-1 个完整行高 + 末行墨迹高度
+    return (totalLines - 1) * lineHeight + glyphHeight;
 }
 
 void PreviewLayout::collectSourceMappings(const LayoutBlock& block, qreal offsetY,

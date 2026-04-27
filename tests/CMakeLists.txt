@@ -126,3 +126,57 @@ target_link_libraries(TocPanelTest PRIVATE
 )
 
 add_test(NAME TocPanelTest COMMAND TocPanelTest)
+
+# --- PreviewLayoutHeadingWrapTest ---
+# Spec: specs/模块-preview/02-布局引擎.md INV-10
+# 验收：T-HEADING-WRAP-1/2/3/4（标题换行高度估算与下方段落不重叠）
+add_executable(PreviewLayoutHeadingWrapTest
+    preview/PreviewLayoutHeadingWrapTest.cpp
+)
+
+target_include_directories(PreviewLayoutHeadingWrapTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewLayoutHeadingWrapTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME PreviewLayoutHeadingWrapTest COMMAND PreviewLayoutHeadingWrapTest)
+
+# --- PreviewLayoutListSpacingTest ---
+# Spec: specs/模块-preview/02-布局引擎.md INV-10
+# 验收：T-LIST-SPACING-1/2/3（连续列表项之间不出现多余空白）
+add_executable(PreviewLayoutListSpacingTest
+    preview/PreviewLayoutListSpacingTest.cpp
+)
+
+target_include_directories(PreviewLayoutListSpacingTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewLayoutListSpacingTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME PreviewLayoutListSpacingTest COMMAND PreviewLayoutListSpacingTest)

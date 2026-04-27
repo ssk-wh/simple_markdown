@@ -5,6 +5,7 @@
 #include <QColor>
 #include <QRectF>
 #include <QString>
+#include <string>
 #include <vector>
 #include <memory>
 #include <unordered_map>
@@ -112,5 +113,10 @@ private:
     qreal m_codeLineHeight = 20.0;
     QPaintDevice* m_device = nullptr;  // [高 DPI 修复] 用于高度估计中的字体度量
     ImageCache* m_imageCache = nullptr;
-    mutable std::unordered_map<size_t, QFontMetricsF> m_fontMetricsCache;
+    // [Spec 模块-preview/02 INV-12] cache key 用字体属性元组拼成的字符串，
+    // 而非 qHash(QFont)：Qt 5.12 的 qHash 在不同 pointSize 下也会冲突，
+    // 会让列表 bold 段落取到 H1 的度量，导致首次渲染时列表项之间多出半行空白
+    // （缩放后才消失）。Qt 5.12 没有给 QString 提供 std::hash 特化，所以
+    // unordered_map 用 std::string 做 key。
+    mutable std::unordered_map<std::string, QFontMetricsF> m_fontMetricsCache;
 };
