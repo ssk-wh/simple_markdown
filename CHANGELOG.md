@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.7] - 2026-04-28
+
+### Fixed
+- 关闭所有打开的文档后，右侧的目录与文档信息面板自动隐藏，让欢迎页占据完整的中央与右侧空间（此前面板仍挂在窗口右侧，显示空目录卡片）
+
 ## [1.0.6] - 2026-04-27
 
 ### Added

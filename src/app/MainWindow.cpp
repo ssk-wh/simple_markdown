@@ -3125,11 +3125,15 @@ void MainWindow::syncSideTabBar()
 
 void MainWindow::updateEmptyState()
 {
-    // Spec: specs/模块-app/22-空白引导页.md INV-EMPTY-WELCOME-MUTUAL
-    // m_tabs 为空：显示空白引导面板、隐藏内容堆栈；否则反之
+    // Spec: specs/模块-app/22-空白引导页.md INV-EMPTY-WELCOME-MUTUAL、INV-EMPTY-TOC-HIDE
+    // m_tabs 为空：WelcomePanel 顶替 contentStack，且右侧 TocPanel 一并隐藏
+    //（没有打开的页面就没有目录/文档信息要展示，挂着空卡片只是无意义 chrome）
     const bool empty = m_tabs.isEmpty();
     if (m_welcomePanel) m_welcomePanel->setVisible(empty);
     if (m_contentStack) m_contentStack->setVisible(!empty);
+    // 演示模式下 TocPanel 由 m_savedTocVisible 独立控制（enterFocusMode/exitFocusMode），
+    // 不与本机制叠加；T-9 保证演示模式与空 Tab 不会同时成立
+    if (m_tocPanel && !m_focusMode) m_tocPanel->setVisible(!empty);
 }
 
 void MainWindow::updateLeftPaneVisibility()
