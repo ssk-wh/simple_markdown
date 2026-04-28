@@ -29,6 +29,8 @@ tmp/
 
 # Claude Code per-agent worktrees
 .claude/worktrees/
+# Claude Code 会话级临时锁文件
+.claude/scheduled_tasks.*
 
 # Stackdump
 *.stackdump

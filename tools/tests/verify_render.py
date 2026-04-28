@@ -261,20 +261,28 @@ class RenderVerifier:
                   "\n".join(issues[:10]) if issues else "")
 
     def _check_codeblocks(self, blocks, parent_path, issues):
+        # 估算每行能容纳的等宽字符数（保守: viewport / 10px per char）
+        # 用于反推超长行被软换行后的真实显示行数，避免把"软换行"误判为"多余空白"
+        chars_per_line = max(20, self.viewport_w // 10)
         for i, b in enumerate(blocks):
             if b["type"] == "code_block" and "content" in b:
                 content = b["content"]
-                line_count = content.count("\n") + 1
+                # 真实显示行数 = 每个源代码行按软换行展开后的行数之和
+                visual_lines = sum(
+                    max(1, (len(line) + chars_per_line - 1) // chars_per_line)
+                    for line in content.split("\n")
+                )
                 # 代码块高度 = padding(上下各8px) + 行数 * 行高
                 # 合理行高范围: 18-28px (含行间距)
-                # 最大合理高度 = 16 + line_count * 28 + 16 (额外容差)
-                max_expected = 16 + line_count * 28 + 16
+                # 最大合理高度 = 16 + visual_lines * 28 + 16 (额外容差)
+                max_expected = 16 + visual_lines * 28 + 16
                 if b["height"] > max_expected:
                     excess = b["height"] - max_expected
+                    src_lines = content.count("\n") + 1
                     issues.append(
                         f"{parent_path}[{i}](code_block): "
                         f"高度{b['height']}px >> 预期{max_expected}px "
-                        f"({line_count}行, 多余{excess}px空白)")
+                        f"(源{src_lines}行/视觉{visual_lines}行, 多余{excess}px空白)")
             for child in b.get("children", []):
                 self._check_codeblocks(
                     [child], f"{parent_path}[{i}]({b['type']})", issues)

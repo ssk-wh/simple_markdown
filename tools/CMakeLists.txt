@@ -1,7 +1,0 @@
-cmake_minimum_required(VERSION 3.16)
-project(svg2ico LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_AUTOMOC ON)
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Svg)
-add_executable(svg2ico svg2ico.cpp)
-target_link_libraries(svg2ico PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Svg)
