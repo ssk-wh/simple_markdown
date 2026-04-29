@@ -2198,6 +2198,14 @@ void MainWindow::saveSettings()
     // Tab 栏位置
     s.setValue("view/tabBarOnSide", m_tabBarOnSide);
     s.setValue("view/hideTopBarWhenSide", m_hideTopBarWhenSide);
+    // 左侧面板竖直分隔条高度（资源管理器 vs 侧边 Tab 栏）
+    if (m_tabBarOnSide && m_leftPaneSplitter->isVisible()) {
+        auto leftSizes = m_leftPaneSplitter->sizes();
+        if (leftSizes.size() >= 2 && leftSizes[0] > 0 && leftSizes[1] > 0) {
+            s.setValue("view/leftPaneFolderHeight", leftSizes[0]);
+            s.setValue("view/leftPaneSideTabHeight", leftSizes[1]);
+        }
+    }
     // 文件夹面板：持久化所有打开的目录
     s.setValue("folderPanel/rootPaths", m_folderPanel->rootPaths());
 
@@ -3118,10 +3126,19 @@ void MainWindow::setTabBarPosition(bool onSide, bool hideTopBar)
         m_leftPaneSplitter->setCollapsible(m_leftPaneSplitter->indexOf(m_sideTabBar), false);
         m_sideTabBar->show();
         m_sideTabBar->setTheme(m_currentTheme);
-        // 默认比例：文件夹 2/3，Tab 栏 1/3
-        int totalH = m_leftPaneSplitter->height();
-        if (totalH < 100) totalH = 600;
-        m_leftPaneSplitter->setSizes({totalH * 2 / 3, totalH / 3});
+        // 恢复或设置左侧面板竖直分隔条高度
+        QSettings s;
+        int folderH = s.value("view/leftPaneFolderHeight", -1).toInt();
+        int sideTabH = s.value("view/leftPaneSideTabHeight", -1).toInt();
+        if (folderH > 0 && sideTabH > 0) {
+            // 恢复之前保存的高度
+            m_leftPaneSplitter->setSizes({folderH, sideTabH});
+        } else {
+            // 首次或未保存时，使用默认比例：文件夹 2/3，Tab 栏 1/3
+            int totalH = m_leftPaneSplitter->height();
+            if (totalH < 100) totalH = 600;
+            m_leftPaneSplitter->setSizes({totalH * 2 / 3, totalH / 3});
+        }
         m_leftPaneSplitter->show();
         QList<int> mainSizes = m_mainSplitter->sizes();
         int totalW = m_mainSplitter->width();
