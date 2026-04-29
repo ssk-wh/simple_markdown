@@ -808,8 +808,14 @@ void MainWindow::restoreSession(const QString& requestedFile)
                     int phs = s.value("previewHScroll", 0).toInt();
                     int cLine = s.value("cursorLine", 0).toInt();
                     int cCol = s.value("cursorColumn", 0).toInt();
-                    QTimer::singleShot(200, this, [this, idx, es, ehs, ps, phs, cLine, cCol]() {
+                    int ew = s.value("editorWidth", -1).toInt();
+                    int pw = s.value("previewWidth", -1).toInt();
+                    QTimer::singleShot(200, this, [this, idx, es, ehs, ps, phs, cLine, cCol, ew, pw]() {
                         if (idx < m_tabs.size()) {
+                            // 恢复分隔条位置
+                            if (ew > 0 && pw > 0) {
+                                m_tabs[idx].splitter->setSizes({ew, pw});
+                            }
                             m_tabs[idx].editor->document()->selection().setCursorPosition({cLine, cCol});
                             m_tabs[idx].editor->verticalScrollBar()->setValue(es);
                             m_tabs[idx].editor->horizontalScrollBar()->setValue(ehs);
@@ -834,8 +840,14 @@ void MainWindow::restoreSession(const QString& requestedFile)
                     int phs = s.value("previewHScroll", 0).toInt();
                     int cLine = s.value("cursorLine", 0).toInt();
                     int cCol = s.value("cursorColumn", 0).toInt();
-                    QTimer::singleShot(200, this, [this, es, ehs, ps, phs, cLine, cCol]() {
+                    int ew = s.value("editorWidth", -1).toInt();
+                    int pw = s.value("previewWidth", -1).toInt();
+                    QTimer::singleShot(200, this, [this, es, ehs, ps, phs, cLine, cCol, ew, pw]() {
                         if (auto* tab = currentTab()) {
+                            // 恢复分隔条位置
+                            if (ew > 0 && pw > 0) {
+                                tab->splitter->setSizes({ew, pw});
+                            }
                             tab->editor->document()->selection().setCursorPosition({cLine, cCol});
                             tab->editor->ensureCursorVisible();
                             tab->editor->verticalScrollBar()->setValue(es);
@@ -859,6 +871,7 @@ void MainWindow::restoreSession(const QString& requestedFile)
             QString filePath;
             int editorScroll, editorHScroll, previewScroll, previewHScroll;
             int cursorLine, cursorColumn;
+            int editorWidth, previewWidth;  // 分隔条位置（宽度）
         };
         int count = s.beginReadArray("session/tabs");
         QVector<TabState> tabStates;
@@ -872,7 +885,9 @@ void MainWindow::restoreSession(const QString& requestedFile)
                                   s.value("previewScroll", 0).toInt(),
                                   s.value("previewHScroll", 0).toInt(),
                                   s.value("cursorLine", 0).toInt(),
-                                  s.value("cursorColumn", 0).toInt()});
+                                  s.value("cursorColumn", 0).toInt(),
+                                  s.value("editorWidth", -1).toInt(),
+                                  s.value("previewWidth", -1).toInt()});
             }
         }
         s.endArray();
@@ -896,6 +911,10 @@ void MainWindow::restoreSession(const QString& requestedFile)
                     m_tabs.append(tab);
                     setTabCloseButton(idx);
                     watchFile(QFileInfo(st.filePath).absoluteFilePath());
+                    // 恢复该 Tab 的分隔条位置
+                    if (st.editorWidth > 0 && st.previewWidth > 0) {
+                        tab.splitter->setSizes({st.editorWidth, st.previewWidth});
+                    }
                 }
             }
 
@@ -903,10 +922,14 @@ void MainWindow::restoreSession(const QString& requestedFile)
             if (activeTab >= 0 && activeTab < m_tabBar->count())
                 m_tabBar->setCurrentIndex(activeTab);
 
-            // 延迟恢复活跃标签页的光标和滚动位置
+            // 延迟恢复活跃标签页的光标、滚动位置和分隔条
             const auto& activeSt = tabStates[activeTab];
             QTimer::singleShot(200, this, [this, activeSt]() {
                 if (auto* tab = currentTab()) {
+                    // 恢复分隔条位置
+                    if (activeSt.editorWidth > 0 && activeSt.previewWidth > 0) {
+                        tab->splitter->setSizes({activeSt.editorWidth, activeSt.previewWidth});
+                    }
                     tab->editor->document()->selection().setCursorPosition(
                         {activeSt.cursorLine, activeSt.cursorColumn});
                     tab->editor->ensureCursorVisible();
@@ -2201,6 +2224,12 @@ void MainWindow::saveSettings()
         auto cursorPos = m_tabs[i].editor->document()->selection().cursorPosition();
         s.setValue("cursorLine", cursorPos.line);
         s.setValue("cursorColumn", cursorPos.column);
+        // 保存编辑/预览分隔条位置（宽度比例）
+        auto splitterSizes = m_tabs[i].splitter->sizes();
+        if (splitterSizes.size() >= 2 && splitterSizes[0] > 0 && splitterSizes[1] > 0) {
+            s.setValue("editorWidth", splitterSizes[0]);
+            s.setValue("previewWidth", splitterSizes[1]);
+        }
     }
     s.endArray();
 }
