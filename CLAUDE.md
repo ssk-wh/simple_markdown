@@ -178,6 +178,17 @@ build_on_win.bat release    :: Windows
 > **注意**：编译前 taskkill 仅在目标进程锁定了 build 目录下的 exe 时才需要。
 > 如果用户启动的是从其他位置（如安装目录）运行的 SimpleMarkdown，不要杀死它。
 
+### 编译后自动跑单元测试
+
+`build_on_win.bat` / `build_on_linux.sh` 完成编译后**默认**运行 `ctest`：
+
+- 默认排除 `LABELS "perf"`（如 `PreviewRenderBenchmark`），减少日常构建尾巴时长
+- 任意测试 fail → build 返回非 0，`pack_on_win.bat`（先调 build）因此**拒绝打包**——质量门 fail-fast
+- 加 `--skip-tests` 或 `--no-tests` 参数跳过（开发迭代场景）
+
+**[INV-BUILD-RUN-TESTS]** 任何 PR 在打包/发布前必须经本地 build 脚本默认路径跑一遍（不带
+`--skip-tests`），让 ctest 自动验证；CI 流水线另有独立测试，本地强制是双保险。
+
 ### Qt DLL 自动部署（Windows）
 
 `build_on_win.bat` 在编译完成后会**自动**做两件事：

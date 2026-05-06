@@ -1,6 +1,7 @@
 ---
 date: 2026-05-06
-status: draft
+status: completed
+completed: 2026-05-06
 related_specs:
   - specs/模块-preview/10-Frontmatter渲染.md
   - specs/模块-preview/02-布局引擎.md
@@ -59,6 +60,19 @@ related_specs:
 - 不含 frontmatter 的文档（首块是 Heading / Paragraph）也获得同等顶部间距（如选方案 B/C）
 - 高 DPI（125%/150%/175%）下间距按逻辑像素一致，不被缩放
 - 滚动到顶部时 viewport 顶部能看到完整间距，滚动到底部时 maximum 范围正确
+
+## 实施结果（2026-05-06）
+
+采用方案 C（layout root 加 top padding）：
+- `PreviewLayout::buildFromAst` 中 y 起点从 0 改为 `cachedFontMetrics(m_baseFont).height() * 0.1`
+  （约 2-3px @12pt，高 DPI 下随字号自然缩放）
+- specs/模块-preview/02 增 `INV-PREVIEW-TOP-PAD`
+- 测试 `PreviewLayoutHeadingWrapTest::T_TOPPAD_FirstBlockYOffsetIsPositive`：
+  - 下界：`root.children[0].bounds.y() > 0`
+  - 上界：`< baseFm.height()`（padding 不应超过单行高度）
+
+副作用一致：所有首块（frontmatter / Heading / Paragraph）统一受益；
+`m_root.bounds.height()` / `sourceLineToY` 自动包含 padding 偏移，滚动条 maximum 正确。
 
 ## 备注
 - 像素值 2px 是用户提的最小可见间距；实际可考虑用字号派生（如 `fm.height() * 0.2`），

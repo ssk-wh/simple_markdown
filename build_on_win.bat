@@ -23,6 +23,13 @@ if "%~1"=="clean" (
 )
 if "%~1"=="--clean" set FORCE_CLEAN=1
 
+REM Tests run by default; --skip-tests / --no-tests can disable for fast iteration
+set RUN_TESTS=1
+for %%A in (%*) do (
+    if "%%~A"=="--skip-tests" set RUN_TESTS=0
+    if "%%~A"=="--no-tests"   set RUN_TESTS=0
+)
+
 REM Check if second argument is "--" for cmake options
 if "%~2"=="--" (
     setlocal enabledelayedexpansion
@@ -149,6 +156,30 @@ if exist %BUILD_DIR%\tests (
             )
         )
     )
+)
+
+REM ---- Run unit tests ----
+REM Spec: specs/横切关注点/70-性能预算.md（ctest 是构建尾巴，单次 < 7s）
+REM Plan: plans/归档/2026-05-06-build脚本自动跑单元测试.md
+REM 默认排除 LABELS "perf"（PreviewRenderBenchmark），减少日常构建时长。
+REM 任意测试 fail 时 build 返回非 0，让 pack_on_win 拒绝打包（fail-fast 质量门）。
+if "%RUN_TESTS%"=="1" (
+    if exist %BUILD_DIR%\CTestTestfile.cmake (
+        echo.
+        echo [+] Running unit tests...
+        pushd %BUILD_DIR%
+        ctest -C %BUILD_TYPE% --output-on-failure -LE perf
+        set CTEST_EXIT=!errorlevel!
+        popd
+        if not "!CTEST_EXIT!"=="0" (
+            echo.
+            echo [ERROR] Unit tests failed. Build aborted.
+            echo         Use --skip-tests to bypass during iterative development.
+            exit /b 1
+        )
+    )
+) else (
+    echo [!] Skipping unit tests ^(--skip-tests^)
 )
 
 REM ---- Verify output ----

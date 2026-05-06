@@ -255,3 +255,34 @@ TEST(PreviewLayoutHeadingWrapTest, T4_H2WrappedNoOverlap)
     EXPECT_GE(heading->bounds.height(), expectedH - 2.0);
     EXPECT_GE(para->bounds.y(), heading->bounds.y() + heading->bounds.height());
 }
+
+// T-TOPPAD（2026-05-06，对应 INV-PREVIEW-TOP-PAD）
+// 文档首块上方必须留出字号派生的视觉间距，避免 frontmatter 卡片 / Heading / Paragraph
+// 等紧贴预览区上边界的"贴线"拥挤。
+TEST(PreviewLayoutHeadingWrapTest, T_TOPPAD_FirstBlockYOffsetIsPositive)
+{
+    MarkdownParser parser;
+    auto astUnique = parser.parse(QStringLiteral("# Heading\n\nbody\n"));
+    ASSERT_NE(astUnique, nullptr);
+    std::shared_ptr<AstNode> ast(std::move(astUnique));
+
+    PreviewLayout layout;
+    QImage img = makeDevice();
+    QFont base("Segoe UI", 12);
+    layout.setFont(base);
+    layout.updateMetrics(&img);
+    layout.setViewportWidth(800.0);
+    layout.buildFromAst(ast);
+
+    const LayoutBlock& root = layout.rootBlock();
+    ASSERT_FALSE(root.children.empty());
+
+    // 首块 bounds.y() 必须 > 0；同时不应过大（合理字号派生约 2-5px @12pt）
+    const qreal firstY = root.children[0].bounds.y();
+    QFontMetricsF baseFm(base, &img);
+    EXPECT_GT(firstY, 0.0)
+        << "INV-PREVIEW-TOP-PAD 违反：首块 y=" << firstY << "（应当 > 0 让出顶部间距）";
+    // 上界保护：padding 不应超过单行高度（避免误改成大间距）
+    EXPECT_LT(firstY, baseFm.height())
+        << "顶部 padding 不应超过一行高度，否则视觉过空";
+}

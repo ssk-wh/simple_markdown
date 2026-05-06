@@ -146,7 +146,11 @@ void PreviewLayout::buildFromAst(const std::shared_ptr<AstNode>& root)
 
     if (!root) return;
 
-    qreal y = 0;
+    // [Spec 模块-preview/02 INV-PREVIEW-TOP-PAD] 文档首块上方留出字号派生的间距，
+    // 避免 frontmatter 卡片 / 标题等紧贴预览区上边界的视觉拥挤。
+    // 派生因子 0.1 → 12pt 下约 2-3px（与用户体感一致），高 DPI 下随字体度量缩放。
+    const QFontMetricsF& fm = cachedFontMetrics(m_baseFont);
+    qreal y = fm.height() * 0.1;
     for (const auto& child : root->children) {
         LayoutBlock block = layoutBlock(child.get(), m_viewportWidth);
         block.bounds.moveTop(y);
