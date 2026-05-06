@@ -5,7 +5,7 @@ owners: [@pcfan]
 code: [src/parser/MarkdownParser.cpp, src/parser/MarkdownAst.h, src/preview/PreviewLayout.cpp, src/preview/PreviewPainter.cpp, src/core/Theme.h, src/core/Theme.cpp]
 tests: [tests/preview/FrontmatterRenderTest.cpp]
 depends: [specs/模块-preview/02-布局引擎.md, specs/模块-preview/03-绘制管线.md, specs/横切关注点/30-主题系统.md, specs/横切关注点/80-字体系统.md, specs/横切关注点/40-高DPI适配.md, specs/模块-parser/README.md]
-last_reviewed: 2026-04-14
+last_reviewed: 2026-05-06
 ---
 
 # 预览区 Frontmatter 渲染

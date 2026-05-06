@@ -774,26 +774,25 @@ void PreviewPainter::paintFrontmatter(QPainter* p, const LayoutBlock& block,
     const qreal valColX = innerX + keyColW;
     const qreal valColW = qMax<qreal>(1.0, (absX + w - hPad) - valColX);
 
-    const qreal avgCharW = qMax<qreal>(1.0, fm.averageCharWidth());
-    const int valCharsPerLine = qMax(1, static_cast<int>(qFloor(valColW / avgCharW)));
-
     qreal y = innerTop;
 
-    for (const auto& kv : block.frontmatterEntries) {
-        const QString& key = kv.first;
-        const QString& value = kv.second;
+    // [INV-12 修订 2026-05-06] valueLines 由 layout 阶段按字符截断拆好，paint 直接读取。
+    // 关键：parser 已把 YAML 多行列表逐行拆成多个无 key entry（如 ("", "- specs/A.md")）。
+    // **无 key entry 的 value 从 key 列起点（innerX + innerCellPad）绘制**——让多行 YAML
+    // 列表的子项视觉上回到 frontmatter 卡片最左侧，而不是缩进到 value 列右侧。
+    for (size_t entryIdx = 0; entryIdx < block.frontmatterEntries.size(); ++entryIdx) {
+        const QString& key = block.frontmatterEntries[entryIdx].first;
+        const QStringList& valueLines = (entryIdx < block.frontmatterValueLines.size())
+                                            ? block.frontmatterValueLines[entryIdx]
+                                            : QStringList{QString()};
 
-        // Value 按字符分行
-        QStringList valueLines;
-        if (value.isEmpty()) {
-            valueLines << QString();
-        } else {
-            for (int i = 0; i < value.length(); i += valCharsPerLine)
-                valueLines << value.mid(i, valCharsPerLine);
-        }
+        // 无 key entry 起绘点 = key 列最左；有 key entry 起绘点 = value 列最左
+        const qreal valueDrawX = key.isEmpty()
+                                     ? (innerX + innerCellPad)
+                                     : (valColX + innerCellPad);
 
         for (int li = 0; li < valueLines.size(); ++li) {
-            // 第一物理行绘 key（若非空），后续行第一列留空（INV-12）
+            // 有 key entry 的第一物理行绘 key
             if (li == 0 && !key.isEmpty()) {
                 p->setPen(m_theme.frontmatterKeyForeground);
                 const qreal keyDrawW = keyColW - 2 * innerCellPad;
@@ -801,9 +800,9 @@ void PreviewPainter::paintFrontmatter(QPainter* p, const LayoutBlock& block,
                 p->drawText(QPointF(innerX + innerCellPad, y + fm.ascent()), elidedKey);
             }
 
-            // Value 列
+            // Value 行
             p->setPen(m_theme.frontmatterValueForeground);
-            p->drawText(QPointF(valColX + innerCellPad, y + fm.ascent()), valueLines[li]);
+            p->drawText(QPointF(valueDrawX, y + fm.ascent()), valueLines[li]);
 
             y += lineH;
         }

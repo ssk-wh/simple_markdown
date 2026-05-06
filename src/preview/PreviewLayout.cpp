@@ -457,14 +457,34 @@ LayoutBlock PreviewLayout::layoutFrontmatter(const AstNode* node, qreal maxWidth
         keyColW = innerCellPad * 2;  // 保底，即使 entries 为空
     const qreal valColW = qMax<qreal>(1.0, innerWidth - keyColW);
 
-    // INV-12：value 按字符换行
+    // INV-12（修订 2026-05-06）：value 拆行规则
+    // 注意：parser 已经把 YAML 多行列表逐行拆成多个 entries——每个无 key 的列表子项
+    // （如 "  - foo"）都是独立 entry，key=""，value="- foo"。所以 layout 不必再按 \n 切。
+    // 这里只做「单行超过可用宽度时按字符截断」防越界。
+    //
+    // 关键修订：**无 key entry**（YAML 列表子项）使用整个 innerWidth 作为可用宽度——
+    // 它们绘制时从 key 列起点开始（让多行列表子项回到 frontmatter 卡片最左侧），
+    // 故可用宽度 ≈ innerWidth；**有 key entry** 仍走 valColW（key/value 双列布局）。
     const qreal avgCharW = qMax<qreal>(1.0, fm.averageCharWidth());
+    const int valCharsPerLine = qMax(1, static_cast<int>(qFloor(valColW / avgCharW)));
+    const int fullCharsPerLine = qMax(1, static_cast<int>(qFloor(innerWidth / avgCharW)));
+
+    block.frontmatterValueLines.clear();
+    block.frontmatterValueLines.reserve(block.frontmatterEntries.size());
     int totalLines = 0;
     for (const auto& kv : block.frontmatterEntries) {
-        const int valCharsPerLine = qMax(1, static_cast<int>(qFloor(valColW / avgCharW)));
-        const int len = kv.second.length();
-        const int valLines = (len <= 0) ? 1 : static_cast<int>(qCeil(qreal(len) / qreal(valCharsPerLine)));
-        totalLines += qMax(1, valLines);
+        QStringList valueLines;
+        const int charsPerLine = kv.first.isEmpty() ? fullCharsPerLine : valCharsPerLine;
+        if (kv.second.isEmpty()) {
+            valueLines << QString();
+        } else {
+            for (int i = 0; i < kv.second.length(); i += charsPerLine)
+                valueLines << kv.second.mid(i, charsPerLine);
+        }
+        if (valueLines.isEmpty())
+            valueLines << QString();
+        totalLines += valueLines.size();
+        block.frontmatterValueLines.push_back(std::move(valueLines));
     }
     if (totalLines <= 0)
         totalLines = 1;  // 无 entry 时仍占一行（视觉上呈现为空白带）

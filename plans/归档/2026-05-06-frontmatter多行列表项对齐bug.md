@@ -1,6 +1,7 @@
 ---
 date: 2026-05-06
-status: draft
+status: completed
+completed: 2026-05-06
 related_specs:
   - specs/模块-preview/10-Frontmatter渲染.md
   - specs/模块-preview/03-绘制管线.md
@@ -68,6 +69,30 @@ related_specs:
 - 多行列表（≥3 项）每行的 X 起点一致
 - 单行 value（如 `title: foo`）的渲染不受影响
 - 高 DPI（125% / 150% / 175%）下复测一致
+
+## 实施结果（2026-05-06）
+
+**根因纠正**——修复时发现初步怀疑方向部分错误：parser **已经把** YAML 多行列表的每个子项
+解析成独立的"无 key entry"（如 `("", "- specs/A.md")`），层级在 parser 阶段已展平。
+真正的问题不在"layout/paint 没识别 \n"，而是：
+
+- 旧 paint 把所有 entry 的 value 都绘制到 value 列起点（valColX + innerCellPad）
+- 无 key entry（YAML 列表子项）于是被视觉上"缩进到 value 列右侧"，与 key 列起点无法对齐
+- 用户感知的"specs 部分内容没有从最左边开始"——指的是希望列表子项**回到 key 列最左**
+
+**修复**：
+1. `PreviewLayout::layoutFrontmatter`：无 key entry 用 `innerWidth` 字符预算（更宽），
+   有 key entry 仍用 `valColW`（保持 key/value 双列布局）
+2. `PreviewPainter::paintFrontmatter`：无 key entry 的 value 起绘 X = `innerX + innerCellPad`
+   （key 列起点），让多行 YAML 列表子项在 frontmatter 卡片左侧对齐
+3. `LayoutBlock` 增 `frontmatterValueLines` 字段——layout 阶段拆好的可视行 paint 直接读取，
+   消除两端分别拆行算法走样的风险
+4. specs/模块-preview/10-Frontmatter渲染.md `last_reviewed` 同步至 2026-05-06
+
+**新增测试** `tests/preview/FrontmatterRenderTest.cpp::FrontmatterLayoutTest`：
+- T_FM_LAYOUT_1: YAML 列表子项各自成为独立无 key entry
+- T_FM_LAYOUT_2: 无 key entry 用 fullCharsPerLine 预算
+- T_FM_LAYOUT_3: 总行数与 block.height 估算一致
 
 ## 备注
 - 本项目自身的 plan 文件就是 frontmatter 含多行列表的真实样例（每个 plan 都用 `related_specs: - ...`），用 SimpleMarkdown 打开任意一个 plan 即可触发

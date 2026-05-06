@@ -130,6 +130,27 @@ if defined QT_DIR (
     )
 )
 
+REM ---- Mirror Qt runtime to build\tests for ctest ----
+REM 测试 exe 在 build\tests\ 下；它们也需要 Qt DLL 才能启动（否则 ctest 报 0xC000007B
+REM = STATUS_INVALID_IMAGE_FORMAT，本质是 DLL 缺失）。从 build\src\app\ 同步即可，
+REM 加上 Qt5Test.dll（SimpleMarkdown 本身不依赖 Qt5::Test，但部分测试用 QSignalSpy 依赖它）。
+if exist %BUILD_DIR%\tests (
+    if exist %BUILD_DIR%\src\app\Qt5Core.dll (
+        echo [+] Mirroring Qt runtime to %BUILD_DIR%\tests...
+        for %%F in (%BUILD_DIR%\src\app\Qt5*.dll) do (
+            if not exist %BUILD_DIR%\tests\%%~nxF copy /y %%F %BUILD_DIR%\tests\ >nul 2>&1
+        )
+        if exist %BUILD_DIR%\src\app\platforms (
+            if not exist %BUILD_DIR%\tests\platforms xcopy /e /i /y %BUILD_DIR%\src\app\platforms %BUILD_DIR%\tests\platforms >nul 2>&1
+        )
+        if defined QT_DIR (
+            if exist "%QT_DIR%\bin\Qt5Test.dll" (
+                if not exist %BUILD_DIR%\tests\Qt5Test.dll copy /y "%QT_DIR%\bin\Qt5Test.dll" %BUILD_DIR%\tests\ >nul 2>&1
+            )
+        )
+    )
+)
+
 REM ---- Verify output ----
 if exist %BUILD_DIR%\src\app\SimpleMarkdown.exe (
     for %%A in (%BUILD_DIR%\src\app\SimpleMarkdown.exe) do set EXE_SIZE=%%~zA

@@ -64,6 +64,11 @@ struct LayoutBlock {
     std::vector<std::pair<QString, QString>> frontmatterEntries;
     qreal frontmatterKeyColumnWidth = 0;  // 由 layout 阶段写入（INV-10）
     QString frontmatterRawText;            // 原始 YAML，用于 INV-13 复制
+    // [Plan 2026-05-06-frontmatter多行列表项对齐bug]
+    // layout 阶段按"先 \n 硬换行，再按字符截断"切好的每行 value 文本；
+    // 与 frontmatterEntries 对应，外层是每个 entry，内层是该 entry 的可视行数组。
+    // PreviewPainter 直接读取，避免与 layout 行数算法走样。
+    std::vector<QStringList> frontmatterValueLines;
 
     std::vector<LayoutBlock> children;
 };

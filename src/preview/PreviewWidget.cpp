@@ -94,6 +94,12 @@ void PreviewWidget::updateAst(std::shared_ptr<AstNode> root)
     m_plainText = extractPlainText();
     m_selStart = m_selEnd = -1;
     m_highlights.clear();  // 切换文档时清空标记
+    // [Spec 模块-preview/08 INV-4] m_highlights 与 m_tocHighlighted 必须同步——
+    // 否则 TOC 面板会残留旧高亮，与预览区"无标记"状态不一致（symptom: 子场景"TOC 残留"）。
+    // 若紧接着 applyPendingMarkings 兑现了新标记，updateTocHighlights 会再次 emit 覆盖；
+    // 若没有 pending，TOC 保持清空状态。
+    m_tocHighlighted.clear();
+    emit tocHighlightChanged(m_tocHighlighted);
 
     buildHeadingCharOffsets();  // 收集标题字符位置
     // [Spec 模块-preview/08 INV-5] 会话恢复传入的标记在此一次性兑现，

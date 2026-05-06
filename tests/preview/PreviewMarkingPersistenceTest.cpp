@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QDataStream>
 #include <QIODevice>
+#include <QSignalSpy>
 
 #include "preview/PreviewWidget.h"
 #include "MarkdownAst.h"
@@ -203,6 +204,45 @@ TEST(PreviewMarkingPersistenceTest, T5_DeserializeBeforeAstReadyPreservesPending
         EXPECT_EQ(h1.entries[0], qMakePair(qint32(10), qint32(20)));
         EXPECT_EQ(h1.entries[1], qMakePair(qint32(30), qint32(50)));
     }
+}
+
+// T-PERSIST-6（2026-05-06）
+// 子场景 1（TOC 残留）回归保护：updateAst 触发 m_highlights.clear() 时，
+// TocPanel 监听的 tocHighlightChanged 信号必须同步 emit 一个空 set，
+// 否则 TocPanel 会残留旧高亮 → 预览区无标记但目录显示有标记。
+TEST(PreviewMarkingPersistenceTest, T6_UpdateAstClearsTocHighlightsInSync)
+{
+    PreviewWidget w;
+    // 先喂入足够长的 AST 让 deserialize 立即生效
+    MarkdownParser parser;
+    auto astU1 = parser.parse(QString("# Heading\n\n") + QString(200, QChar('a')) + "\n");
+    ASSERT_NE(astU1, nullptr);
+    std::shared_ptr<AstNode> ast1(std::move(astU1));
+    w.updateAst(ast1);
+
+    // 注入两个标记，激活 TocPanel 监听信号
+    QSignalSpy spy(&w, SIGNAL(tocHighlightChanged(const QSet<int>&)));
+    QByteArray in = buildMarkingsBlob({{10, 20}, {30, 50}});
+    w.deserializeMarkings(in);
+    int spyCountAfterApply = spy.count();
+    EXPECT_GE(spyCountAfterApply, 1)
+        << "deserialize + applyPendingMarkings 应当至少 emit 一次 tocHighlightChanged";
+
+    // 第二次 updateAst（模拟编辑后重新解析）—— 必须同步清空 TOC 状态
+    spy.clear();
+    auto astU2 = parser.parse(QString("# Heading\n\nedited body content\n"));
+    ASSERT_NE(astU2, nullptr);
+    std::shared_ptr<AstNode> ast2(std::move(astU2));
+    w.updateAst(ast2);
+
+    // 验证：updateAst 内 m_highlights.clear() 后，至少 emit 过一次 tocHighlightChanged，
+    // 且最近一次 emit 的内容是空 set（无 pending 应用的场景下 TOC 应被清空）
+    ASSERT_GE(spy.count(), 1)
+        << "updateAst 必须同步 emit tocHighlightChanged 通知 TocPanel 清空旧高亮";
+    QList<QVariant> lastEmit = spy.takeLast();
+    QSet<int> lastSet = lastEmit.at(0).value<QSet<int>>();
+    EXPECT_TRUE(lastSet.isEmpty())
+        << "updateAst 后 TOC 高亮应为空 set；非空意味着 m_tocHighlighted 与 m_highlights 不同步";
 }
 
 int main(int argc, char** argv)

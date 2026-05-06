@@ -178,6 +178,19 @@ build_on_win.bat release    :: Windows
 > **注意**：编译前 taskkill 仅在目标进程锁定了 build 目录下的 exe 时才需要。
 > 如果用户启动的是从其他位置（如安装目录）运行的 SimpleMarkdown，不要杀死它。
 
+### Qt DLL 自动部署（Windows）
+
+`build_on_win.bat` 在编译完成后会**自动**做两件事：
+
+1. 对 `build/src/app/SimpleMarkdown.exe` 跑 `windeployqt`，把 Qt 运行时（`Qt5*.dll` + `platforms/qwindows.dll` 等）拷到 exe 同目录
+2. **把同一组 Qt DLL 镜像到 `build/tests/`**——测试 exe 也需要这些 DLL，否则 `ctest` 启动测试时报 `0xC000007B` (`STATUS_INVALID_IMAGE_FORMAT`)，本质是 DLL 缺失
+3. 额外把 `Qt5Test.dll` 从 `<QT_DIR>/bin` 复制到 `build/tests/`——`SimpleMarkdown.exe` 本身不依赖 `Qt5::Test`，但部分单元测试用 `QSignalSpy` 等组件依赖它
+
+约束：
+
+- **[INV-BUILD-QT-MIRROR]** Windows 上任何新增的 ctest 目标如果依赖 Qt 模块（含 `Qt5::Test`），不需要在 CMake 里写 `add_custom_command(POST_BUILD ... copy)`，统一由 `build_on_win.bat` 末尾的 mirror 段处理。如果未来需要其他 Qt 模块（如 `Qt5Sql`、`Qt5Multimedia`），同步在 mirror 段补一行复制
+- 该机制对**已存在**的 DLL 跳过（`if not exist ... copy`），所以增量构建零开销
+
 ### 打包
 
 ```bat
