@@ -900,9 +900,21 @@ void PreviewWidget::buildHeadingCharOffsets()
 {
     m_headingCharOffsets.clear();
 
-    // 遍历布局，记录每个 Heading 块的字符起始位置
+    // 遍历布局，记录每个 Heading 块的字符起始位置。
+    // **关键：累加规则必须与 extractBlockText 字节级一致**，否则 m_headingCharOffsets
+    // 与 m_plainText 字符流错位，TOC 高亮按章节范围判定时会指向错误章节。
+    // 历史 bug（plan #14 子场景 3，2026-05-06 修复）：旧实现未处理 Frontmatter 块的
+    // rawText 累加，但 extractBlockText 会把 rawText 写入 m_plainText——含 frontmatter
+    // 的文档下所有章节 char offset 全部偏移 |rawText|+1，TOC 高亮章节归属错位。
     std::function<void(const LayoutBlock&, int&)> collectHeadings =
         [&](const LayoutBlock& block, int& charIdx) {
+            // [子场景 3 修复] Frontmatter 必须按 extractBlockText 同款规则累加：rawText + \n
+            if (block.type == LayoutBlock::Frontmatter) {
+                charIdx += block.frontmatterRawText.length();
+                if (!block.frontmatterRawText.isEmpty()) charIdx++;
+                return;  // frontmatter 无子块，与 extractBlockText 防御式短路对齐
+            }
+
             if (block.type == LayoutBlock::Heading) {
                 m_headingCharOffsets.append(charIdx);
             }

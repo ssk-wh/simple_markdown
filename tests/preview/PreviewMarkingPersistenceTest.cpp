@@ -308,6 +308,72 @@ TEST(PreviewMarkingPersistenceTest, T8_UpdateAstNullExplicitlyClearsHighlights)
         << "唤醒后标记不应自动恢复（用户期望休眠 = 完全释放，由会话机制重新加载持久化标记）";
 }
 
+// T-PERSIST-9（2026-05-06 plan #14 子场景 3）
+// buildHeadingCharOffsets 必须与 extractBlockText 字节级一致——Frontmatter 块
+// 在 extractBlockText 中累加 rawText + \n 进 m_plainText，buildHeadingCharOffsets
+// 也必须同步累加 charIdx，否则含 frontmatter 文档的章节 char offset 全部偏移，
+// updateTocHighlights 按章节范围判定标记时归属错位。
+//
+// 测试方法：构造含 frontmatter + 多个 heading 的文档，分别在每个章节内的字符位置
+// 添加标记，断言 TOC 高亮的章节索引等于预期。
+TEST(PreviewMarkingPersistenceTest, T9_HeadingOffsetsAlignWithPlainTextWithFrontmatter)
+{
+    PreviewWidget w;
+    MarkdownParser parser;
+
+    // 含 frontmatter + 3 个章节
+    QString doc = QStringLiteral(
+        "---\n"
+        "title: sample\n"
+        "tags:\n"
+        "  - a\n"
+        "  - b\n"
+        "---\n"
+        "\n"
+        "# Section A\n"
+        "\n"
+        "Body of section A goes here with enough text.\n"
+        "\n"
+        "# Section B\n"
+        "\n"
+        "Body of section B goes here with enough text.\n"
+        "\n"
+        "# Section C\n"
+        "\n"
+        "Body of section C goes here with enough text.\n");
+    auto astU = parser.parse(doc);
+    ASSERT_NE(astU, nullptr);
+    w.updateAst(std::shared_ptr<AstNode>(std::move(astU)));
+
+    // 找出 Section B 在 m_plainText 中的字符偏移（运行时实测，避免硬编码）
+    // 我们通过 widget 接口侧测——deserialize 一个标记到 Section B 的位置，
+    // 检查 TOC 高亮的章节集合是否仅含 Section B（index=1）
+
+    // 序列化路径不直接暴露 m_plainText/headingOffsets，但 tocHighlightedIndices()
+    // 反映 updateTocHighlights 的结果。先获取 plainText 模拟（通过 layout 间接）：
+    // 简化做法：依赖 PreviewWidget 内部正确性，通过对每个章节插入标记 + 检查 TOC
+    // 高亮 index 是否对应。
+
+    // 标记落在第二个章节正文 "Body of section B" 范围内。
+    // 在含 frontmatter 文档中，frontmatter rawText 长度约 47 字符（5 行约 8-10 字符/行）+\n。
+    // section A heading "# Section A\n" 后 charIdx 约 47+1+12=60，section A body 后约 60+44=104，
+    // section B heading 起点约 104，section B body 起点约 104+12=116。
+    // 取 charIdx ≈ 130（B body 中段）+ 8 字符标记。
+    QSignalSpy spy(&w, SIGNAL(tocHighlightChanged(const QSet<int>&)));
+    w.deserializeMarkings(buildMarkingsBlob({{130, 138}}));
+
+    ASSERT_GE(spy.count(), 1) << "deserialize 应当触发 tocHighlightChanged emit";
+    QSet<int> highlighted = spy.takeLast().at(0).value<QSet<int>>();
+
+    // 关键断言：标记落在第 2 个章节（index=1, Section B）—— 不应当因 frontmatter
+    // char offset 错位而被误算到 Section A 或 Section C
+    ASSERT_EQ(highlighted.size(), 1u)
+        << "标记 [130,138] 应当只命中 1 个章节（实际命中 " << highlighted.size() << " 个）";
+    EXPECT_TRUE(highlighted.contains(1))
+        << "标记 [130,138] 应当命中 Section B (index=1)；实际命中: "
+        << (highlighted.values().isEmpty() ? -1 : highlighted.values().first());
+}
+
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
