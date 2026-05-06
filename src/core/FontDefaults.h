@@ -60,10 +60,20 @@ inline QFont defaultMonoFont(int sizeDelta = 0)
     return font;
 }
 
-// 视觉对齐：调整编辑器字号让 xHeight 接近预览字体（INV-2 / INV-10）
+// 视觉对齐：调整编辑器字号让多项度量综合接近预览字体（INV-2 / INV-10 修订）
 //
-// 算法：在 [previewFont.pointSize() - 2, previewFont.pointSize() + 2] 窗口内
-// 搜索候选 pointSize，挑选使其 QFontMetricsF::xHeight() 与预览最接近的值。
+// 算法（2026-05-06 plan #4 阶段 2 方向 A）：
+//   在 [previewFont.pointSize() - 3, previewFont.pointSize() + 3] 窗口内（共 7 个候选）
+//   对每个候选 pointSize，计算综合 score：
+//     score = 1.0 * |editor.xHeight - preview.xHeight|
+//           + 1.5 * |editor.capHeight - preview.capHeight|
+//           + 0.5 * |editor.height - preview.height|
+//   选 score 最小的 pointSize。capHeight 权重最高——大写字母决定主体视觉感受；
+//   xHeight 是 INV-2 经典指标；height（含 leading）是行整体高度，权重最低。
+//
+// 历史：旧算法仅优化 xHeight，导致 Courier New（编辑器，等宽）vs Segoe UI（预览，
+// 比例）在 xHeight 严格相等时 height 仍差 8px @ delta=0（FontConsistencyTest 实测），
+// 用户主观感受"字号不一致"。新算法把 capHeight / height 一并纳入。
 //
 // 若 device 为 null（如单元测试场景），退化到原 editor 字号不做补偿。
 inline QFont balanceEditorFontSize(QFont editor, const QFont& preview, QPaintDevice* device)
@@ -72,7 +82,9 @@ inline QFont balanceEditorFontSize(QFont editor, const QFont& preview, QPaintDev
         return editor;
     }
     QFontMetricsF prevFm(preview, device);
-    const qreal target = prevFm.xHeight();
+    const qreal targetXH = prevFm.xHeight();
+    const qreal targetCapH = prevFm.capHeight();
+    const qreal targetHeight = prevFm.height();
 
     int basePt = preview.pointSize();
     if (basePt <= 0) {
@@ -81,16 +93,18 @@ inline QFont balanceEditorFontSize(QFont editor, const QFont& preview, QPaintDev
     }
 
     int bestPt = editor.pointSize() > 0 ? editor.pointSize() : basePt;
-    qreal bestDiff = std::numeric_limits<qreal>::max();
+    qreal bestScore = std::numeric_limits<qreal>::max();
 
-    for (int pt = basePt - 2; pt <= basePt + 2; ++pt) {
+    for (int pt = basePt - 3; pt <= basePt + 3; ++pt) {
         if (pt <= 0) continue;
         QFont trial = editor;
         trial.setPointSize(pt);
         QFontMetricsF fm(trial, device);
-        qreal diff = std::abs(fm.xHeight() - target);
-        if (diff < bestDiff) {
-            bestDiff = diff;
+        qreal score = 1.0 * std::abs(fm.xHeight() - targetXH)
+                    + 1.5 * std::abs(fm.capHeight() - targetCapH)
+                    + 0.5 * std::abs(fm.height() - targetHeight);
+        if (score < bestScore) {
+            bestScore = score;
             bestPt = pt;
         }
     }

@@ -46,18 +46,18 @@ private:
 
 }  // namespace
 
-// 在多个 delta 下断言 xHeight 差 ≤ 1px；同时打印基线表格便于诊断字号一致性问题。
-TEST(FontConsistencyTest, T_FONT_XHEIGHT_DiffWithinOnePixel)
+// 在多个 delta 下断言 INV-2 三项约束：xH ≤ 1px、capH ≤ 1px、height ≤ 2px。
+// 同时打印基线表格便于诊断。
+TEST(FontConsistencyTest, T_FONT_INV2_AllThreeMetricsAligned)
 {
     QImage device(800, 600, QImage::Format_RGB32);
 
     std::fprintf(stdout,
-                 "[FontConsistencyTest] xHeight measurement table "
+                 "[FontConsistencyTest] INV-2 three-metric alignment "
                  "(device: 800x600, dpr=%.2f):\n",
                  device.devicePixelRatioF());
     std::fprintf(stdout,
-                 "  delta | preview.pt | editor.pt(raw) | editor.pt(balanced) | "
-                 "preview.xH | editor.xH | |diff|\n");
+                 "  delta | preview.pt | editor.pt | xH-diff | capH-diff | height-diff\n");
 
     int violations = 0;
     for (int delta : {-4, -2, 0, +2, +4}) {
@@ -67,24 +67,22 @@ TEST(FontConsistencyTest, T_FONT_XHEIGHT_DiffWithinOnePixel)
 
         QFontMetricsF prevFm(previewFont, &device);
         QFontMetricsF editFm(editorBal, &device);
-        qreal prevX = prevFm.xHeight();
-        qreal editX = editFm.xHeight();
-        qreal diff = std::abs(editX - prevX);
+        qreal xhDiff = std::abs(editFm.xHeight() - prevFm.xHeight());
+        qreal capDiff = std::abs(editFm.capHeight() - prevFm.capHeight());
+        qreal hDiff = std::abs(editFm.height() - prevFm.height());
 
         std::fprintf(stdout,
-                     "  %5d | %10d | %14d | %19d | %10.3f | %9.3f | %.3f\n",
-                     delta,
-                     previewFont.pointSize(),
-                     editorRaw.pointSize(),
-                     editorBal.pointSize(),
-                     prevX,
-                     editX,
-                     diff);
+                     "  %5d | %10d | %9d | %7.3f | %9.3f | %11.3f\n",
+                     delta, previewFont.pointSize(), editorBal.pointSize(),
+                     xhDiff, capDiff, hDiff);
 
-        EXPECT_LE(diff, 1.0)
-            << "INV-2 violated at delta=" << delta
-            << ": |editor.xHeight - preview.xHeight| = " << diff << "px > 1px";
-        if (diff > 1.0) ++violations;
+        EXPECT_LE(xhDiff, 1.0)
+            << "INV-2 xH 违反 at delta=" << delta << ": diff=" << xhDiff;
+        EXPECT_LE(capDiff, 1.0)
+            << "INV-2 capH 违反 at delta=" << delta << ": diff=" << capDiff;
+        EXPECT_LE(hDiff, 2.0)
+            << "INV-2 height 违反 at delta=" << delta << ": diff=" << hDiff;
+        if (xhDiff > 1.0 || capDiff > 1.0 || hDiff > 2.0) ++violations;
     }
     std::fflush(stdout);
 
