@@ -93,18 +93,24 @@ void PreviewWidget::updateAst(std::shared_ptr<AstNode> root)
 
     m_plainText = extractPlainText();
     m_selStart = m_selEnd = -1;
-    m_highlights.clear();  // 切换文档时清空标记
-    // [Spec 模块-preview/08 INV-4] m_highlights 与 m_tocHighlighted 必须同步——
-    // 否则 TOC 面板会残留旧高亮，与预览区"无标记"状态不一致（symptom: 子场景"TOC 残留"）。
-    // 若紧接着 applyPendingMarkings 兑现了新标记，updateTocHighlights 会再次 emit 覆盖；
-    // 若没有 pending，TOC 保持清空状态。
-    m_tocHighlighted.clear();
-    emit tocHighlightChanged(m_tocHighlighted);
+    // [Spec 模块-preview/08 INV-MARK-EDIT-PRESERVE]（2026-05-06 plan #8 Step 1）
+    // **不清空** m_highlights——updateAst 由 ParseScheduler 在用户编辑时频繁触发，
+    // 原本的 m_highlights.clear() 会让用户每输入一字就丢失标记。
+    // 真正需要清空的场景（切换/重建 PreviewWidget、用户主动 clearHighlights）由调用方处理：
+    //   - openFile 创建新 PreviewWidget：m_highlights 默认空，无需 clear
+    //   - promptReloadTab：用户期望同文档内容更新后保留标记
+    //   - 用户右键"清除标记"：调 clearHighlights() 显式触发
+    // 字符偏移可能因编辑漂移到错误位置——容忍策略见 Spec §8.3，paint 端按字符偏移
+    // 自然忽略越界部分，标记跑偏由用户感知后手动清除。
 
     buildHeadingCharOffsets();  // 收集标题字符位置
-    // [Spec 模块-preview/08 INV-5] 会话恢复传入的标记在此一次性兑现，
-    // 跨过上一行 m_highlights.clear()。
+    // [Spec 模块-preview/08 INV-5] 会话恢复传入的标记在此兑现（pending 为空时 no-op）
     applyPendingMarkings();
+    // [Spec 模块-preview/08 INV-4] 总是按当前 m_highlights + 新 m_headingCharOffsets
+    // 重算 m_tocHighlighted 并 emit，保持 TOC 与 m_highlights 同步——
+    // 既覆盖编辑后 highlight 保留+章节边界刷新的场景，
+    // 也覆盖恢复时 applyPendingMarkings 写入新标记的场景（idempotent，可能重复 emit 一次）
+    updateTocHighlights();
     updateScrollBars();
     updateTocEntries();
     viewport()->update();

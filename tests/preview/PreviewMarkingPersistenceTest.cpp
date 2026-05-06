@@ -206,43 +206,71 @@ TEST(PreviewMarkingPersistenceTest, T5_DeserializeBeforeAstReadyPreservesPending
     }
 }
 
-// T-PERSIST-6（2026-05-06）
-// 子场景 1（TOC 残留）回归保护：updateAst 触发 m_highlights.clear() 时，
-// TocPanel 监听的 tocHighlightChanged 信号必须同步 emit 一个空 set，
-// 否则 TocPanel 会残留旧高亮 → 预览区无标记但目录显示有标记。
-TEST(PreviewMarkingPersistenceTest, T6_UpdateAstClearsTocHighlightsInSync)
+// T-PERSIST-6（2026-05-06，2026-05-06 修订）
+// 原 T6 断言「updateAst 后 emit 空 set」用于保护 TOC 残留 bug——
+// 但 INV-MARK-EDIT-PRESERVE 之后 m_highlights 在 updateAst 中保留，TOC 也应保留同步状态。
+// 新断言：updateAst 必须 emit 至少一次 tocHighlightChanged，且**最后一次 emit 的内容
+// 必须与当前 m_highlights 一致**（同步），而不再要求"空 set"。
+TEST(PreviewMarkingPersistenceTest, T6_UpdateAstKeepsTocHighlightsInSync)
 {
     PreviewWidget w;
-    // 先喂入足够长的 AST 让 deserialize 立即生效
     MarkdownParser parser;
     auto astU1 = parser.parse(QString("# Heading\n\n") + QString(200, QChar('a')) + "\n");
     ASSERT_NE(astU1, nullptr);
-    std::shared_ptr<AstNode> ast1(std::move(astU1));
-    w.updateAst(ast1);
+    w.updateAst(std::shared_ptr<AstNode>(std::move(astU1)));
 
-    // 注入两个标记，激活 TocPanel 监听信号
+    // 注入两个标记
     QSignalSpy spy(&w, SIGNAL(tocHighlightChanged(const QSet<int>&)));
-    QByteArray in = buildMarkingsBlob({{10, 20}, {30, 50}});
-    w.deserializeMarkings(in);
-    int spyCountAfterApply = spy.count();
-    EXPECT_GE(spyCountAfterApply, 1)
+    w.deserializeMarkings(buildMarkingsBlob({{10, 20}, {30, 50}}));
+    EXPECT_GE(spy.count(), 1)
         << "deserialize + applyPendingMarkings 应当至少 emit 一次 tocHighlightChanged";
 
-    // 第二次 updateAst（模拟编辑后重新解析）—— 必须同步清空 TOC 状态
+    // 第二次 updateAst（模拟编辑）—— m_highlights 必须保留，TOC 必须同步
     spy.clear();
-    auto astU2 = parser.parse(QString("# Heading\n\nedited body content\n"));
+    auto astU2 = parser.parse(QString("# Heading\n\n") + QString(200, QChar('a')) + " more\n");
     ASSERT_NE(astU2, nullptr);
-    std::shared_ptr<AstNode> ast2(std::move(astU2));
-    w.updateAst(ast2);
+    w.updateAst(std::shared_ptr<AstNode>(std::move(astU2)));
 
-    // 验证：updateAst 内 m_highlights.clear() 后，至少 emit 过一次 tocHighlightChanged，
-    // 且最近一次 emit 的内容是空 set（无 pending 应用的场景下 TOC 应被清空）
     ASSERT_GE(spy.count(), 1)
-        << "updateAst 必须同步 emit tocHighlightChanged 通知 TocPanel 清空旧高亮";
-    QList<QVariant> lastEmit = spy.takeLast();
-    QSet<int> lastSet = lastEmit.at(0).value<QSet<int>>();
-    EXPECT_TRUE(lastSet.isEmpty())
-        << "updateAst 后 TOC 高亮应为空 set；非空意味着 m_tocHighlighted 与 m_highlights 不同步";
+        << "updateAst 必须 emit tocHighlightChanged（保持 TOC 与 m_highlights 同步）";
+    // 当前 m_highlights 仍含 (10,20) 和 (30,50)，章节边界由新 m_headingCharOffsets 决定，
+    // m_tocHighlighted 与 tocHighlightedIndices() 必须一致
+    EXPECT_EQ(w.tocHighlightedIndices().size(),
+              spy.takeLast().at(0).value<QSet<int>>().size())
+        << "最后一次 emit 的 set 必须与当前 m_tocHighlighted 状态一致";
+}
+
+// T-PERSIST-7（2026-05-06 plan #8 Step 1）
+// 编辑文档（updateAst 触发）时 m_highlights 必须保留——是 INV-MARK-EDIT-PRESERVE 回归保护。
+// 之前 updateAst 中无条件 m_highlights.clear() 会让用户每输入一字就丢标记。
+TEST(PreviewMarkingPersistenceTest, T7_HighlightsPreservedAcrossUpdateAst)
+{
+    PreviewWidget w;
+    MarkdownParser parser;
+
+    // 第一次 updateAst：模拟初始解析
+    auto ast1 = parser.parse(QString("# Heading\n\n") + QString(200, QChar('a')) + "\n");
+    ASSERT_NE(ast1, nullptr);
+    w.updateAst(std::shared_ptr<AstNode>(std::move(ast1)));
+
+    // 注入两个标记
+    w.deserializeMarkings(buildMarkingsBlob({{10, 20}, {30, 50}}));
+    auto h0 = parseBlob(w.serializeMarkings());
+    ASSERT_EQ(h0.count, 2u) << "deserialize 后应当有 2 个标记";
+
+    // 第二次 updateAst：模拟用户编辑后重新解析
+    auto ast2 = parser.parse(QString("# Heading\n\n") + QString(200, QChar('a')) + " modified\n");
+    ASSERT_NE(ast2, nullptr);
+    w.updateAst(std::shared_ptr<AstNode>(std::move(ast2)));
+
+    // 关键断言：标记不应丢失
+    auto h1 = parseBlob(w.serializeMarkings());
+    EXPECT_EQ(h1.count, 2u)
+        << "编辑后 updateAst 触发，m_highlights 必须保留（INV-MARK-EDIT-PRESERVE）";
+    if (h1.entries.size() >= 2) {
+        EXPECT_EQ(h1.entries[0], qMakePair(qint32(10), qint32(20)));
+        EXPECT_EQ(h1.entries[1], qMakePair(qint32(30), qint32(50)));
+    }
 }
 
 int main(int argc, char** argv)
