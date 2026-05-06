@@ -458,29 +458,46 @@ LayoutBlock PreviewLayout::layoutFrontmatter(const AstNode* node, qreal maxWidth
     const qreal valColW = qMax<qreal>(1.0, innerWidth - keyColW);
 
     // INV-12（修订 2026-05-06）：value 拆行规则
-    // 注意：parser 已经把 YAML 多行列表逐行拆成多个 entries——每个无 key 的列表子项
-    // （如 "  - foo"）都是独立 entry，key=""，value="- foo"。所以 layout 不必再按 \n 切。
-    // 这里只做「单行超过可用宽度时按字符截断」防越界。
+    // parser 已把 YAML 多行列表逐行拆成多个 entries——无 key 列表子项独立成 entry，layout 不必再按 \n 切。
+    // 拆行规则：**字符级累加 horizontalAdvance**直到接近可用像素宽度才换行。
     //
-    // 关键修订：**无 key entry**（YAML 列表子项）使用整个 innerWidth 作为可用宽度——
-    // 它们绘制时从 key 列起点开始（让多行列表子项回到 frontmatter 卡片最左侧），
-    // 故可用宽度 ≈ innerWidth；**有 key entry** 仍走 valColW（key/value 双列布局）。
-    const qreal avgCharW = qMax<qreal>(1.0, fm.averageCharWidth());
-    const int valCharsPerLine = qMax(1, static_cast<int>(qFloor(valColW / avgCharW)));
-    const int fullCharsPerLine = qMax(1, static_cast<int>(qFloor(innerWidth / avgCharW)));
+    // 历史教训（plan「frontmatter超长value越框」）：旧实现用 averageCharWidth × N 估算 charsPerLine，
+    // 对中英文混排（中文宽 ≈ 字号 × 1.0，ASCII 宽 ≈ 字号 × 0.5）不准：N 个混排字符的实际宽度
+    // 可能远超 N × avgCharW → 越出 frontmatter 卡片右边框。
+    // 与 estimateParagraphHeight INV-15 同型修复——按字符级真实宽度累加，与 paint 端字节级对齐。
+    //
+    // 可用宽度：
+    //   有 key entry  → value 列内（valColW - 2 * innerCellPad，左右对称内边距）
+    //   无 key entry  → 整 innerWidth - 2 * innerCellPad（YAML 列表子项从 key 列起点起绘）
+    const qreal availForKey = qMax<qreal>(1.0, valColW - 2 * innerCellPad);
+    const qreal availForNoKey = qMax<qreal>(1.0, innerWidth - 2 * innerCellPad);
+
+    auto wrapByPixelWidth = [&fm](const QString& s, qreal availPx) -> QStringList {
+        QStringList out;
+        if (s.isEmpty()) { out << QString(); return out; }
+        qreal acc = 0;
+        int lineStart = 0;
+        for (int i = 0; i < s.length(); ++i) {
+            const qreal w = fm.horizontalAdvance(s[i]);
+            // 当累加宽度超过可用像素时换行；保证至少有一个字符（i > lineStart 避免空行）
+            if (acc + w > availPx && i > lineStart) {
+                out << s.mid(lineStart, i - lineStart);
+                lineStart = i;
+                acc = w;
+            } else {
+                acc += w;
+            }
+        }
+        if (lineStart < s.length()) out << s.mid(lineStart);
+        return out;
+    };
 
     block.frontmatterValueLines.clear();
     block.frontmatterValueLines.reserve(block.frontmatterEntries.size());
     int totalLines = 0;
     for (const auto& kv : block.frontmatterEntries) {
-        QStringList valueLines;
-        const int charsPerLine = kv.first.isEmpty() ? fullCharsPerLine : valCharsPerLine;
-        if (kv.second.isEmpty()) {
-            valueLines << QString();
-        } else {
-            for (int i = 0; i < kv.second.length(); i += charsPerLine)
-                valueLines << kv.second.mid(i, charsPerLine);
-        }
+        const qreal availPx = kv.first.isEmpty() ? availForNoKey : availForKey;
+        QStringList valueLines = wrapByPixelWidth(kv.second, availPx);
         if (valueLines.isEmpty())
             valueLines << QString();
         totalLines += valueLines.size();

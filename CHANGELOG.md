@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - 调整预览区宽度时表格单元格内容不再越界与下一行单元格重叠（特别是窄列、中英文混排、含长链接的场景）
 - 编辑文档导致预览区标记被清除时，右侧目录上的对应章节标记指示同步消失，不再出现"预览没了，目录还在"的错位
 - 文档头部含多行 YAML 列表（如 `related_specs: - foo - bar`）的 frontmatter，列表项现在在卡片左侧对齐显示，不再被缩进到值列右侧
+- 含中英文混排长字段的 frontmatter 卡片，文本换行后完全留在卡片内，不再溢出右边框
 
 ### Improved
 - Windows 任务管理器和文件属性现在显示友好的应用名称"SimpleMarkdown"，而非裸文件名；版本号与发行版本同步，并在中英文系统下分别显示对应描述

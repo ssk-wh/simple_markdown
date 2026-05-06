@@ -384,6 +384,62 @@ TEST(FrontmatterLayoutTest, T_FM_LAYOUT_2_NoKeyEntryUsesFullWidthBudget)
     EXPECT_GT(total, 0);
 }
 
+TEST(FrontmatterLayoutTest, T_FM_LAYOUT_4_MixedCJK_AsciiNeverOverflowsCardWidth)
+{
+    // 复现 bug：含 ASCII 路径 + 中文注释的 YAML 列表项，按 averageCharWidth 估算切碎后
+    // 实际渲染宽度可能超 innerWidth → 越出 frontmatter 卡片右边框
+    QString doc = QStringLiteral(
+        "---\n"
+        "related_specs:\n"
+        "  - specs/模块-app/02-主窗口与多Tab.md          # 待创建/补充：Tab 休眠规则\n"
+        "  - specs/模块-preview/10-Frontmatter渲染.md\n"
+        "---\n");
+
+    MarkdownParser parser;
+    auto astU = parser.parse(doc);
+    ASSERT_NE(astU, nullptr);
+    std::shared_ptr<AstNode> ast(std::move(astU));
+
+    QImage device(800, 600, QImage::Format_RGB32);
+    PreviewLayout layout;
+    QFont base("Segoe UI", 12);
+    layout.setFont(base);
+    layout.updateMetrics(&device);
+
+    // 在多个宽度下断言每行渲染宽度 ≤ 可用宽度（不越框）
+    for (int W : {300, 400, 500, 600, 800}) {
+        layout.setViewportWidth(static_cast<qreal>(W));
+        layout.buildFromAst(ast);
+
+        const LayoutBlock* fm = findLayoutFrontmatter(layout.rootBlock());
+        ASSERT_NE(fm, nullptr) << "viewportWidth=" << W;
+
+        // 重建 fm metrics（与 layoutFrontmatter 同步：monoFont 字体族 + baseFont 字号）
+        QFont fmFont = layout.monoFont();
+        fmFont.setPointSizeF(layout.baseFont().pointSizeF());
+        QFontMetricsF fmm(fmFont, &device);
+        const qreal hPad = fmm.height() * 0.5;
+        const qreal innerCellPad = fmm.height() * 0.25;
+        const qreal innerWidth = qMax<qreal>(1.0, fm->bounds.width() - 2 * hPad);
+        const qreal availForNoKey = qMax<qreal>(1.0, innerWidth - 2 * innerCellPad);
+        const qreal availForKey =
+            qMax<qreal>(1.0, (innerWidth - fm->frontmatterKeyColumnWidth) - 2 * innerCellPad);
+
+        for (size_t i = 0; i < fm->frontmatterEntries.size(); ++i) {
+            const QString& key = fm->frontmatterEntries[i].first;
+            const qreal avail = key.isEmpty() ? availForNoKey : availForKey;
+            const QStringList& lines = fm->frontmatterValueLines[i];
+            for (const QString& line : lines) {
+                qreal lineW = fmm.horizontalAdvance(line);
+                EXPECT_LE(lineW, avail + 0.5)  // 0.5 px 浮点容差
+                    << "viewportWidth=" << W << " entry#" << i
+                    << " line 渲染宽度 " << lineW << "px 超过可用宽度 " << avail << "px"
+                    << " line=\"" << line.toUtf8().constData() << "\"";
+            }
+        }
+    }
+}
+
 TEST(FrontmatterLayoutTest, T_FM_LAYOUT_3_BlockHeightMatchesValueLineCount)
 {
     QString doc = QStringLiteral(
