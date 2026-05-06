@@ -144,7 +144,11 @@ void PreviewLayout::buildFromAst(const std::shared_ptr<AstNode>& root)
     m_root = LayoutBlock();
     m_root.type = LayoutBlock::Document;
 
-    if (!root) return;
+    // root == nullptr：显式清空（休眠路径），m_root 已重置为空 Document，直接返回
+    if (!root) {
+        m_root.bounds = QRectF(0, 0, m_viewportWidth, 0);
+        return;
+    }
 
     // [Spec 模块-preview/02 INV-PREVIEW-TOP-PAD] 文档首块上方留出字号派生的间距，
     // 避免 frontmatter 卡片 / 标题等紧贴预览区上边界的视觉拥挤。

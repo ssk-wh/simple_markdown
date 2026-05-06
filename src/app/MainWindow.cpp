@@ -782,6 +782,69 @@ void MainWindow::clampSidePanelsToScreenQuarter()
     m_mainSplitter->blockSignals(false);
 }
 
+// [Plan 2026-05-06-多Tab超阈值时休眠最早文档]
+// 把指定 Tab "休眠"——卸载 editor 内容、清 preview AST、设 lazyPending=true。
+// 复用现有 lazy 机制：onTabChanged 中切到 lazyPending 的 Tab 时会自动 loadFromFile。
+// 跳过条件保证数据安全和体感：
+//   - 已是 lazy（不重复）
+//   - 未保存修改（避免数据丢失）
+//   - 文件路径为空（无源可恢复）
+//   - 当前活跃 Tab / 上次活跃 Tab（避免 Ctrl+Tab 反复切撞墙）
+bool MainWindow::dormantTab(int idx)
+{
+    if (idx < 0 || idx >= m_tabs.size()) return false;
+    auto& tab = m_tabs[idx];
+    if (tab.lazyPending) return false;
+    if (idx == m_tabBar->currentIndex()) return false;
+
+    auto* doc = tab.editor->document();
+    if (!doc) return false;
+    if (doc->isModified()) return false;
+
+    QString fp = doc->filePath();
+    if (fp.isEmpty()) return false;
+
+    // 卸载内容：清编辑器 PieceTable + 清预览 AST
+    // Document 没有 setContent，用 remove(0, length) 清空；remove 触发 modified=true，
+    // 故必须在 remove 之后再 setModified(false) 让 Tab 标题不带 "*" 标记
+    int curLen = doc->length();
+    if (curLen > 0) doc->remove(0, curLen);
+    doc->setModified(false);
+    tab.preview->updateAst(nullptr);
+    tab.lazyPending = true;
+    tab.lazyFilePath = fp;
+    return true;
+}
+
+// 扫描已加载（非 lazy）Tab 数，超阈值时按 openOrder 升序（最早打开优先）休眠最早的 Tab
+// 直到回到阈值之内或没有更多可休眠对象。
+void MainWindow::enforceSleepThreshold()
+{
+    if (m_tabSleepThreshold <= 0) return;
+
+    // 收集 (openOrder, idx) 用于排序
+    QVector<QPair<qint64, int>> active;
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        if (!m_tabs[i].lazyPending) {
+            active.append({m_tabs[i].openOrder, i});
+        }
+    }
+    if (active.size() <= m_tabSleepThreshold) return;
+
+    // FIFO：按 openOrder 升序
+    std::sort(active.begin(), active.end(),
+              [](const QPair<qint64, int>& a, const QPair<qint64, int>& b) {
+                  return a.first < b.first;
+              });
+
+    int needSleep = active.size() - m_tabSleepThreshold;
+    int slept = 0;
+    for (const auto& p : active) {
+        if (slept >= needSleep) break;
+        if (dormantTab(p.second)) ++slept;
+    }
+}
+
 // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
 // 拆分 QTabWidget 后，addTab/removeTab 需同时操作 m_tabBar 与 m_contentStack
 int MainWindow::addPage(QWidget* page, const QString& title)
@@ -1080,6 +1143,8 @@ void MainWindow::openFile(const QString& path)
 MainWindow::TabData MainWindow::createTab()
 {
     TabData tab;
+    // [Plan 2026-05-06-多Tab超阈值时休眠最早文档] 分配单调自增的打开序号供 FIFO 排序
+    tab.openOrder = m_nextTabOpenOrder++;
 
     // Spec: specs/模块-app/13-分隔条吸附刻度.md
     // 用 SnapSplitter 替代 QSplitter，启用 1/4、1/2、3/4 吸附刻度
@@ -1852,7 +1917,7 @@ void MainWindow::onTabChanged(int index)
 
     updateTabTitle(index);
 
-    // 懒加载：切换到尚未加载的 tab 时触发文件加载
+    // 懒加载：切换到尚未加载的 tab 时触发文件加载（也覆盖运行时休眠后切回的唤醒路径）
     if (index >= 0 && index < m_tabs.size() && m_tabs[index].lazyPending) {
         m_tabs[index].lazyPending = false;
         QString fp = m_tabs[index].lazyFilePath;
@@ -1941,6 +2006,11 @@ void MainWindow::onTabChanged(int index)
             anim->start(QAbstractAnimation::DeleteWhenStopped);
         }
     }
+
+    // [Plan 2026-05-06-多Tab超阈值时休眠最早文档]
+    // Tab 切换 / 新建后检查总数：超阈值则按 FIFO 休眠最早的非豁免 Tab。
+    // 放在末尾以保证当前激活的 Tab 已就绪（豁免逻辑 idx == currentIndex 已生效）。
+    enforceSleepThreshold();
 }
 
 // -- 拖放 --

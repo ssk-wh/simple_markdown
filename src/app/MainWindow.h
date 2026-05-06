@@ -65,8 +65,12 @@ private:
         ScrollSync* scrollSync = nullptr;
         bool pendingReload = false;  // 文件被外部修改，等切换到此 tab 时提示
         bool pendingDelete = false;  // 文件被外部删除，等切换到此 tab 时提示并关闭
-        bool lazyPending = false;    // 懒加载：尚未加载文件内容
+        bool lazyPending = false;    // 懒加载：尚未加载文件内容（休眠状态复用同一字段）
         QString lazyFilePath;        // 懒加载时记录的文件路径
+        // [Plan 2026-05-06-多Tab超阈值时休眠最早文档]
+        // 自增打开序号——多 Tab 休眠机制按"最早打开"FIFO 选淘汰对象。
+        // 0 表示尚未分配（旧 Tab 不参与休眠），> 0 才参与排序。
+        qint64 openOrder = 0;
         // [Plan 2026-05-06-外部修改弹窗去重]
         // 跟踪本 Tab 当前正在显示的"是否重新加载"对话框；
         // 非空时新一轮外部修改不再开新对话框，仅更新 pendingReload 标志，
@@ -222,6 +226,20 @@ private:
     void zoomReset();
     void applyFontSize();
     TabData createTab();
+
+    // [Plan 2026-05-06-多Tab超阈值时休眠最早文档]
+    // 多 Tab 休眠机制：已加载 Tab 数超过阈值时，把最早打开的 Tab "休眠"（卸载内容
+    // 但保留 Tab 头），避免内存随会话长度无限增长。复用现有 lazyPending / lazyFilePath
+    // 字段表示休眠态——切换激活时由 onTabChanged 中的 lazy 加载路径自动唤醒。
+    qint64 m_nextTabOpenOrder = 1;
+    int m_tabSleepThreshold = 20;
+    // 把指定 Tab 休眠：卸载 editor/preview 内容、设 lazyPending=true。
+    // 跳过条件：已休眠 / 未保存修改 / 文件路径为空 / 当前活跃 Tab / 上次活跃 Tab。
+    // 返回 true 表示成功休眠。
+    bool dormantTab(int idx);
+    // 扫描所有 Tab，按 openOrder 排序，挑选最早的非豁免 Tab 调用 dormantTab；
+    // 直到已加载 Tab 数 ≤ m_tabSleepThreshold 或没有更多可休眠对象。
+    void enforceSleepThreshold();
     void updateTabTitle(int index);
     void setTabCloseButton(int index);
     void updateAllTabCloseButtons();

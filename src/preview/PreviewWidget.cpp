@@ -78,6 +78,27 @@ void PreviewWidget::updateAst(std::shared_ptr<AstNode> root)
 {
     m_currentAst = std::move(root);
 
+    // [Plan 2026-05-06-多Tab超阈值时休眠最早文档]
+    // root == nullptr 是显式"清空预览状态"信号（典型场景：MainWindow 调用 dormantTab
+    // 把 Tab 反向回到 lazy 状态时，需要释放 PreviewLayout 内存 + 清掉 highlights/TOC）。
+    // 与编辑路径（root 非空）不同，此路径必须主动清空 m_highlights/m_tocHighlighted/
+    // m_tocEntries 并 emit，让 TocPanel 同步进入"无内容"状态。
+    if (!m_currentAst) {
+        m_layout->buildFromAst(nullptr);
+        m_plainText.clear();
+        m_selStart = m_selEnd = -1;
+        m_highlights.clear();
+        m_pendingMarkings.clear();
+        m_headingCharOffsets.clear();
+        m_tocHighlighted.clear();
+        emit tocHighlightChanged(m_tocHighlighted);
+        m_tocEntries.clear();
+        emit tocEntriesChanged(m_tocEntries);
+        updateScrollBars();
+        viewport()->update();
+        return;
+    }
+
     // 初始化 DPI 度量（重要：在布局计算前同步，避免高 DPI 初始化错误）
     qreal currentDpr = viewport()->devicePixelRatioF();
     if (m_lastDevicePixelRatio <= 0) {

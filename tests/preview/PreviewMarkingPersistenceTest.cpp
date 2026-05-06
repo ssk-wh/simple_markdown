@@ -273,6 +273,41 @@ TEST(PreviewMarkingPersistenceTest, T7_HighlightsPreservedAcrossUpdateAst)
     }
 }
 
+// T-PERSIST-8（2026-05-06 plan #6）
+// dormantTab 路径：MainWindow 调用 preview->updateAst(nullptr) 显式清空预览状态。
+// 这个路径与编辑路径（root 非空）行为不同——必须主动清 m_highlights / m_pendingMarkings /
+// m_tocHighlighted，让 Tab 真正进入"休眠"无内容状态。这与 INV-MARK-EDIT-PRESERVE
+// 不矛盾：INV-MARK-EDIT-PRESERVE 仅约束 root 非空时不清空。
+TEST(PreviewMarkingPersistenceTest, T8_UpdateAstNullExplicitlyClearsHighlights)
+{
+    PreviewWidget w;
+    MarkdownParser parser;
+    auto astU = parser.parse(QString("# Heading\n\n") + QString(200, QChar('a')) + "\n");
+    ASSERT_NE(astU, nullptr);
+    w.updateAst(std::shared_ptr<AstNode>(std::move(astU)));
+
+    // 注入标记
+    w.deserializeMarkings(buildMarkingsBlob({{10, 20}, {30, 50}}));
+    auto h0 = parseBlob(w.serializeMarkings());
+    ASSERT_EQ(h0.count, 2u);
+
+    // 显式 nullptr：模拟 dormantTab 调用
+    w.updateAst(nullptr);
+
+    // 标记必须被清空（与编辑路径相反——休眠是显式释放）
+    auto h1 = parseBlob(w.serializeMarkings());
+    EXPECT_EQ(h1.count, 0u)
+        << "updateAst(nullptr) 必须清空 m_highlights（休眠路径释放内存）";
+
+    // 唤醒：再喂入新 AST，标记应当保持清空（不会"自动恢复"——已被消耗）
+    auto astU2 = parser.parse(QStringLiteral("# After\n\nbody\n"));
+    ASSERT_NE(astU2, nullptr);
+    w.updateAst(std::shared_ptr<AstNode>(std::move(astU2)));
+    auto h2 = parseBlob(w.serializeMarkings());
+    EXPECT_EQ(h2.count, 0u)
+        << "唤醒后标记不应自动恢复（用户期望休眠 = 完全释放，由会话机制重新加载持久化标记）";
+}
+
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
