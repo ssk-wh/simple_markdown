@@ -517,15 +517,26 @@ void PreviewWidget::contextMenuEvent(QContextMenuEvent* event)
     QAction* hlAct = menu.addAction(tr("Mark"), this, &PreviewWidget::addHighlight);
     hlAct->setEnabled(hasSelection);
 
-    // 检测右键位置是否落在某个标记内
+    // 检测右键位置是否**严格**落在某个标记内
+    // 注意：textIndexAtPoint 设计用于选区拖拽 snap，空白处会返回最近 segment 的边界 char index
+    // 而非 -1——直接用它判定会让用户在标记**附近的空白处**右键时仍误命中。
+    // 改用 segment.rect.contains 做严格判定，未命中任何 segment 的位置 clickIdx = -1。
     qreal scrollXVal = m_wordWrap ? 0 : horizontalScrollBar()->value();
     QPointF clickPt(event->pos().x() - 20 + scrollXVal, event->pos().y());
-    int clickIdx = textIndexAtPoint(clickPt);
-    int hitMarkIdx = -1;
-    for (int i = 0; i < m_highlights.size(); ++i) {
-        if (clickIdx >= m_highlights[i].first && clickIdx < m_highlights[i].second) {
-            hitMarkIdx = i;
+    int clickIdx = -1;
+    for (const auto& seg : m_painter->textSegments()) {
+        if (seg.rect.contains(clickPt)) {
+            clickIdx = textIndexAtPoint(clickPt);
             break;
+        }
+    }
+    int hitMarkIdx = -1;
+    if (clickIdx >= 0) {
+        for (int i = 0; i < m_highlights.size(); ++i) {
+            if (clickIdx >= m_highlights[i].first && clickIdx < m_highlights[i].second) {
+                hitMarkIdx = i;
+                break;
+            }
         }
     }
 
