@@ -1,9 +1,15 @@
 ---
 title: Tab 分隔条位置持久化
-status: in_progress
+status: completed
 date: 2026-04-29
+completed: 2026-05-06
 related_specs:
   - specs/模块-app/13-分隔条吸附刻度.md
+  - 88cffa9  # fix: Tab 分隔条位置持久化（保存和恢复编辑/预览宽度比例）
+:
+  - 88cffa9  # fix: Tab 分隔条位置持久化（保存和恢复编辑/预览宽度比例）
+  - 19a5bb9  # fix: 侧边模式下左侧面板竖直分隔条高度持久化
+  - 03eddbe  # docs: 更新 CHANGELOG 记录两项分隔条位置持久化修复
 ---
 
 ## 问题描述
