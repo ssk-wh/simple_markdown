@@ -166,6 +166,83 @@ TEST(PreviewLayoutTest, T2_NestedListAbsoluteCoordinates) { ... }
 
 ---
 
+## 反复踩坑模式（红旗清单 / 2026-05-06 复盘沉淀）
+
+下列同型 bug 在 2026-05-06 一轮 ralph loop 中**重复出现 3+ 次**，新代码看到类似形态应当立即警觉：
+
+### 🚩 反模式 A：`averageCharWidth × N` 估算字符宽度
+**症状**：在含中英文混排（中文 ≈ 字号×1.0，ASCII ≈ 字号×0.5）的场景中，按平均字符宽度估算"行能放几个字符"会**系统性失真**——中文密集行越框、ASCII 密集行留白。
+
+**犯错形态**：
+```cpp
+const int charsPerLine = qFloor(maxWidth / fm.averageCharWidth());  // ❌
+```
+
+**正解**：逐字符 `fm.horizontalAdvance(s[i])` 累加直到接近 maxWidth。
+- 参考：`PreviewLayout::estimateParagraphHeight`（INV-15）/ `layoutFrontmatter` 的 wrapByPixelWidth 实现
+
+### 🚩 反模式 B：「同一语义两份独立代码」走样
+**症状**：同一个字符流 / 换行规则 / 边界判定逻辑被两份代码各自实现，长期不知不觉走样。
+典型受害场景：layout 计算 vs paint 计算、estimate 高度 vs 实际换行、TOC 章节定位 vs 字符流写入。
+
+**已踩过的坑**：
+- `extractBlockText` vs `buildHeadingCharOffsets`：Frontmatter 处理不一致 → TOC 章节归属错位
+- `estimateParagraphHeight` vs `paintInlineRuns`：换行算法不一致 → 表格越界
+- `layoutFrontmatter` vs `paintFrontmatter` 切行：→ frontmatter 三连击
+
+**正解**：
+- 抽 file-static helper 让两侧共享一份代码
+- 或在 LayoutBlock 中预存 layout 阶段计算好的中间产物（如 `frontmatterValueLines`），paint 直接读
+- Spec INV 强制约束（如 `INV-CHAR-OFFSET-CONSISTENT`）
+
+### 🚩 反模式 C：函数命名暗示语义 ≠ 实际行为
+**症状**：函数名暗示某种判定语义（"返回 point 处的 text index"），实际行为却是更宽松的（"snap 到最近字符"）。
+误用方调用时传入预期的"严格"语义，实际拿到"宽松"结果。
+
+**已踩过的坑**：
+- `textIndexAtPoint`：选区拖拽 snap，**永远返回 ≥ 0**（空白处也返回最近 segment 边界），但被
+  `contextMenuEvent` 当严格命中判定 → 标记附近空白处右键菜单不置灰
+
+**正解**：
+- 调用点先做严格 `seg.rect.contains` 判定
+- 或重命名暗示真实语义（如 `nearestTextIndex`）+ 提供严格伴生函数
+
+### 🚩 反模式 D：「Spec 接口先行但代码未实现」债务
+**症状**：Spec §4 接口段写了 API 签名 / `tests:` 字段写了测试文件路径，但实际 `src/` / `tests/` 中**零匹配**。`status: stable` 让人误以为已实现+已验证。
+
+**已踩过的坑**：
+- `serializeMarkings/deserializeMarkings`（08-内容标记 §4 接口写了，2026-05-06 才补实现）
+- `FontConsistencyTest.cpp`（80-字体系统 tests 字段写了，2026-05-06 才补实现）
+
+**正解**：
+- Spec `status: stable` 应当对齐"已实现+已验证"，而非"已设计完"
+- 提交前用 grep 自检：`tests:` 字段中列出的文件是否真的存在 / `code:` 中的接口是否真的有实现
+
+---
+
+## 修复策略选择框架（2026-05-06 复盘沉淀）
+
+### 「最小可行」vs「完美方案」
+| 信号 | 建议 |
+|------|------|
+| 用户痛点是**定性**的（"丢了"/"没了"/"卡了"） | 最小可行——单行修复 + INV 锁定边界 |
+| 用户痛点是**定量**的（"还差 5ms 才达 60fps"） | 数据驱动设计 + 基线测量 |
+| 修复路径**清晰可逆** | 最小可行（出错可一行 git revert） |
+| 修复需要**改数据模型 / 新增 UI 配置面** | 慎重——先修最小痛点，留演进空间 |
+
+**本轮决策**：#8 选 Step 1 小修不做 sourceLine 锚点；#6 复用 lazy 机制不做完整三态生命周期。
+
+### 「等用户复现」vs「自己读代码追根因」
+| 信号 | 建议 |
+|------|------|
+| 用户给了**症状方向**（"哪个功能不工作"） | 自己读源码定位 |
+| 用户给了**精确步骤但你看不出原因** | 真正需要复现，可问具体路径 |
+| 函数代码"看起来正确" | **追问"输入对吗 / 调用语义对吗"**——这一步常被跳过 |
+
+**反例**：本轮 #14 第一轮修复时我写"`updateTocHighlights` 算法层面看正确，等用户复现"——是误判。算法正确，**输入** `m_headingCharOffsets` 错了。下次看到"算法看似正确"应当**追到上游**。
+
+---
+
 ## 高频命令速查
 
 ### 构建
