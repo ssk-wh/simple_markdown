@@ -39,6 +39,16 @@ public:
     const QVector<TocEntry>& tocEntries() const { return m_tocEntries; }
     const QSet<int>& tocHighlightedIndices() const { return m_tocHighlighted; }
 
+    // [Spec 模块-preview/08-内容标记 INV-5、T-4、§4 接口]
+    // 标记的会话级持久化序列化/反序列化。
+    // 反序列化采用"延迟应用"策略：先缓存到 m_pendingMarkings，
+    // 在最近一次 updateAst() 之后由 applyPendingMarkings() 兑现，
+    // 以跨过 updateAst 中的 m_highlights.clear() 动作。
+    // 越界（start<0 或 end<=start 或 start 超出当前文档长度）的标记静默丢弃，
+    // 对应 Spec §8.3「字符偏移漂移」的尽力而为策略。
+    QByteArray serializeMarkings() const;
+    void deserializeMarkings(const QByteArray& data);
+
 public slots:
     void updateAst(std::shared_ptr<AstNode> root);
     void refreshPreview();
@@ -72,6 +82,9 @@ private:
     void addHighlight();
     void clearHighlights();
     void updateTocHighlights();
+    // [Spec 模块-preview/08 INV-5] 把 m_pendingMarkings 中暂存的标记字节流应用到 m_highlights。
+    // 在 deserializeMarkings 调用时和每次 updateAst 末尾被调用，一次性消耗。
+    void applyPendingMarkings();
     void buildHeadingCharOffsets();
     void updateTocEntries();
     void onScrollAnimationValueChanged(const QVariant &value);
@@ -98,6 +111,9 @@ private:
     // 标记高亮
     QVector<QPair<int,int>> m_highlights;
     QVector<int> m_headingCharOffsets;
+    // [Spec 模块-preview/08 INV-5] 待应用的标记字节流（来自会话恢复），
+    // 在 updateAst 后由 applyPendingMarkings() 一次性消耗。
+    QByteArray m_pendingMarkings;
 
     // TOC 跳转动画
     QPropertyAnimation* m_scrollAnimation = nullptr;

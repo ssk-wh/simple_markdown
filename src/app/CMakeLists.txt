@@ -1,7 +1,28 @@
 set(APP_SOURCES main.cpp MainWindow.h MainWindow.cpp ChangelogDialog.h ChangelogDialog.cpp ShortcutsDialog.h ShortcutsDialog.cpp WelcomePanel.h WelcomePanel.cpp TabBarWithAdd.h TabBarWithAdd.cpp SideTabBar.h SideTabBar.cpp SnapSplitter.h SnapSplitter.cpp FolderPanel.h FolderPanel.cpp)
 
 if(WIN32)
-    list(APPEND APP_SOURCES app.rc)
+    # Spec: specs/模块-app/README.md 全局约束 [INV-WIN-VERSIONINFO]
+    # 由 CHANGELOG 自动提取的 PROJECT_VERSION 注入到 VERSIONINFO 资源块，
+    # 让 Windows 任务管理器、Explorer 属性页、PE 资源浏览器显示友好的应用名称。
+    string(REPLACE "." ";" _APP_VERSION_LIST "${PROJECT_VERSION}")
+    list(LENGTH _APP_VERSION_LIST _APP_VERSION_COUNT)
+    if(_APP_VERSION_COUNT GREATER_EQUAL 3)
+        list(GET _APP_VERSION_LIST 0 APP_VERSION_MAJOR)
+        list(GET _APP_VERSION_LIST 1 APP_VERSION_MINOR)
+        list(GET _APP_VERSION_LIST 2 APP_VERSION_PATCH)
+    else()
+        set(APP_VERSION_MAJOR 0)
+        set(APP_VERSION_MINOR 0)
+        set(APP_VERSION_PATCH 0)
+    endif()
+    set(APP_VERSION_FULL "${PROJECT_VERSION}")
+    # rc.exe 接受正斜杠路径，跨编译/原生 toolchain 都安全
+    set(APP_ICON_PATH "${CMAKE_SOURCE_DIR}/resources/app-icon.ico")
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/app.rc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/app.rc
+        @ONLY)
+    list(APPEND APP_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/app.rc)
 endif()
 
 # 翻译文件

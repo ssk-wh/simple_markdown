@@ -20,6 +20,7 @@
 #include <QMenuBar>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QPointer>
 #include <QMimeData>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -223,11 +224,15 @@ MainWindow::MainWindow(QWidget* parent)
             this, &MainWindow::applyTocPreferredWidth);
 
     // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-USER-OVERRIDE
-    // 监听用户拖拽 mainSplitter 分隔条，之后禁用宽度自适应
+    //       specs/模块-app/README.md          [INV-PANEL-WIDTH-DRAG-CAP]
+    // 监听用户拖拽 mainSplitter 分隔条：之后禁用宽度自适应（USER-OVERRIDE），
+    // 同时实时夹紧左/右两侧面板到屏幕 1/4 上限（DRAG-CAP）。
     connect(m_mainSplitter, &QSplitter::splitterMoved,
             this, [this](int, int) {
         // 只在 splitter 已完成初始化之后接收用户拖拽事件
-        if (m_splitterInitialized) m_userDraggedToc = true;
+        if (!m_splitterInitialized) return;
+        m_userDraggedToc = true;
+        clampSidePanelsToScreenQuarter();
     });
 
     connect(m_tabBar, &QTabBar::tabCloseRequested,
@@ -732,6 +737,51 @@ void MainWindow::clampTocWidthToScreen()
     }
 }
 
+// Spec: specs/模块-app/README.md  [INV-PANEL-WIDTH-DRAG-CAP]
+// 用户拖拽 mainSplitter 时，左侧资源管理器面板和右侧目录面板宽度上限 = 窗口所在屏幕宽度 / 4。
+// 拖拽中实时夹紧；持久化恢复路径也复用本函数。
+//
+// "所在屏幕"用窗口几何中心点决定，比左上角更准确：跨屏拖拽时，center 落在哪个屏幕就以该屏幕为准。
+void MainWindow::clampSidePanelsToScreenQuarter()
+{
+    if (!m_mainSplitter) return;
+    auto sizes = m_mainSplitter->sizes();
+    if (sizes.size() < 2) return;
+
+    const QScreen* scr = QGuiApplication::screenAt(mapToGlobal(rect().center()));
+    if (!scr) scr = QGuiApplication::primaryScreen();
+    if (!scr) return;
+    const int maxW = scr->availableGeometry().width() / 4;
+    if (maxW <= 0) return;
+
+    bool changed = false;
+    QList<int> newSizes = sizes;
+
+    // index 0 = 左侧 leftPaneSplitter（资源管理器），index 末 = TOC 面板
+    if (newSizes.size() >= 3 && newSizes[0] > maxW) {
+        newSizes[0] = maxW;
+        changed = true;
+    }
+    int tocIdx = newSizes.size() - 1;
+    if (newSizes[tocIdx] > maxW) {
+        newSizes[tocIdx] = maxW;
+        changed = true;
+    }
+    if (!changed) return;
+
+    // 把节省下来的像素回流给中间内容区，避免总宽度漂移
+    const int totalW = m_mainSplitter->width();
+    int contentIdx = (newSizes.size() >= 3) ? 1 : 0;
+    int sumOthers = 0;
+    for (int i = 0; i < newSizes.size(); ++i)
+        if (i != contentIdx) sumOthers += newSizes[i];
+    newSizes[contentIdx] = qMax(0, totalW - sumOthers);
+
+    m_mainSplitter->blockSignals(true);
+    m_mainSplitter->setSizes(newSizes);
+    m_mainSplitter->blockSignals(false);
+}
+
 // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
 // 拆分 QTabWidget 后，addTab/removeTab 需同时操作 m_tabBar 与 m_contentStack
 int MainWindow::addPage(QWidget* page, const QString& title)
@@ -810,7 +860,9 @@ void MainWindow::restoreSession(const QString& requestedFile)
                     int cCol = s.value("cursorColumn", 0).toInt();
                     int ew = s.value("editorWidth", -1).toInt();
                     int pw = s.value("previewWidth", -1).toInt();
-                    QTimer::singleShot(200, this, [this, idx, es, ehs, ps, phs, cLine, cCol, ew, pw]() {
+                    // Spec: specs/模块-preview/08-内容标记.md INV-5
+                    QByteArray markings = s.value("markings").toByteArray();
+                    QTimer::singleShot(200, this, [this, idx, es, ehs, ps, phs, cLine, cCol, ew, pw, markings]() {
                         if (idx < m_tabs.size()) {
                             // 恢复分隔条位置
                             if (ew > 0 && pw > 0) {
@@ -821,6 +873,9 @@ void MainWindow::restoreSession(const QString& requestedFile)
                             m_tabs[idx].editor->horizontalScrollBar()->setValue(ehs);
                             m_tabs[idx].preview->verticalScrollBar()->setValue(ps);
                             m_tabs[idx].preview->horizontalScrollBar()->setValue(phs);
+                            if (!markings.isEmpty()) {
+                                m_tabs[idx].preview->deserializeMarkings(markings);
+                            }
                         }
                     });
                 }
@@ -842,7 +897,9 @@ void MainWindow::restoreSession(const QString& requestedFile)
                     int cCol = s.value("cursorColumn", 0).toInt();
                     int ew = s.value("editorWidth", -1).toInt();
                     int pw = s.value("previewWidth", -1).toInt();
-                    QTimer::singleShot(200, this, [this, es, ehs, ps, phs, cLine, cCol, ew, pw]() {
+                    // Spec: specs/模块-preview/08-内容标记.md INV-5
+                    QByteArray markings = s.value("markings").toByteArray();
+                    QTimer::singleShot(200, this, [this, es, ehs, ps, phs, cLine, cCol, ew, pw, markings]() {
                         if (auto* tab = currentTab()) {
                             // 恢复分隔条位置
                             if (ew > 0 && pw > 0) {
@@ -854,6 +911,9 @@ void MainWindow::restoreSession(const QString& requestedFile)
                             tab->editor->horizontalScrollBar()->setValue(ehs);
                             tab->preview->verticalScrollBar()->setValue(ps);
                             tab->preview->horizontalScrollBar()->setValue(phs);
+                            if (!markings.isEmpty()) {
+                                tab->preview->deserializeMarkings(markings);
+                            }
                         }
                     });
                     break;
@@ -872,6 +932,8 @@ void MainWindow::restoreSession(const QString& requestedFile)
             int editorScroll, editorHScroll, previewScroll, previewHScroll;
             int cursorLine, cursorColumn;
             int editorWidth, previewWidth;  // 分隔条位置（宽度）
+            // Spec: specs/模块-preview/08-内容标记.md INV-5
+            QByteArray markings;
         };
         int count = s.beginReadArray("session/tabs");
         QVector<TabState> tabStates;
@@ -887,7 +949,8 @@ void MainWindow::restoreSession(const QString& requestedFile)
                                   s.value("cursorLine", 0).toInt(),
                                   s.value("cursorColumn", 0).toInt(),
                                   s.value("editorWidth", -1).toInt(),
-                                  s.value("previewWidth", -1).toInt()});
+                                  s.value("previewWidth", -1).toInt(),
+                                  s.value("markings").toByteArray()});
             }
         }
         s.endArray();
@@ -902,6 +965,11 @@ void MainWindow::restoreSession(const QString& requestedFile)
                 const auto& st = tabStates[i];
                 if (i == activeTab) {
                     openFile(st.filePath);
+                    // Spec: specs/模块-preview/08-内容标记.md INV-5
+                    // 立即注入 m_pendingMarkings；updateAst 完成后由 applyPendingMarkings 兑现
+                    if (!st.markings.isEmpty() && !m_tabs.isEmpty()) {
+                        m_tabs.last().preview->deserializeMarkings(st.markings);
+                    }
                 } else {
                     // 懒加载：创建 tab 但不加载文件内容
                     TabData tab = createTab();
@@ -914,6 +982,12 @@ void MainWindow::restoreSession(const QString& requestedFile)
                     // 恢复该 Tab 的分隔条位置
                     if (st.editorWidth > 0 && st.previewWidth > 0) {
                         tab.splitter->setSizes({st.editorWidth, st.previewWidth});
+                    }
+                    // Spec: specs/模块-preview/08-内容标记.md INV-5
+                    // 懒加载 tab 把标记字节流先注入 m_pendingMarkings，
+                    // 切换激活并触发 openFile/updateAst 后由 applyPendingMarkings 兑现
+                    if (!st.markings.isEmpty()) {
+                        tab.preview->deserializeMarkings(st.markings);
                     }
                 }
             }
@@ -1806,7 +1880,9 @@ void MainWindow::onTabChanged(int index)
         m_folderPanel->selectFile(fp);
 
         // 切换到有待重载标记的 tab 时弹窗提示
-        if (m_tabs[index].pendingReload)
+        // [Plan 2026-05-06-外部修改弹窗去重] 已有对话框时不再排队新调度，
+        // promptReloadTab 内部也会再次防御。
+        if (m_tabs[index].pendingReload && !m_tabs[index].activeReloadDialog)
             QTimer::singleShot(0, this, [this, index]() { promptReloadTab(index); });
 
         // 切换到被外部删除的 tab 时提示并关闭
@@ -2107,6 +2183,9 @@ void MainWindow::showEvent(QShowEvent* event)
             if (totalW <= 0) totalW = width();
             int contentW = qMax(100, totalW - leftW - tocW);
             m_mainSplitter->setSizes({leftW, contentW, tocW});
+
+            // [INV-PANEL-WIDTH-DRAG-CAP] 恢复的旧宽度若超过当前屏幕 1/4，立即夹紧
+            clampSidePanelsToScreenQuarter();
         }
 
         updateLeftPaneVisibility();
@@ -2237,6 +2316,14 @@ void MainWindow::saveSettings()
         if (splitterSizes.size() >= 2 && splitterSizes[0] > 0 && splitterSizes[1] > 0) {
             s.setValue("editorWidth", splitterSizes[0]);
             s.setValue("previewWidth", splitterSizes[1]);
+        }
+        // Spec: specs/模块-preview/08-内容标记.md INV-5、T-4
+        // 标记必须在会话恢复时一并恢复
+        QByteArray markings = m_tabs[i].preview->serializeMarkings();
+        if (!markings.isEmpty()) {
+            s.setValue("markings", markings);
+        } else {
+            s.remove("markings");
         }
     }
     s.endArray();
@@ -2453,6 +2540,14 @@ void MainWindow::onFileChangedExternally(const QString& path)
     // 重新添加监控（某些系统修改后会自动移除）
     watchFile(path);
 
+    // [Plan 2026-05-06-外部修改弹窗去重]
+    // 若该 Tab 已经有"是否重新加载"对话框正在显示，仅刷新待重载标志，
+    // 不再开新对话框；用户响应当前对话框后会按最新磁盘内容决定是否加载。
+    if (m_tabs[tabIndex].activeReloadDialog) {
+        m_tabs[tabIndex].pendingReload = true;
+        return;
+    }
+
     // 非当前 tab：标记待重载，切换时再弹窗
     if (tabIndex != m_tabBar->currentIndex()) {
         m_tabs[tabIndex].pendingReload = true;
@@ -2467,6 +2562,14 @@ void MainWindow::promptReloadTab(int tabIndex)
     if (tabIndex < 0 || tabIndex >= m_tabs.size())
         return;
 
+    // [Plan 2026-05-06-外部修改弹窗去重]
+    // 已经有正在显示的对话框 → 抬升到前台即可，不再开新一个。
+    if (m_tabs[tabIndex].activeReloadDialog) {
+        m_tabs[tabIndex].activeReloadDialog->raise();
+        m_tabs[tabIndex].activeReloadDialog->activateWindow();
+        return;
+    }
+
     m_tabs[tabIndex].pendingReload = false;
 
     QString path = m_tabs[tabIndex].editor->document()->filePath();
@@ -2474,17 +2577,37 @@ void MainWindow::promptReloadTab(int tabIndex)
         return;
 
     QString name = QFileInfo(path).fileName();
-    QMessageBox::StandardButton ret = QMessageBox::question(
-        this, tr("File Changed"),
-        tr("\"%1\" has been modified by another program.\n\n"
-           "Do you want to reload it?").arg(name),
-        QMessageBox::Yes | QMessageBox::No);
+    auto* box = new QMessageBox(QMessageBox::Question,
+                                tr("File Changed"),
+                                tr("\"%1\" has been modified by another program.\n\n"
+                                   "Do you want to reload it?").arg(name),
+                                QMessageBox::Yes | QMessageBox::No,
+                                this);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    m_tabs[tabIndex].activeReloadDialog = box;
 
-    if (ret == QMessageBox::Yes) {
-        m_tabs[tabIndex].editor->document()->loadFromFile(path);
-        m_tabs[tabIndex].scheduler->parseNow();
-        updateTabTitle(tabIndex);
-    }
+    // 用户响应后：根据选择决定是否重载，关闭后清状态。
+    // 在响应阶段窗口期间收到的所有 fileChanged 都已被压制（见 onFileChangedExternally），
+    // 但 pendingReload 可能因连续修改被反复置 true。响应"否"时保留 pendingReload，
+    // 让下一次外部修改/切换 Tab 时再次提示；响应"是"则按最新磁盘加载，pendingReload 清零。
+    connect(box, &QMessageBox::finished, this, [this, tabIndex, box, path](int result) {
+        if (tabIndex < 0 || tabIndex >= m_tabs.size())
+            return;
+        if (result == QMessageBox::Yes) {
+            m_tabs[tabIndex].pendingReload = false;
+            // 重载前再确认文件仍存在；用户响应窗口期间可能被删除
+            if (QFileInfo::exists(path)) {
+                m_tabs[tabIndex].editor->document()->loadFromFile(path);
+                m_tabs[tabIndex].scheduler->parseNow();
+                updateTabTitle(tabIndex);
+            }
+        }
+        // QPointer 在 box 销毁后自动归零；显式清一次便于日志/断言时机明确
+        m_tabs[tabIndex].activeReloadDialog.clear();
+        Q_UNUSED(box);
+    });
+
+    box->open();  // 非模态，避免阻塞主事件循环；用户必须响应一个按钮
 }
 
 // ---- 状态栏统计信息 ----

@@ -3,6 +3,7 @@
 #include <QVector>
 #include <QTimer>
 #include <QFileSystemWatcher>
+#include <QPointer>
 #include "Theme.h"
 
 class EditorWidget;
@@ -23,6 +24,7 @@ class QStatusBar;
 class QVBoxLayout;
 class QTranslator;
 class SideTabBar;
+class QMessageBox;
 class WelcomePanel;  // Spec: specs/模块-app/22-空白引导页.md
 
 class MainWindow : public QMainWindow {
@@ -65,6 +67,11 @@ private:
         bool pendingDelete = false;  // 文件被外部删除，等切换到此 tab 时提示并关闭
         bool lazyPending = false;    // 懒加载：尚未加载文件内容
         QString lazyFilePath;        // 懒加载时记录的文件路径
+        // [Plan 2026-05-06-外部修改弹窗去重]
+        // 跟踪本 Tab 当前正在显示的"是否重新加载"对话框；
+        // 非空时新一轮外部修改不再开新对话框，仅更新 pendingReload 标志，
+        // 避免文件被频繁修改时弹窗叠加。QPointer 在对话框被销毁时自动归零。
+        QPointer<QMessageBox> activeReloadDialog;
     };
 
     // [Spec 模块-preview/09] 预览区链接 Ctrl+click 处理
@@ -143,6 +150,11 @@ private:
     bool m_userDraggedToc = false;
     void applyTocPreferredWidth(int w);
     void clampTocWidthToScreen();
+    // [Plan 2026-05-06-面板宽度上限按所在屏幕1-4]
+    // [INV-PANEL-WIDTH-DRAG-CAP] 用户拖拽 m_mainSplitter 时，
+    // 左侧资源管理器面板和右侧目录面板的宽度上限均为窗口所在屏幕宽度的 1/4。
+    // 拖拽过程中实时夹紧；持久化恢复时同样夹紧。
+    void clampSidePanelsToScreenQuarter();
 
     QFileSystemWatcher m_fileWatcher;
     void watchFile(const QString& path);

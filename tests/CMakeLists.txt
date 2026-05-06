@@ -180,3 +180,110 @@ target_link_libraries(PreviewLayoutListSpacingTest PRIVATE
 )
 
 add_test(NAME PreviewLayoutListSpacingTest COMMAND PreviewLayoutListSpacingTest)
+
+# --- PreviewMarkingPersistenceTest ---
+# Spec: specs/模块-preview/08-内容标记.md INV-5、§4 接口、§8.3
+# 验收：T-PERSIST-1/2/3/4（标记会话级序列化往返、越界丢弃、损坏字节流不崩溃、空数据合法格式）
+add_executable(PreviewMarkingPersistenceTest
+    preview/PreviewMarkingPersistenceTest.cpp
+)
+
+target_include_directories(PreviewMarkingPersistenceTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewMarkingPersistenceTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+)
+
+add_test(NAME PreviewMarkingPersistenceTest COMMAND PreviewMarkingPersistenceTest)
+
+# --- PreviewRenderBenchmark ---
+# Plan: plans/归档/2026-05-06-大文件渲染性能基线脚本.md
+# Spec: specs/横切关注点/70-性能预算.md, specs/模块-preview/02-布局引擎.md
+# 用途：1000+ 行大文件渲染基线测量；输出 P50/P95/P99；无断言永远 PASS。
+# 默认参与 ctest 但单次约 1-3s，对开发环境影响小；后续若 CI 时长敏感可加 LABELS "perf" 用 -LE 排除。
+add_executable(PreviewRenderBenchmark
+    preview/PreviewRenderBenchmark.cpp
+)
+
+target_include_directories(PreviewRenderBenchmark PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewRenderBenchmark PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME PreviewRenderBenchmark COMMAND PreviewRenderBenchmark)
+set_tests_properties(PreviewRenderBenchmark PROPERTIES LABELS "perf")
+
+# --- PreviewTableCellOverflowTest ---
+# Spec: specs/模块-preview/02-布局引擎.md 表格 layout
+# Bug: plans/2026-05-06-表格单元格内容超出与下方重合.md
+# 验收：T-TABLE-CELL-NO-OVERFLOW
+add_executable(PreviewTableCellOverflowTest
+    preview/PreviewTableCellOverflowTest.cpp
+)
+
+target_include_directories(PreviewTableCellOverflowTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewTableCellOverflowTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME PreviewTableCellOverflowTest COMMAND PreviewTableCellOverflowTest)
+
+# --- FontConsistencyTest ---
+# Spec: specs/横切关注点/80-字体系统.md（INV-2 / INV-9 / INV-10、§4 接口段声明）
+# 验收：T-FONT-XHEIGHT、T-FONT-MONO、T-FONT-BALANCE-NULL
+add_executable(FontConsistencyTest
+    app/FontConsistencyTest.cpp
+)
+
+target_include_directories(FontConsistencyTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+)
+
+target_link_libraries(FontConsistencyTest PRIVATE
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME FontConsistencyTest COMMAND FontConsistencyTest)

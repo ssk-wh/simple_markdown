@@ -585,41 +585,72 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
 
     // 行高必须与 paintInlineRuns 一致：渲染侧使用 firstRun.font.height() * m_lineSpacingFactor
     // [Spec 模块-preview/02 INV-10 + INV-13]
-    // 之前直接用 m_lineHeight（基于 m_baseFont）会导致 heading 等放大字号的块严重低估
-    // 高度——例如 H1 的 inlineRuns[0].font 是 1.8x m_baseFont，渲染单行高度 ≈ 1.8 *
-    // m_lineHeight，而布局只记 1 * m_lineHeight，下一个 block 的 y 就压在标题文字上。
-    // 改为基于 runs[0].font（与 paintInlineRuns 中 defaultFm 同构）派生行高。
-    // 乘数从 m_lineSpacingFactor 读取，而非字面量 1.5——确保用户切换"视图 → 行间距"
-    // 后 layout 与渲染端同步变化（INV-13）。
     const QFontMetricsF& firstRunFm = cachedFontMetrics(runs[0].font);
     qreal lineHeight = firstRunFm.height() * m_lineSpacingFactor;
-    // 单行墨迹高度 = ascent + descent + 标准 leading（QFontMetricsF::height 已含）。
-    // paintInlineRuns 的实际占用：每换一行 curY += lineHeight，最后一行画完即停。
-    // 因此 N 行段落实际墨迹底部 = (N-1) * lineHeight + glyphHeight，
-    // 而非 N * lineHeight（旧公式会在段落底部多留 0.5 倍墨迹高的空白，连续列表项之间最直观）。
-    // [Spec 模块-preview/02 INV-11]
     qreal glyphHeight = firstRunFm.height();
 
-    // 按 LineBreak(\n) 分段，每段独立估算换行数再累加
-    // 修复前的 bug：将所有 run 宽度累加后整体除以 maxWidth，
-    // 但 \n 在渲染时会重置 x 坐标,导致高度被高估
+    // [Spec 模块-preview/02 INV-TABLE-CELL-NO-OVERFLOW]（2026-05-06 新增）
+    // 历史 bug（plans/归档/2026-05-06-表格单元格内容超出与下方重合.md）：
+    //   原算法 totalLines = qCeil(segmentWidth / maxWidth) 是「整段总宽度 ÷ 行宽 上取整」，
+    //   假设字符可以紧凑填满每一行。实际 paintInlineRuns 是逐字符换行——每行尾部
+    //   只要剩余空间放不下下一个字符就立即换行，**每行末尾几乎必有取整浪费**。
+    //   在窄列（如 1/3 屏幕宽的表格 cell）下，单行只能放 2-3 个汉字，多 run 切换更糟，
+    //   导致 estimate 比实际行数少 30-50%。表格中体现为 cell.bounds.height < 真实占用，
+    //   下一行 row 起点压在上一行末尾 → cell 内容视觉重叠。
+    // 修复：直接模拟 paintInlineRuns 的逐字符换行算法，与渲染端字节级对齐。
     qreal safeMaxWidth = qMax(maxWidth, 1.0);
-    int totalLines = 0;
-    qreal segmentWidth = 0;
+    qreal x = 0;
+    qreal curX = 0;
+    int totalLines = 1;
+
+    auto findFitCount = [&](const QFontMetricsF& fm, const QString& str, qreal remaining) -> int {
+        int fit = 0;
+        qreal accW = 0;
+        for (int i = 0; i < str.length(); ++i) {
+            accW += fm.horizontalAdvance(str[i]);
+            if (accW > remaining) break;
+            fit = i + 1;
+        }
+        return fit;
+    };
 
     for (const auto& run : runs) {
         if (run.text == "\n") {
-            totalLines += qMax(1, static_cast<int>(qCeil(segmentWidth / safeMaxWidth)));
-            segmentWidth = 0;
+            curX = x;
+            ++totalLines;
             continue;
         }
         const QFontMetricsF& fm = cachedFontMetrics(run.font);
-        segmentWidth += fm.horizontalAdvance(run.text);
+        QString text = run.text;
+        while (!text.isEmpty()) {
+            qreal fullWidth = fm.horizontalAdvance(text);
+            qreal remaining = x + safeMaxWidth - curX;
+            // 与 PreviewPainter::paintInlineRuns 的换行分支保持完全一致
+            if (fullWidth <= remaining || curX <= x) {
+                if (fullWidth > remaining && curX <= x) {
+                    int fitCount = findFitCount(fm, text, remaining);
+                    if (fitCount <= 0) fitCount = 1;
+                    text = text.mid(fitCount);
+                    curX = x;
+                    ++totalLines;
+                    continue;
+                }
+                curX += fullWidth;
+                break;
+            }
+            int wrapAt = findFitCount(fm, text, remaining);
+            if (wrapAt <= 0) {
+                curX = x;
+                ++totalLines;
+                continue;
+            }
+            text = text.mid(wrapAt);
+            curX = x;
+            ++totalLines;
+        }
     }
-    // 最后一段（\n 之后的内容，或无 \n 时的全部内容）
-    totalLines += qMax(1, static_cast<int>(qCeil(segmentWidth / safeMaxWidth)));
 
-    // 与渲染端实际占用保持一致：N-1 个完整行高 + 末行墨迹高度
+    // [Spec 模块-preview/02 INV-11] N-1 个完整行高 + 末行墨迹高度
     return (totalLines - 1) * lineHeight + glyphHeight;
 }
 

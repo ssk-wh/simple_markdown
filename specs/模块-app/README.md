@@ -66,3 +66,6 @@ MainWindow
 - 文件打开后**必须**调用 `raise()` + `activateWindow()`，否则窗口可能在后台
 - 会话持久化必须在主线程 idle 时写入，避免卡顿
 - 崩溃处理器必须生成足够信息的 minidump，便于事后分析
+- **[INV-RELOAD-DIALOG-DEDUP]** 任意 Tab 在任意时刻最多只能存在一个「文件被外部修改，是否重新加载？」对话框；该对话框打开期间发生的额外 `fileChanged` 信号只更新内部 `pendingReload` 标志，不再叠加新对话框。用户对当前对话框给出响应后，新一轮外部修改才能再触发新对话框。删除提示（File Deleted）走另一个路径，但同样遵循"每 Tab 至多一个外部状态对话框"的精神。
+- **[INV-WIN-VERSIONINFO]** Windows 构建产物 `SimpleMarkdown.exe` 必须包含 `VS_VERSION_INFO` 资源块，至少填充 `FileDescription` / `ProductName` / `CompanyName` / `FileVersion` / `ProductVersion` / `OriginalFilename` 字段；版本号由 CMake 从 `CHANGELOG.md` 头条自动提取并通过 `configure_file` 注入 `app.rc.in`，禁止在 .rc 中硬编码版本字面量。同时提供英文（040904B0）和中文（080404B0）两套 `StringFileInfo` 块。缺失任一必填字段时，Windows 任务管理器和 Explorer 属性页会退化为显示裸文件名，破坏专业品质。
+- **[INV-PANEL-WIDTH-DRAG-CAP]** 用户拖拽 `m_mainSplitter` 时，左侧资源管理器（index 0）和右侧目录面板（最后一项）的宽度上限均为**窗口所在屏幕** `availableGeometry().width() / 4`；超过则在 `splitterMoved` 信号回调中实时夹紧。"所在屏幕"用窗口几何中心点 `screenAt(mapToGlobal(rect().center()))` 决定，跨屏移动后按新屏幕重新计算。持久化的旧宽度若超过当前屏幕 1/4，在 `showEvent` 恢复路径中同样被夹紧。本约束**优先于** `INV-TOC-WIDTH-USER-OVERRIDE` 和 `INV-LP-WIDTH-USER`：用户拖拽不再无上限，但默认建议宽度（1/8 / 1/5 自适应）保持不变；用户主动选择的更宽空间最大可达 1/4。

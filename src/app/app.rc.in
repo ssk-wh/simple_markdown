@@ -1,0 +1,53 @@
+// 模板：版本字段由 CMake configure_file 在配置阶段注入
+// Spec: specs/模块-app/README.md  全局约束 [INV-WIN-VERSIONINFO]
+//   FileDescription / ProductName / CompanyName / FileVersion / ProductVersion 不得为空
+//   否则 Windows 任务管理器"描述"列退化为显示裸文件名 SimpleMarkdown.exe
+
+// 强制 rc.exe 按 UTF-8 解析后续内容；项目源码统一 UTF-8（无 BOM），
+// 中文 StringFileInfo 块若不设置 codepage 会被 rc 按系统 ANSI（GBK）解析报错
+#pragma code_page(65001)
+
+#include <windows.h>
+
+IDI_ICON1 ICON "@APP_ICON_PATH@"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    @APP_VERSION_MAJOR@,@APP_VERSION_MINOR@,@APP_VERSION_PATCH@,0
+ PRODUCTVERSION @APP_VERSION_MAJOR@,@APP_VERSION_MINOR@,@APP_VERSION_PATCH@,0
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+ FILEFLAGS      0x0L
+ FILEOS         VOS__WINDOWS32
+ FILETYPE       VFT_APP
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"  // English (United States), Unicode
+        BEGIN
+            VALUE "CompanyName",      "SimpleMarkdown"
+            VALUE "FileDescription",  "SimpleMarkdown"
+            VALUE "FileVersion",      "@APP_VERSION_FULL@"
+            VALUE "InternalName",     "SimpleMarkdown"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 SimpleMarkdown"
+            VALUE "OriginalFilename", "SimpleMarkdown.exe"
+            VALUE "ProductName",      "SimpleMarkdown"
+            VALUE "ProductVersion",   "@APP_VERSION_FULL@"
+        END
+        BLOCK "080404B0"  // Chinese (Simplified, PRC), Unicode
+        BEGIN
+            VALUE "CompanyName",      "SimpleMarkdown"
+            VALUE "FileDescription",  "SimpleMarkdown 简洁的 Markdown 编辑器"
+            VALUE "FileVersion",      "@APP_VERSION_FULL@"
+            VALUE "InternalName",     "SimpleMarkdown"
+            VALUE "LegalCopyright",   "版权所有 (C) 2026 SimpleMarkdown"
+            VALUE "OriginalFilename", "SimpleMarkdown.exe"
+            VALUE "ProductName",      "SimpleMarkdown"
+            VALUE "ProductVersion",   "@APP_VERSION_FULL@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        // 040904B0 = English/US Unicode, 080404B0 = Chinese-PRC Unicode
+        VALUE "Translation", 0x0409, 0x04B0, 0x0804, 0x04B0
+    END
+END

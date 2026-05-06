@@ -45,7 +45,7 @@
 - `arctic-frost.toml` — iOS 26 Liquid Glass 风格亮色
 
 内置主题的源码在 GitHub 仓库：
-<https://github.com/pcfan/simple_markdown/tree/main/resources/themes>
+<https://github.com/ssk-wh/simple_markdown/tree/main/resources/themes>
 
 ## 加载失败？
 
@@ -60,4 +60,4 @@
 
 ---
 
-**遇到问题？** 欢迎在 <https://github.com/pcfan/simple_markdown/issues> 提 issue，附上 `.toml` 文件和报错信息。
+**遇到问题？** 欢迎在 <https://github.com/ssk-wh/simple_markdown/issues> 提 issue，附上 `.toml` 文件和报错信息。

@@ -18,6 +18,8 @@
 #include <QSet>
 #include <QMimeData>
 #include <QPropertyAnimation>
+#include <QDataStream>
+#include <QIODevice>
 
 PreviewWidget::PreviewWidget(QWidget* parent)
     : QAbstractScrollArea(parent)
@@ -94,6 +96,9 @@ void PreviewWidget::updateAst(std::shared_ptr<AstNode> root)
     m_highlights.clear();  // 切换文档时清空标记
 
     buildHeadingCharOffsets();  // 收集标题字符位置
+    // [Spec 模块-preview/08 INV-5] 会话恢复传入的标记在此一次性兑现，
+    // 跨过上一行 m_highlights.clear()。
+    applyPendingMarkings();
     updateScrollBars();
     updateTocEntries();
     viewport()->update();
@@ -724,6 +729,91 @@ void PreviewWidget::clearHighlights()
     m_highlights.clear();
     m_tocHighlighted.clear();
     emit tocHighlightChanged(m_tocHighlighted);
+    viewport()->update();
+}
+
+// [Spec 模块-preview/08 INV-5、§4 接口] 标记会话级序列化
+// 格式：
+//   magic    : quint32 = 0x534D4D4B ("SMMK")
+//   version  : quint8  = 1
+//   count    : quint32
+//   entries  : (qint32 startOffset, qint32 endOffset) × count
+QByteArray PreviewWidget::serializeMarkings() const
+{
+    QByteArray buf;
+    QDataStream out(&buf, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_12);
+    out << quint32(0x534D4D4B);
+    out << quint8(1);
+    out << quint32(m_highlights.size());
+    for (const auto& hl : m_highlights) {
+        out << qint32(hl.first) << qint32(hl.second);
+    }
+    return buf;
+}
+
+// [Spec 模块-preview/08 INV-5、§4 接口] 标记会话级反序列化
+// 采用"延迟应用"：先放进 m_pendingMarkings，由最近一次 updateAst 末尾的
+// applyPendingMarkings() 兑现。如果 AST 已就绪则在此立即应用一次。
+void PreviewWidget::deserializeMarkings(const QByteArray& data)
+{
+    if (data.isEmpty()) {
+        m_pendingMarkings.clear();
+        return;
+    }
+    m_pendingMarkings = data;
+    applyPendingMarkings();
+}
+
+// [Spec 模块-preview/08 INV-5、§8.3] 把 m_pendingMarkings 应用到 m_highlights。
+// 一次性消耗：成功后清空 m_pendingMarkings，避免后续编辑反复"恢复"成旧值。
+//
+// [关键修正 2026-05-06] AST 守卫**必须在消耗 m_pendingMarkings 之前**：
+// MainWindow::restoreSession 调 deserializeMarkings 时 ParseScheduler 是异步的，
+// m_currentAst 可能还为 nullptr。如果此时就消耗 m_pendingMarkings 写入 m_highlights，
+// 紧接着 astReady → updateAst 会先 clear() m_highlights，再调用本函数——但
+// m_pendingMarkings 已空 → no-op → 标记丢失。
+//
+// 修正后：AST 没就绪时直接早返回不消耗 m_pendingMarkings；保留到 updateAst 末尾
+// （那时 m_currentAst 已就绪）才解码、写入、消耗。lazy tab 路径同理。
+//
+// 字符偏移漂移容忍：start<0 / end<=start / 起点已超出文档长度的条目静默丢弃，
+// 终点超出文档长度时夹紧到末尾。格式不匹配的字节流整体丢弃。
+void PreviewWidget::applyPendingMarkings()
+{
+    if (m_pendingMarkings.isEmpty()) return;
+    // AST 没就绪 → 保留 m_pendingMarkings，等 updateAst 末尾再调用
+    if (!m_currentAst) return;
+
+    QDataStream in(m_pendingMarkings);
+    in.setVersion(QDataStream::Qt_5_12);
+    quint32 magic = 0;
+    quint8 version = 0;
+    quint32 count = 0;
+    in >> magic >> version >> count;
+
+    // 格式不匹配：直接丢弃，不影响当前会话
+    if (in.status() != QDataStream::Ok || magic != 0x534D4D4B || version != 1) {
+        m_pendingMarkings.clear();
+        return;
+    }
+
+    QVector<QPair<int,int>> restored;
+    restored.reserve(static_cast<int>(count));
+    const int textLen = m_plainText.length();
+    for (quint32 i = 0; i < count; ++i) {
+        qint32 s = -1, e = -1;
+        in >> s >> e;
+        if (in.status() != QDataStream::Ok) break;
+        if (s < 0 || e <= s) continue;
+        if (textLen > 0 && s >= textLen) continue;
+        if (textLen > 0 && e > textLen) e = textLen;
+        restored.append({s, e});
+    }
+
+    m_highlights = restored;
+    m_pendingMarkings.clear();
+    updateTocHighlights();
     viewport()->update();
 }
 
