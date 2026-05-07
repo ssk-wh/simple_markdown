@@ -76,6 +76,12 @@ public:
     // 标记高亮
     void setHighlights(const QVector<QPair<int,int>>& highlights);
 
+    // [Spec 模块-preview/11 INV-3] 搜索高亮
+    // matches: (offset, length) 二元组列表（与 SearchWorker 输出语义一致）
+    void setSearchHighlights(const QVector<QPair<int,int>>& matches);
+    // 当前命中项索引；-1 表示无当前命中（仅显示全部命中色）
+    void setCurrentSearchHit(int index);
+
     // TOC 跳转目标行高亮
     void setTargetLineHighlight(int sourceLine, qreal opacity);
 
@@ -108,6 +114,10 @@ private:
     int m_selStart = -1;
     int m_selEnd = -1;
     QVector<QPair<int,int>> m_highlights;  // 标记高亮范围 (start, end)
+    // [Spec 模块-preview/11 INV-3] 搜索高亮 (offset, length)，与 m_highlights
+    // 数据集独立——绘制时叠加在 m_highlights 之上、选区之下
+    QVector<QPair<int,int>> m_searchHits;
+    int m_currentSearchHitIndex = -1;
     int m_targetSourceLine = -1;  // TOC 跳转目标行
     qreal m_targetHighlightOpacity = 0.0;  // 目标行高亮透明度
 

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-05-07
+
+### Added
+- 预览区支持 Ctrl+F 查找：输入关键词后高亮所有命中，按 F3 / Shift+F3 跳转上下匹配项，Esc 关闭并清除高亮；编辑器和预览区同时打开时 Ctrl+F 按当前焦点决定唤起哪一侧（之前查找仅编辑器可用，阅读长文档需切回编辑器才能定位）
+
 ## [1.0.11] - 2026-05-07
 
 ### Fixed

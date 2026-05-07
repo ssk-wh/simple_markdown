@@ -38,6 +38,16 @@ void PreviewPainter::setHighlights(const QVector<QPair<int,int>>& highlights)
     m_highlights = highlights;
 }
 
+void PreviewPainter::setSearchHighlights(const QVector<QPair<int,int>>& matches)
+{
+    m_searchHits = matches;
+}
+
+void PreviewPainter::setCurrentSearchHit(int index)
+{
+    m_currentSearchHitIndex = index;
+}
+
 void PreviewPainter::setTargetLineHighlight(int sourceLine, qreal opacity)
 {
     m_targetSourceLine = sourceLine;
@@ -192,6 +202,22 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                     }
                 }
 
+                // [Spec 模块-preview/11 INV-3] 搜索高亮（叠加在标记之上）
+                for (int i = 0; i < m_searchHits.size(); ++i) {
+                    int hitStart = m_searchHits[i].first;
+                    int hitEnd = hitStart + m_searchHits[i].second;
+                    int hlS = qMax(segStart, hitStart);
+                    int hlE = qMin(segEnd, hitEnd);
+                    if (hlS < hlE) {
+                        qreal x1 = fm.horizontalAdvance(line.left(hlS - segStart));
+                        qreal x2 = fm.horizontalAdvance(line.left(hlE - segStart));
+                        const QColor& bg = (i == m_currentSearchHitIndex)
+                                           ? m_theme.editorSearchMatchCurrent
+                                           : m_theme.editorSearchMatch;
+                        p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight), bg);
+                    }
+                }
+
                 // 选区高亮
                 if (m_selStart >= 0 && m_selEnd > m_selStart) {
                     int hlStart = qMax(segStart, m_selStart);
@@ -257,6 +283,22 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                             qreal x2 = fm.horizontalAdvance(visualSeg.left(hlE - visualSegStart));
                             p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight),
                                         m_theme.previewHighlight);
+                        }
+                    }
+
+                    // [Spec 模块-preview/11 INV-3] 搜索高亮（叠加在标记之上）
+                    for (int i = 0; i < m_searchHits.size(); ++i) {
+                        int hitStart = m_searchHits[i].first;
+                        int hitEnd = hitStart + m_searchHits[i].second;
+                        int hlS = qMax(visualSegStart, hitStart);
+                        int hlE = qMin(visualSegEnd, hitEnd);
+                        if (hlS < hlE) {
+                            qreal x1 = fm.horizontalAdvance(visualSeg.left(hlS - visualSegStart));
+                            qreal x2 = fm.horizontalAdvance(visualSeg.left(hlE - visualSegStart));
+                            const QColor& bg = (i == m_currentSearchHitIndex)
+                                               ? m_theme.editorSearchMatchCurrent
+                                               : m_theme.editorSearchMatch;
+                            p->fillRect(QRectF(textX + x1, textY, x2 - x1, textHeight), bg);
                         }
                     }
 
@@ -580,6 +622,23 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
                     qreal x1 = segFm.horizontalAdvance(segText.left(hlS - charStart));
                     qreal x2 = segFm.horizontalAdvance(segText.left(hlE - charStart));
                     p->fillRect(QRectF(sx + x1, sy, x2 - x1, sh), m_theme.previewHighlight);
+                }
+            }
+
+            // [Spec 模块-preview/11 INV-3] 搜索高亮（叠加在标记之上）
+            for (int i = 0; i < m_searchHits.size(); ++i) {
+                int hitStart = m_searchHits[i].first;
+                int hitEnd = hitStart + m_searchHits[i].second;
+                int hlS = qMax(charStart, hitStart);
+                int hlE = qMin(segEnd, hitEnd);
+                if (hlS < hlE) {
+                    QFontMetricsF segFm(curFont);
+                    qreal x1 = segFm.horizontalAdvance(segText.left(hlS - charStart));
+                    qreal x2 = segFm.horizontalAdvance(segText.left(hlE - charStart));
+                    const QColor& bg = (i == m_currentSearchHitIndex)
+                                       ? m_theme.editorSearchMatchCurrent
+                                       : m_theme.editorSearchMatch;
+                    p->fillRect(QRectF(sx + x1, sy, x2 - x1, sh), bg);
                 }
             }
         }

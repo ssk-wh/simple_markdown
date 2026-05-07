@@ -6,6 +6,8 @@
 #include "MarkdownAst.h"
 #include "MarkdownParser.h"
 #include "PerfProbe.h"
+#include "SearchBar.h"
+#include "SearchWorker.h"
 
 #include <QPainter>
 #include <QScrollBar>
@@ -20,6 +22,8 @@
 #include <QPropertyAnimation>
 #include <QDataStream>
 #include <QIODevice>
+#include <QThread>
+#include <functional>
 
 PreviewWidget::PreviewWidget(QWidget* parent)
     : QAbstractScrollArea(parent)
@@ -56,6 +60,52 @@ PreviewWidget::PreviewWidget(QWidget* parent)
     viewport()->setMouseTracking(true);
     setFocusPolicy(Qt::ClickFocus);
 
+    // [Spec 模块-preview/11-预览区查找] 搜索栏（widget-agnostic SearchBar 复用编辑器版本）
+    m_searchBar = new SearchBar(this);
+    m_searchBar->hide();
+    connect(m_searchBar, &SearchBar::findNext, this, &PreviewWidget::findNextHit);
+    connect(m_searchBar, &SearchBar::findPrev, this, &PreviewWidget::findPrevHit);
+    connect(m_searchBar, &SearchBar::searchTextChanged,
+            this, &PreviewWidget::onSearchTextChanged);
+    connect(m_searchBar, &SearchBar::closed, this, [this]() {
+        // INV-5：关闭即清搜索高亮
+        m_searchHits.clear();
+        m_currentSearchText.clear();
+        m_currentSearchIndex = -1;
+        viewport()->update();
+    });
+
+    // 搜索线程（与 EditorWidget 一致的异步模型）
+    m_searchWorker = new SearchWorker();
+    m_searchWorker->moveToThread(&m_searchThread);
+    connect(&m_searchThread, &QThread::finished, m_searchWorker, &QObject::deleteLater);
+    qRegisterMetaType<QVector<QPair<int,int>>>("QVector<QPair<int,int>>");
+    connect(m_searchWorker, &SearchWorker::searchFinished,
+            this, &PreviewWidget::onSearchResultsReady);
+    m_searchThread.start();
+
+    // 防抖：参考编辑器侧 100ms
+    m_searchDebounce.setSingleShot(true);
+    m_searchDebounce.setInterval(100);
+    connect(&m_searchDebounce, &QTimer::timeout, this, [this]() {
+        if (m_currentSearchText.isEmpty()) {
+            m_searchHits.clear();
+            m_currentSearchIndex = -1;
+            if (m_searchBar) m_searchBar->updateMatchInfo(0, 0);
+            viewport()->update();
+            if (m_searchBar) m_searchBar->keepFocus();
+            return;
+        }
+        const int reqId = ++m_searchRequestId;
+        QMetaObject::invokeMethod(m_searchWorker, "searchWithOptions",
+                                  Qt::QueuedConnection,
+                                  Q_ARG(QString, m_currentSearchText),
+                                  Q_ARG(QString, m_plainText),
+                                  Q_ARG(int, reqId),
+                                  Q_ARG(bool, m_searchBar->isCaseSensitive()),
+                                  Q_ARG(bool, m_searchBar->isWholeWord()),
+                                  Q_ARG(bool, m_searchBar->isRegex()));
+    });
 }
 
 PreviewWidget::~PreviewWidget()
@@ -64,6 +114,10 @@ PreviewWidget::~PreviewWidget()
         m_scrollAnimation->disconnect();
         m_scrollAnimation->stop();
     }
+    // [Spec 模块-preview/11] 关闭搜索线程，让 worker 在线程结束时被
+    // QThread::finished → deleteLater 回收
+    m_searchThread.quit();
+    m_searchThread.wait();
     delete m_layout;
     delete m_painter;
     // m_imageCache 由 QObject 父对象管理
@@ -172,6 +226,9 @@ void PreviewWidget::paintEvent(QPaintEvent* /*event*/)
 
     m_painter->setSelection(m_selStart, m_selEnd);
     m_painter->setHighlights(m_highlights);
+    // [Spec 模块-preview/11 INV-3] 把搜索高亮推给 painter（独立字段，叠加在 m_highlights 之上）
+    m_painter->setSearchHighlights(m_searchHits);
+    m_painter->setCurrentSearchHit(m_currentSearchIndex);
     m_painter->setTargetLineHighlight(m_targetSourceLine, m_highlightOpacity);
     qreal contentWidth = m_wordWrap ? (vpWidth - 40) : 10000;
     m_painter->paint(&painter, m_layout->rootBlock(), scrollY, vpHeight, contentWidth);
@@ -197,10 +254,18 @@ void PreviewWidget::resizeEvent(QResizeEvent* event)
     QWidget* p = parentWidget();
     if (p && p->property("smSnapDragging").toBool()) {
         updateScrollBars();
+        // [Spec 模块-preview/11 INV-8] SearchBar 跟随右上角，拖拽态下也保持
+        if (m_searchBar && m_searchBar->isVisible()) {
+            m_searchBar->move(width() - m_searchBar->width() - 20, 10);
+        }
         return;
     }
 
     rebuildLayout();
+    // [Spec 模块-preview/11 INV-8] SearchBar 跟随右上角（与 EditorWidget 一致）
+    if (m_searchBar && m_searchBar->isVisible()) {
+        m_searchBar->move(width() - m_searchBar->width() - 20, 10);
+    }
 }
 
 void PreviewWidget::scrollContentsBy(int /*dx*/, int /*dy*/)
@@ -498,6 +563,21 @@ void PreviewWidget::keyPressEvent(QKeyEvent* event)
         m_selEnd = m_plainText.length();
         viewport()->update();
         return;
+    }
+    // [Spec 模块-preview/11] Esc 关闭搜索栏；F3 / Shift+F3 跳转命中
+    if (m_searchBar && m_searchBar->isVisible()) {
+        if (event->key() == Qt::Key_Escape) {
+            m_searchBar->hideBar();
+            return;
+        }
+        if (event->key() == Qt::Key_F3) {
+            if (event->modifiers() & Qt::ShiftModifier) {
+                findPrevHit(m_currentSearchText);
+            } else {
+                findNextHit(m_currentSearchText);
+            }
+            return;
+        }
     }
     QAbstractScrollArea::keyPressEvent(event);
 }
@@ -969,4 +1049,150 @@ void PreviewWidget::buildHeadingCharOffsets()
     for (const auto& child : m_layout->rootBlock().children) {
         collectHeadings(child, charIdx);
     }
+}
+
+// ============================================================================
+// [Spec 模块-preview/11-预览区查找] 搜索功能实现
+// ============================================================================
+
+void PreviewWidget::showSearchBar()
+{
+    if (!m_searchBar) return;
+    m_searchBar->showSearch();  // SearchBar 内部默认隐藏 replace 行（INV-2）
+    m_searchBar->move(width() - m_searchBar->width() - 20, 10);
+    m_searchBar->raise();
+    m_searchBar->keepFocus();
+    // 若已有搜索词，立即刷新搜索结果（用户重新打开搜索栏时保留之前的查询）
+    if (!m_currentSearchText.isEmpty()) {
+        m_searchDebounce.start();
+    }
+}
+
+bool PreviewWidget::isSearchBarVisible() const
+{
+    return m_searchBar && m_searchBar->isVisible();
+}
+
+void PreviewWidget::onSearchTextChanged(const QString& text)
+{
+    m_currentSearchText = text;
+    m_currentSearchIndex = -1;
+    m_searchDebounce.start();
+}
+
+void PreviewWidget::onSearchResultsReady(QVector<QPair<int,int>> matches, int requestId)
+{
+    if (requestId != m_searchRequestId)
+        return;  // 过期结果丢弃（用户可能改了搜索词）
+    m_searchHits = std::move(matches);
+    m_currentSearchIndex = -1;
+    if (m_searchBar) {
+        m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
+    }
+    viewport()->update();
+}
+
+void PreviewWidget::findNextHit(const QString& text)
+{
+    if (text.isEmpty() || m_searchHits.isEmpty()) return;
+    // 若搜索词改变，先同步重搜（用户按 Enter 时保证最新结果）
+    if (text != m_currentSearchText) {
+        m_currentSearchText = text;
+        m_searchDebounce.stop();
+        // 直接同步搜索一次让 findNext 即时生效
+        m_searchHits.clear();
+        const Qt::CaseSensitivity cs = m_searchBar->isCaseSensitive()
+                                        ? Qt::CaseSensitive : Qt::CaseInsensitive;
+        int pos = 0;
+        while ((pos = m_plainText.indexOf(text, pos, cs)) != -1) {
+            m_searchHits.append({pos, text.length()});
+            pos += text.length();
+        }
+    }
+    if (m_searchHits.isEmpty()) {
+        m_currentSearchIndex = -1;
+        if (m_searchBar) m_searchBar->updateMatchInfo(-1, 0);
+        viewport()->update();
+        return;
+    }
+    // INV-4 跳转：循环递增索引
+    m_currentSearchIndex = (m_currentSearchIndex + 1) % m_searchHits.size();
+    scrollToCharOffset(m_searchHits[m_currentSearchIndex].first);
+    if (m_searchBar) {
+        m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
+    }
+    viewport()->update();
+}
+
+void PreviewWidget::findPrevHit(const QString& text)
+{
+    if (text.isEmpty() || m_searchHits.isEmpty()) return;
+    if (text != m_currentSearchText) {
+        m_currentSearchText = text;
+        m_searchDebounce.stop();
+        m_searchHits.clear();
+        const Qt::CaseSensitivity cs = m_searchBar->isCaseSensitive()
+                                        ? Qt::CaseSensitive : Qt::CaseInsensitive;
+        int pos = 0;
+        while ((pos = m_plainText.indexOf(text, pos, cs)) != -1) {
+            m_searchHits.append({pos, text.length()});
+            pos += text.length();
+        }
+    }
+    if (m_searchHits.isEmpty()) {
+        m_currentSearchIndex = -1;
+        if (m_searchBar) m_searchBar->updateMatchInfo(-1, 0);
+        viewport()->update();
+        return;
+    }
+    // INV-4 跳转：循环递减索引（首项 -1 时绕回末项）
+    m_currentSearchIndex = (m_currentSearchIndex - 1 + m_searchHits.size())
+                           % m_searchHits.size();
+    scrollToCharOffset(m_searchHits[m_currentSearchIndex].first);
+    if (m_searchBar) {
+        m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
+    }
+    viewport()->update();
+}
+
+void PreviewWidget::scrollToCharOffset(int offset)
+{
+    // [Spec 模块-preview/11 INV-4] 块级精度跳转：找包含 offset 的最深 LayoutBlock，
+    // 滚动到 block.bounds.y 让命中项尽量在视口中部
+    if (!m_layout) return;
+    qreal targetY = -1;
+    int charCounter = 0;
+
+    // 与 PreviewPainter::recordSegment 计数策略对齐：每个段计数 += text.length()。
+    // 此处复用 extractBlockText 的纯文本累加 + 比对 offset 落在哪个块的字符范围
+    // 内（块级精度即可，不到字符）。
+    std::function<void(const LayoutBlock&)> walk = [&](const LayoutBlock& blk) {
+        if (targetY >= 0) return;  // 已找到，提前返回
+        const int blkStart = charCounter;
+        QString blkText;
+        extractBlockText(blk, blkText);
+        const int blkEnd = blkStart + blkText.length();
+        if (offset >= blkStart && offset < blkEnd) {
+            targetY = blk.bounds.y();
+            return;
+        }
+        charCounter = blkEnd;
+        for (const auto& child : blk.children) {
+            walk(child);
+            if (targetY >= 0) return;
+        }
+    };
+
+    for (const auto& child : m_layout->rootBlock().children) {
+        walk(child);
+        if (targetY >= 0) break;
+    }
+
+    if (targetY < 0) return;
+
+    // 滚动到目标 Y 减屏幕中央偏移（让命中项位于视口中部）
+    const qreal vpH = viewport()->height();
+    int target = static_cast<int>(targetY - vpH / 3);
+    if (target < 0) target = 0;
+    verticalScrollBar()->setValue(target);
 }

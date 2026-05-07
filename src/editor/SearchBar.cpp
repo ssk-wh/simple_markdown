@@ -1,5 +1,4 @@
 #include "SearchBar.h"
-#include "EditorWidget.h"
 
 #include <QLineEdit>
 #include <QLabel>
@@ -14,7 +13,7 @@ static constexpr int kBtnW = 28;
 static constexpr int kBtnGap = 2;
 static constexpr int kReplBtnW = 42;
 
-SearchBar::SearchBar(EditorWidget* parent)
+SearchBar::SearchBar(QWidget* parent)
     : QWidget(parent)
     , m_theme(Theme::light())
 {

@@ -6,12 +6,14 @@ class QLineEdit;
 class QLabel;
 class QHBoxLayout;
 class QVBoxLayout;
-class EditorWidget;
 
+// SearchBar 是 widget-agnostic 通用查找栏：所有交互通过 signal 暴露（findNext/Prev/
+// searchTextChanged/closed/replaceNext/replaceAll），由调用方 widget 接信号自己实现。
+// 编辑器和预览区共用。Spec: specs/模块-preview/11-预览区查找.md（解耦理由）
 class SearchBar : public QWidget {
     Q_OBJECT
 public:
-    explicit SearchBar(EditorWidget* parent);
+    explicit SearchBar(QWidget* parent);
 
     void showSearch();      // Ctrl+F
     void showReplace();     // Ctrl+H

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QAbstractScrollArea>
+#include <QThread>
+#include <QTimer>
 #include <memory>
 #include <QPair>
 #include <QVector>
@@ -13,6 +15,8 @@ class PreviewPainter;
 class ImageCache;
 struct TocEntry;
 class QPropertyAnimation;
+class SearchBar;
+class SearchWorker;
 
 class PreviewWidget : public QAbstractScrollArea {
     Q_OBJECT
@@ -48,6 +52,11 @@ public:
     // 对应 Spec §8.3「字符偏移漂移」的尽力而为策略。
     QByteArray serializeMarkings() const;
     void deserializeMarkings(const QByteArray& data);
+
+    // [Spec 模块-preview/11-预览区查找] 弹出查找栏并聚焦输入框（仅查找，不显示替换行）
+    void showSearchBar();
+    // 查询当前是否有搜索栏可见（供 MainWindow 决定 Ctrl+F 路由）
+    bool isSearchBarVisible() const;
 
 public slots:
     void updateAst(std::shared_ptr<AstNode> root);
@@ -119,4 +128,20 @@ private:
     QPropertyAnimation* m_scrollAnimation = nullptr;
     int m_targetSourceLine = -1;
     qreal m_highlightOpacity = 0.0;
+
+    // [Spec 模块-preview/11-预览区查找]
+    SearchBar* m_searchBar = nullptr;
+    QThread m_searchThread;
+    SearchWorker* m_searchWorker = nullptr;
+    QTimer m_searchDebounce;
+    int m_searchRequestId = 0;
+    QVector<QPair<int,int>> m_searchHits;  // (offset, length)
+    int m_currentSearchIndex = -1;
+    QString m_currentSearchText;
+
+    void onSearchTextChanged(const QString& text);
+    void onSearchResultsReady(QVector<QPair<int,int>> matches, int requestId);
+    void findNextHit(const QString& text);
+    void findPrevHit(const QString& text);
+    void scrollToCharOffset(int offset);
 };
