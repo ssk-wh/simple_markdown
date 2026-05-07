@@ -3,8 +3,9 @@
 // Spec: specs/模块-app/13-分隔条吸附刻度.md
 // Invariants enforced here:
 //   INV-SNAP-THRESHOLD, INV-SNAP-TARGETS, INV-SNAP-VISIBLE-ON-DRAG,
-//   INV-SNAP-TRANSPARENT, INV-SNAP-THEME, INV-SNAP-NO-RECURSION
-// Last synced: 2026-04-15
+//   INV-SNAP-TRANSPARENT, INV-SNAP-THEME, INV-SNAP-NO-RECURSION,
+//   INV-SNAP-LAZY-PANE-REBUILD
+// Last synced: 2026-05-07
 #pragma once
 
 #include <QSplitter>
@@ -26,6 +27,18 @@ public:
 
     // 由 MainWindow::applyTheme 调用以保持辅助线颜色同步。
     void setAccentColor(const QColor& color);
+
+    // [INV-SNAP-LAZY-PANE-REBUILD] 给子 pane 的 resizeEvent 用，判定是否
+    // 当前正处于 handle 拖拽中。子 pane 不直接 include 本头文件，
+    // 通过 parentWidget()->property("smSnapDragging").toBool() 查询。
+    bool isDragging() const { return m_dragging; }
+
+signals:
+    // [INV-SNAP-LAZY-PANE-REBUILD] 拖拽结束（mouseRelease）后 emit 一次。
+    // MainWindow::createTab 接到本信号后调用各 pane 完成最终重排，
+    // 与 resizeEvent 跳过路径配对。与 splitterMoved 不同，本信号只在
+    // 拖拽真正结束时触发一次，不会在拖拽过程中连续 emit。
+    void dragFinished();
 
 protected:
     QSplitterHandle* createHandle() override;

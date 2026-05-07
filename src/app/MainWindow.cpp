@@ -1163,6 +1163,21 @@ MainWindow::TabData MainWindow::createTab()
     tab.preview->setMinimumWidth(0);
     tab.splitter->setChildrenCollapsible(true);
 
+    // [Spec 模块-app/13 INV-SNAP-LAZY-PANE-REBUILD]
+    // 拖拽期间 PreviewWidget::resizeEvent / EditorWidget::resizeEvent 检测到
+    // splitter 上 dynamic property "smSnapDragging" = true 后跳过全文重排。
+    // 这里在拖拽结束时触发各 pane 一次性最终重排，对齐松手位置的实际宽度。
+    // 用 dragFinished 信号而非 splitterMoved——后者拖拽过程中连续多次 emit，
+    // 用于驱动吸附检测；前者仅在 mouseRelease 时一次，是 lazy rebuild 的兑现点。
+    connect(snap, &app::SnapSplitter::dragFinished, this,
+            [editor = tab.editor, preview = tab.preview]() {
+        if (editor) editor->recomputeWrapForCurrentWidth();
+        if (preview) {
+            preview->rebuildLayout();
+            preview->viewport()->update();
+        }
+    });
+
     // splitter 拖拽联动 displayMode 菜单状态
     // splitter 拖拽联动 displayMode（debounce 200ms，松手后才判断）
     connect(tab.splitter, &QSplitter::splitterMoved, this, [this, splitter = tab.splitter]() {

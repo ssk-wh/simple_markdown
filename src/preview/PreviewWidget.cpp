@@ -188,6 +188,18 @@ void PreviewWidget::resizeEvent(QResizeEvent* event)
         m_layout->updateMetrics(viewport());
     }
 
+    // [Spec 模块-app/13 INV-SNAP-LAZY-PANE-REBUILD]
+    // 父 SnapSplitter 拖拽期间跳过全文 buildFromAst：每个 mouseMove 帧都跑
+    // 全文重排会让单帧成本破 16ms 预算（PreviewRenderBenchmark 测得算法本身
+    // P50 = 11.4ms，叠加 paintEvent 后超出 60fps 预算）。最终态由 SnapSplitter
+    // 的 dragFinished 信号在 MainWindow::createTab 中触发 rebuildLayout 完成。
+    // 解耦设计：不 include SnapSplitter.h，通过 dynamic property 传递拖拽态。
+    QWidget* p = parentWidget();
+    if (p && p->property("smSnapDragging").toBool()) {
+        updateScrollBars();
+        return;
+    }
+
     rebuildLayout();
 }
 

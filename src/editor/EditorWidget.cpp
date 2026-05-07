@@ -300,6 +300,20 @@ void EditorWidget::resizeEvent(QResizeEvent* event)
 {
     QAbstractScrollArea::resizeEvent(event);
 
+    // [Spec 模块-app/13 INV-SNAP-LAZY-PANE-REBUILD]
+    // 父 SnapSplitter 拖拽期间跳过 EditorLayout::rebuild：m_layout->setWrapWidth
+    // 内部走 m_lines.clear() 抛弃全部 QTextLayout 缓存，每帧都做开销不小。
+    // 最终态由 SnapSplitter 的 dragFinished 信号在 MainWindow::createTab 中
+    // 触发 recomputeWrapForCurrentWidth 完成。
+    QWidget* p = parentWidget();
+    if (p && p->property("smSnapDragging").toBool()) {
+        updateScrollBars();
+        if (m_searchBar->isVisible()) {
+            m_searchBar->move(width() - m_searchBar->width() - 20, 10);
+        }
+        return;
+    }
+
     // 自动换行：wrapWidth = 可用文本区域宽度
     if (m_wordWrap) {
         qreal textAreaWidth = viewport()->width() - m_gutterWidth - 16;
@@ -312,6 +326,20 @@ void EditorWidget::resizeEvent(QResizeEvent* event)
     if (m_searchBar->isVisible()) {
         m_searchBar->move(width() - m_searchBar->width() - 20, 10);
     }
+}
+
+// [Spec 模块-app/13 INV-SNAP-LAZY-PANE-REBUILD]
+// 与 resizeEvent 拖拽态跳过路径配对：松手时由外部（MainWindow 接 dragFinished）
+// 调用，对当前视口宽度做一次完整 wrap 重排 + 滚动条更新 + 重绘。
+void EditorWidget::recomputeWrapForCurrentWidth()
+{
+    if (!m_layout || !m_doc) return;
+    if (m_wordWrap) {
+        qreal textAreaWidth = viewport()->width() - m_gutterWidth - 16;
+        m_layout->setWrapWidth(textAreaWidth > 50 ? textAreaWidth : 50);
+    }
+    updateScrollBars();
+    viewport()->update();
 }
 
 void EditorWidget::scrollContentsBy(int dx, int dy)

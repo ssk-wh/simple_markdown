@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.9] - 2026-05-07
+
+### Improved
+- 拖动文档中央编辑区与预览区之间的分隔条调整宽度时不再卡顿（千行以上的长文档体感尤其明显）；松开手柄时内容一次性更新到新宽度
+
 ## [1.0.8] - 2026-05-06
 
 ### Fixed

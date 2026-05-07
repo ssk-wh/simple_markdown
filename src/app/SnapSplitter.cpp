@@ -1,7 +1,7 @@
 // src/app/SnapSplitter.cpp
 //
 // Spec: specs/模块-app/13-分隔条吸附刻度.md
-// Last synced: 2026-04-15
+// Last synced: 2026-05-07
 #include "SnapSplitter.h"
 
 #include <QPainter>
@@ -190,6 +190,11 @@ void SnapSplitter::beginDrag()
 {
     ensureOverlay();
     m_dragging = true;
+    // [INV-SNAP-LAZY-PANE-REBUILD] 通过 dynamic property 给子 pane（editor /
+    // preview）的 resizeEvent 看：拖拽期间应当跳过全文 buildFromAst /
+    // EditorLayout::rebuild，仅更新滚动条范围。子 pane 不知道父类是 SnapSplitter，
+    // 用 dynamic property 解耦避免架构反向依赖。
+    setProperty("smSnapDragging", true);
     m_overlay->setActiveIndex(-1);
     syncOverlayGeometry();
     m_overlay->show();
@@ -199,10 +204,15 @@ void SnapSplitter::beginDrag()
 void SnapSplitter::endDrag()
 {
     m_dragging = false;
+    // [INV-SNAP-LAZY-PANE-REBUILD] 清拖拽态——必须在 emit dragFinished 之前清，
+    // 因为 dragFinished 的 slot 里子 pane 会调用 rebuildLayout 等需要"非拖拽态"
+    // 的 invariant；若 property 还是 true，子 pane 的 resizeEvent 会再次跳过重排。
+    setProperty("smSnapDragging", false);
     if (m_overlay) {
         m_overlay->hide();
         m_overlay->setActiveIndex(-1);
     }
+    emit dragFinished();
 }
 
 void SnapSplitter::syncOverlayGeometry()

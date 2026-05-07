@@ -266,6 +266,33 @@ target_link_libraries(PreviewTableCellOverflowTest PRIVATE
 
 add_test(NAME PreviewTableCellOverflowTest COMMAND PreviewTableCellOverflowTest)
 
+# --- SnapSplitterDragFinishedTest ---
+# Spec: specs/模块-app/13-分隔条吸附刻度.md
+# Plan: plans/2026-05-07-拖拽分割线两侧全文重排.md
+# 验收：T15（INV-SNAP-LAZY-PANE-REBUILD）
+# 注意：sm_app 是 executable 而非 library，所以这里直接把 SnapSplitter.cpp
+# 编进测试 exe，不通过 target_link_libraries 链。
+add_executable(SnapSplitterDragFinishedTest
+    app/SnapSplitterDragFinishedTest.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/SnapSplitter.cpp
+)
+
+target_include_directories(SnapSplitterDragFinishedTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/app
+)
+
+target_link_libraries(SnapSplitterDragFinishedTest PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+    gtest
+    gtest_main
+)
+
+add_test(NAME SnapSplitterDragFinishedTest COMMAND SnapSplitterDragFinishedTest)
+
 # --- FontConsistencyTest ---
 # Spec: specs/横切关注点/80-字体系统.md（INV-2 / INV-9 / INV-10、§4 接口段声明）
 # 验收：T-FONT-XHEIGHT、T-FONT-MONO、T-FONT-BALANCE-NULL

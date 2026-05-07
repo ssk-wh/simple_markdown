@@ -38,6 +38,12 @@ public:
     void setTypewriterMode(bool enabled);
     bool typewriterMode() const { return m_typewriterMode; }
 
+    // [Spec 模块-app/13 INV-SNAP-LAZY-PANE-REBUILD] 按当前视口宽度强制重排 wrap。
+    // 由 MainWindow::createTab 接收 SnapSplitter::dragFinished 信号后调用，
+    // 与 resizeEvent 在拖拽态下跳过 setWrapWidth 的路径配对——保证松手时
+    // editor 内容与新宽度对齐，不残留旧 wrap 布局。
+    void recomputeWrapForCurrentWidth();
+
     void showSearchBar();
     void showReplaceBar();
 
