@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.10] - 2026-05-07
+
+### Changed
+- 拖动文档中央分隔条时改为只显示一条参考虚线指示位置，编辑区与预览区在松开手柄时才一次性调整为新宽度（之前两侧区域会跟随手柄实时变化但内容不重排，造成旧布局被裁切或留白的视觉混乱）
+
 ## [1.0.9] - 2026-05-07
 
 ### Improved

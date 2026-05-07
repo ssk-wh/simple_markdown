@@ -43,6 +43,21 @@ private:
 
 }  // namespace
 
+// INV-SNAP-LAZY-RESIZE-VISUAL：拖拽时只显示参考虚线，子 pane 几何不实时变化。
+// 通过 OpaqueResize=false 实现——锁定这个开关防止未来某次重构无意中开回 true
+// 导致"渲染区跟随手柄移动"的视觉退化（详见 spec 13 INV-SNAP-LAZY-RESIZE-VISUAL
+// 的视觉动机）。
+TEST(SnapSplitterDragTest, T16_LazyResizeVisualOnly)
+{
+    using namespace app;
+
+    SnapSplitter splitter(Qt::Horizontal);
+    EXPECT_FALSE(splitter.opaqueResize())
+        << "INV-SNAP-LAZY-RESIZE-VISUAL: SnapSplitter 必须 setOpaqueResize(false)——"
+           "拖动期间只显示参考虚线，两侧子 pane 几何不实时变化（避免渲染区"
+           "跟随手柄移动 + 旧布局被裁切的视觉混乱）。";
+}
+
 TEST(SnapSplitterDragTest, T15_PropertyAndSignalLifecycle)
 {
     using namespace app;

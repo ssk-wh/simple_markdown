@@ -134,6 +134,22 @@ SnapSplitter::SnapSplitter(Qt::Orientation orientation, QWidget* parent)
     // 子 pane 的 minimumWidth 由 MainWindow::createTab 设置兜底。
     setChildrenCollapsible(false);
 
+    // [INV-SNAP-LAZY-RESIZE-VISUAL] 拖拽期间不实时调整子 pane 几何，仅 Qt 内置
+    // rubber band 在原位置画一条参考虚线。子 pane 在 mouseRelease 时一次性 resize
+    // 到目标尺寸——避免拖拽过程中"整个渲染区跟随手柄移动"的视觉混乱
+    // （之前实测体验：内容因 INV-SNAP-LAZY-PANE-REBUILD 不重排，但容器宽度变化
+    // 让旧布局被裁切/留白，比 lazy resize 视觉更糟）。
+    //
+    // 与 INV-SNAP-LAZY-PANE-REBUILD 协同链路：
+    //   mousePress  → beginDrag (setProperty smSnapDragging=true, show overlay)
+    //   mouseMove   → Qt 画 rubber band；子 widget 不收 resizeEvent（OpaqueResize=false）
+    //   mouseRelease→ base class setSizes 一次 → 子 widget resizeEvent 守护跳过 rebuild
+    //              → endDrag 清 property → emit dragFinished → MainWindow slot 真正 rebuild
+    //
+    // 副作用：吸附辅助线（SnapOverlay 三条虚线）拖拽过程中显示但不高亮
+    // （onSplitterMoved 在 release 时才 emit），吸附行为变成"松手时跳到刻度"。
+    setOpaqueResize(false);
+
     connect(this, &QSplitter::splitterMoved,
             this, &SnapSplitter::onSplitterMoved);
 }
