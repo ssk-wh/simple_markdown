@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 
+# CMake 4.x 兼容性：3rdparty/ 下的第三方库（如 cmark-gfm 写 cmake_minimum_required(3.0)、
+# googletest 部分历史版本）会触发 "Compatibility with CMake < 3.5 has been removed" 错误。
+# 在 add_subdirectory 之前设此变量，让 CMake 用 3.5 的策略行为兼容老脚本。
+# 不修 3rdparty 源码（保持 submodule 干净便于未来 update）。
+# 历史背景：2026-05-07 GitHub Actions Windows runner 升级 CMake 到 4.x 后 CI 编译失败。
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 # 从 CHANGELOG.md 自动提取版本号
 file(READ "${CMAKE_SOURCE_DIR}/CHANGELOG.md" _changelog)
 string(REGEX MATCH "\\[([0-9]+\\.[0-9]+\\.[0-9]+)\\]" _ "${_changelog}")
