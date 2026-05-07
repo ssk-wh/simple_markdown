@@ -92,23 +92,47 @@ inline QFont balanceEditorFontSize(QFont editor, const QFont& preview, QPaintDev
         return editor;
     }
 
-    int bestPt = editor.pointSize() > 0 ? editor.pointSize() : basePt;
-    qreal bestScore = std::numeric_limits<qreal>::max();
+    // [Spec 80 INV-2 修订三 / 2026-05-07] 硬约束阈值——与 spec 80 INV-2 + 测试容忍同步。
+    // Windows GDI/DirectWrite 在不同 OS 版本下字体度量物理上分散（CI runner 实测案例：
+    // 同一 Segoe UI 8pt 本地 height=17 / CI windows-latest height=13），不能假设
+    // 算法 score 最优自动满足三项。让算法**主动** filter 出满足约束的子集，再 score。
+    constexpr qreal kXhTolerance = 1.0;
+    constexpr qreal kCapTolerance = 1.0;
+    constexpr qreal kHeightTolerance = 3.0;
+
+    int bestPtFiltered = -1;
+    qreal bestScoreFiltered = std::numeric_limits<qreal>::max();
+    int bestPtAny = editor.pointSize() > 0 ? editor.pointSize() : basePt;
+    qreal bestScoreAny = std::numeric_limits<qreal>::max();
 
     for (int pt = basePt - 3; pt <= basePt + 3; ++pt) {
         if (pt <= 0) continue;
         QFont trial = editor;
         trial.setPointSize(pt);
         QFontMetricsF fm(trial, device);
-        qreal score = 1.0 * std::abs(fm.xHeight() - targetXH)
-                    + 1.5 * std::abs(fm.capHeight() - targetCapH)
-                    + 0.5 * std::abs(fm.height() - targetHeight);
-        if (score < bestScore) {
-            bestScore = score;
-            bestPt = pt;
+        const qreal xhDiff = std::abs(fm.xHeight() - targetXH);
+        const qreal capDiff = std::abs(fm.capHeight() - targetCapH);
+        const qreal hDiff = std::abs(fm.height() - targetHeight);
+        const qreal score = 1.0 * xhDiff + 1.5 * capDiff + 0.5 * hDiff;
+
+        // 阶段 2 fallback：全集中 score 最小（filter 子集为空时使用）
+        if (score < bestScoreAny) {
+            bestScoreAny = score;
+            bestPtAny = pt;
+        }
+        // 阶段 1 filter：满足 INV-2 三项硬约束的候选子集中 score 最小（优先级高于全集）
+        if (xhDiff <= kXhTolerance
+            && capDiff <= kCapTolerance
+            && hDiff <= kHeightTolerance) {
+            if (score < bestScoreFiltered) {
+                bestScoreFiltered = score;
+                bestPtFiltered = pt;
+            }
         }
     }
 
+    // filter 子集非空 → 优先使用；空集 → 退化到全集 score 最小
+    int bestPt = (bestPtFiltered > 0) ? bestPtFiltered : bestPtAny;
     editor.setPointSize(bestPt);
     return editor;
 }
