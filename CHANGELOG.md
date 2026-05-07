@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.11] - 2026-05-07
+
+### Fixed
+- 拖动文档中央分隔条时 1/4、1/2、3/4 三档吸附刻度的实时高亮恢复，靠近刻度时对应辅助线立即变粗，松手时自动对齐（1.0.10 改为只显示参考虚线后该高亮反馈意外丢失）
+
 ## [1.0.10] - 2026-05-07
 
 ### Changed

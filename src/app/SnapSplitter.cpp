@@ -82,7 +82,9 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// SnapSplitterHandle: 拦截鼠标 press/release，通知 splitter 启停 overlay
+// SnapSplitterHandle: 拦截鼠标 press/move/release，主动驱动 SnapOverlay 吸附检测
+// （OpaqueResize=false 下原本依赖的 splitterMoved 信号在拖拽过程中不 emit，
+// 必须自己驱动——见 INV-SNAP-LIVE-HINT-IN-LAZY-MODE）
 // ---------------------------------------------------------------------------
 class SnapSplitterHandle : public QSplitterHandle {
 public:
@@ -91,15 +93,46 @@ public:
 
 protected:
     void mousePressEvent(QMouseEvent* e) override {
-        if (e->button() == Qt::LeftButton && m_snap)
+        if (e->button() == Qt::LeftButton && m_snap) {
+            // [INV-SNAP-LIVE-HINT-IN-LAZY-MODE] 记录鼠标按下时在 handle 内的偏移，
+            // mouseMove 用来从鼠标位置反推 handle 左边缘位置（pos 语义与
+            // onSplitterMoved 一致：handle 左边缘在 splitter 坐标系下的位置）。
+            m_mouseOffsetInHandle = (orientation() == Qt::Horizontal)
+                                    ? e->pos().x() : e->pos().y();
             m_snap->beginDrag();
+        }
         QSplitterHandle::mousePressEvent(e);
     }
 
+    void mouseMoveEvent(QMouseEvent* e) override {
+        QSplitterHandle::mouseMoveEvent(e);  // base class 画 rubber band
+        // [INV-SNAP-LIVE-HINT-IN-LAZY-MODE] 主动驱动吸附检测——不依赖
+        // splitterMoved 信号（OpaqueResize=false 下不连续 emit）
+        if (!m_snap || !m_snap->isDragging()) return;
+        if (!(e->buttons() & Qt::LeftButton)) return;
+
+        // 把 handle 自身坐标系下的鼠标位置 map 到 splitter 坐标系
+        const QPoint splitterMousePos = mapToParent(e->pos());
+        const int mouseSplitterCoord = (orientation() == Qt::Horizontal)
+                                        ? splitterMousePos.x()
+                                        : splitterMousePos.y();
+        // handle 左边缘 = 鼠标 splitter 坐标 - 鼠标在 handle 内的偏移
+        const int handleEdgePos = mouseSplitterCoord - m_mouseOffsetInHandle;
+        m_snap->notifyDragHint(handleEdgePos, /*applySnap=*/false);
+    }
+
     void mouseReleaseEvent(QMouseEvent* e) override {
-        QSplitterHandle::mouseReleaseEvent(e);
-        if (e->button() == Qt::LeftButton && m_snap)
+        QSplitterHandle::mouseReleaseEvent(e);  // base class 一次性 setSizes 到 release 位置
+        if (e->button() == Qt::LeftButton && m_snap) {
+            // [INV-SNAP-LIVE-HINT-IN-LAZY-MODE] release 位置在阈值内时吸附——
+            // 不依赖 splitterMoved 信号路径（OpaqueResize=false 下未必连续 emit）。
+            // base class 已把 sizes[0] 设为 release 位置 = handle 左边缘 X
+            const QList<int> sizes = m_snap->sizes();
+            if (!sizes.isEmpty()) {
+                m_snap->notifyDragHint(sizes.first(), /*applySnap=*/true);
+            }
             m_snap->endDrag();
+        }
     }
 
     // Spec: specs/模块-app/13-分隔条吸附刻度.md INV-SNAP-DOUBLE-CLICK-RESET
@@ -120,6 +153,10 @@ protected:
 
 private:
     SnapSplitter* m_snap;
+    // [INV-SNAP-LIVE-HINT-IN-LAZY-MODE] 鼠标按下时在 handle 内的偏移（按朝向取 x 或 y），
+    // mouseMove 时用来从鼠标位置反推 handle 左边缘——给 SnapSplitter::notifyDragHint
+    // 提供与 onSplitterMoved 等价的 pos 语义。
+    int m_mouseOffsetInHandle = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -239,15 +276,30 @@ void SnapSplitter::syncOverlayGeometry()
 
 void SnapSplitter::onSplitterMoved(int pos, int index)
 {
-    // 只处理 editor|preview 之间的 handle（index 1）
+    // [INV-SNAP-LIVE-HINT-IN-LAZY-MODE] 在 OpaqueResize=false 下本槽函数不再
+    // 在拖拽过程中连续触发——主动路径已搬到 SnapSplitterHandle::mouseMoveEvent
+    // 调用 notifyDragHint。这里保留作为兼容路径：若未来某个用法把 splitter
+    // 改回 OpaqueResize=true，本槽函数仍能驱动吸附；同时 release 时若 base
+    // class emit 了 splitterMoved，本槽也会跑——与 mouseReleaseEvent 中的
+    // notifyDragHint(applySnap=true) 重复但无害（同一目标 setSizes 等价）。
     if (index != 1) return;
     if (!m_dragging) return;
     if (m_snapping) return;  // INV-SNAP-NO-RECURSION
+    notifyDragHint(pos, /*applySnap=*/true);
+}
+
+// [INV-SNAP-LIVE-HINT-IN-LAZY-MODE] 主动驱动的吸附检测路径——
+// SnapSplitterHandle::mouseMoveEvent / mouseReleaseEvent 调用，绕过 splitterMoved 信号。
+// applySnap=false：mouseMove 期间，仅高亮 SnapOverlay 上对应吸附线
+// applySnap=true ：mouseRelease 时，若 hit 命中阈值，setSizes 强制吸附到刻度
+void SnapSplitter::notifyDragHint(int pos, bool applySnap)
+{
+    if (!m_dragging) return;
 
     const int W = width();
     if (W <= 0) return;
 
-    // 找到最近的吸附目标
+    // 找到最近的吸附目标（与原 onSplitterMoved 算法一致）
     int hit = -1;
     int bestDelta = kSnapThresholdPx + 1;
     for (int i = 0; i < 3; ++i) {
@@ -261,12 +313,12 @@ void SnapSplitter::onSplitterMoved(int pos, int index)
 
     if (m_overlay) m_overlay->setActiveIndex(hit);
 
-    if (hit < 0) return;
+    if (!applySnap || hit < 0) return;
+    if (m_snapping) return;  // INV-SNAP-NO-RECURSION
 
     const int target = qRound(W * kRatios[hit]);
     const int hw = handleWidth();
-    // 左 pane = target；右 pane = W - target - handle
-    int leftSize  = target;
+    int leftSize = target;
     int rightSize = W - target - hw;
     if (rightSize < 0) { rightSize = 0; leftSize = qMax(0, W - hw); }
 

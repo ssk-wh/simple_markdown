@@ -4,7 +4,8 @@
 // Invariants enforced here:
 //   INV-SNAP-THRESHOLD, INV-SNAP-TARGETS, INV-SNAP-VISIBLE-ON-DRAG,
 //   INV-SNAP-TRANSPARENT, INV-SNAP-THEME, INV-SNAP-NO-RECURSION,
-//   INV-SNAP-LAZY-PANE-REBUILD, INV-SNAP-LAZY-RESIZE-VISUAL
+//   INV-SNAP-LAZY-PANE-REBUILD, INV-SNAP-LAZY-RESIZE-VISUAL,
+//   INV-SNAP-LIVE-HINT-IN-LAZY-MODE
 // Last synced: 2026-05-07
 #pragma once
 
@@ -32,6 +33,16 @@ public:
     // 当前正处于 handle 拖拽中。子 pane 不直接 include 本头文件，
     // 通过 parentWidget()->property("smSnapDragging").toBool() 查询。
     bool isDragging() const { return m_dragging; }
+
+    // [INV-SNAP-LIVE-HINT-IN-LAZY-MODE] 拖拽过程中由 SnapSplitterHandle
+    // 主动驱动的吸附检测。OpaqueResize=false 下 splitterMoved 信号不再
+    // 在拖拽过程中连续 emit，原 onSplitterMoved 路径失效——本方法替代它
+    // 完成「实时高亮 + 可选吸附」。
+    //
+    // pos: handle 左边缘在 splitter 坐标系下的位置（与 onSplitterMoved 的 pos 一致）
+    // applySnap=false: 仅更新 SnapOverlay 高亮（mouseMove 期间）
+    // applySnap=true:  若 hit 命中阈值，调用 setSizes 强制吸附（mouseRelease 时）
+    void notifyDragHint(int pos, bool applySnap);
 
 signals:
     // [INV-SNAP-LAZY-PANE-REBUILD] 拖拽结束（mouseRelease）后 emit 一次。
