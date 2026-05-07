@@ -46,6 +46,9 @@ public:
 
     void showSearchBar();
     void showReplaceBar();
+    // [Spec 模块-preview/11 INV-9] 互斥：MainWindow 路由切换到预览搜索时调用，
+    // 关闭编辑器侧搜索栏并清空搜索匹配
+    void hideSearchBar();
 
     // 在光标处插入图片的 Markdown 语法
     void insertImageMarkdown(const QString& imagePath);

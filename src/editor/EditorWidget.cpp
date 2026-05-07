@@ -617,6 +617,15 @@ void EditorWidget::showReplaceBar()
     m_searchBar->showReplace();
 }
 
+// [Spec 模块-preview/11 INV-9] 互斥：路由切到对方时关闭本侧搜索栏 + 清搜索状态。
+// SearchBar::hideBar() 内部触发 closed 信号 → ctor 中连接的 lambda 清 m_searchMatches。
+void EditorWidget::hideSearchBar()
+{
+    if (m_searchBar && m_searchBar->isVisible()) {
+        m_searchBar->hideBar();
+    }
+}
+
 TextPosition EditorWidget::offsetToTextPos(int offset) const
 {
     int line = m_doc->offsetToLine(offset);

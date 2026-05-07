@@ -55,6 +55,9 @@ public:
 
     // [Spec 模块-preview/11-预览区查找] 弹出查找栏并聚焦输入框（仅查找，不显示替换行）
     void showSearchBar();
+    // [Spec 模块-preview/11 INV-9] 互斥：MainWindow 路由切换到编辑器搜索时调用，
+    // 关闭预览侧搜索栏并清空搜索高亮
+    void hideSearchBar();
     // 查询当前是否有搜索栏可见（供 MainWindow 决定 Ctrl+F 路由）
     bool isSearchBarVisible() const;
 

@@ -1073,6 +1073,15 @@ bool PreviewWidget::isSearchBarVisible() const
     return m_searchBar && m_searchBar->isVisible();
 }
 
+void PreviewWidget::hideSearchBar()
+{
+    // [Spec 模块-preview/11 INV-9] 调 SearchBar::hideBar() —— hide() + emit closed()，
+    // closed 触发 ctor 中连接的 lambda 清空 m_searchHits/m_currentSearchText/index
+    if (m_searchBar && m_searchBar->isVisible()) {
+        m_searchBar->hideBar();
+    }
+}
+
 void PreviewWidget::onSearchTextChanged(const QString& text)
 {
     m_currentSearchText = text;

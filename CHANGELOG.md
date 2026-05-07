@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-05-07
+
+### Fixed
+- 在预览区打开查找栏后切焦点到编辑区再按 Ctrl+F，预览区查找栏会自动关闭并把焦点移交给编辑区查找栏（反向同样成立）；任何时刻最多只显示一个查找栏，避免双栏共存让用户分不清当前在哪一侧搜索
+
 ## [1.1.0] - 2026-05-07
 
 ### Added

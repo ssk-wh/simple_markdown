@@ -380,8 +380,9 @@ void MainWindow::setupMenuBar()
 
     editMenu->addSeparator();
 
-    // [Spec 模块-preview/11 INV-6] Ctrl+F 按焦点路由：当前焦点在预览区时唤起预览搜索栏，
-    // 否则（编辑器焦点 / 无焦点 / 其他面板）唤起编辑器搜索栏。
+    // [Spec 模块-preview/11 INV-6 + INV-9] Ctrl+F 按焦点路由 + 互斥：
+    // - 焦点在预览区时唤起预览搜索栏，否则唤起编辑器搜索栏
+    // - 任意时刻只一侧 SearchBar 可见——打开目标侧前先关非目标侧（含搜索高亮一并清）
     editMenu->addAction(tr("Find..."), [this]() {
         auto* tab = currentTab();
         if (!tab) return;
@@ -394,9 +395,11 @@ void MainWindow::setupMenuBar()
             }
         }
         if (focusInPreview && tab->preview) {
+            if (tab->editor) tab->editor->hideSearchBar();
             tab->preview->showSearchBar();
         } else {
-            tab->editor->showSearchBar();
+            if (tab->preview) tab->preview->hideSearchBar();
+            if (tab->editor) tab->editor->showSearchBar();
         }
     }, QKeySequence::Find);
 
