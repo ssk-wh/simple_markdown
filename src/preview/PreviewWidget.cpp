@@ -19,6 +19,7 @@
 #include <QMenu>
 #include <QSet>
 #include <QMimeData>
+#include <climits>
 #include <QPropertyAnimation>
 #include <QDataStream>
 #include <QIODevice>
@@ -609,6 +610,10 @@ void PreviewWidget::contextMenuEvent(QContextMenuEvent* event)
     QAction* copyHtmlAct = menu.addAction(tr("Copy as HTML"), this, &PreviewWidget::copyAsHtml);
     copyHtmlAct->setEnabled(hasSelection);
 
+    // [Spec 模块-preview/13 INV-2] 第三种复制粒度——原始 Markdown 源文（块级精度）
+    QAction* copyMdAct = menu.addAction(tr("Copy as Markdown"), this, &PreviewWidget::copyAsMarkdown);
+    copyMdAct->setEnabled(hasSelection && !m_sourceText.isEmpty());
+
     QAction* selectAllAct = menu.addAction(tr("Select All"), [this]() {
         m_selStart = 0;
         m_selEnd = m_plainText.length();
@@ -696,6 +701,70 @@ void PreviewWidget::copyAsHtml()
     mimeData->setText(selectedMarkdown);
     mimeData->setHtml(html);
     QApplication::clipboard()->setMimeData(mimeData);
+}
+
+// [Spec 模块-preview/13 INV-1] 把选区覆盖的 LayoutBlock 对应的 raw markdown 行
+// 写入剪贴板。块级精度——walk 块树用 plain char 累加（与 scrollToCharOffset/
+// pickHitIndexByScroll 同款模式）找出与 [selStart, selEnd) 重叠的块，取这些块的
+// sourceStartLine 最小值与 sourceEndLine 最大值，从 m_sourceText 切对应行段。
+void PreviewWidget::copyAsMarkdown()
+{
+    if (m_selStart < 0 || m_selEnd < 0) return;
+    const int selStart = qMin(m_selStart, m_selEnd);
+    const int selEnd = qMax(m_selStart, m_selEnd);
+    if (selStart == selEnd) return;
+    if (m_sourceText.isEmpty() || !m_layout) {
+        // 没有 source（如 ChangelogDialog 场景不 setSourceText）→ 退化到纯文本
+        copySelection();
+        return;
+    }
+
+    int minLine = INT_MAX, maxLine = -1;
+    int charCounter = 0;
+    std::function<void(const LayoutBlock&)> walk = [&](const LayoutBlock& blk) {
+        const int blkStart = charCounter;
+        QString blkText;
+        extractBlockText(blk, blkText);
+        const int blkEnd = blkStart + blkText.length();
+        // [selStart, selEnd) ∩ [blkStart, blkEnd) 非空？
+        if (blkEnd > selStart && blkStart < selEnd) {
+            if (blk.sourceStartLine >= 0) {
+                minLine = qMin(minLine, blk.sourceStartLine);
+                const int endLine = (blk.sourceEndLine >= 0) ? blk.sourceEndLine
+                                                              : blk.sourceStartLine;
+                maxLine = qMax(maxLine, endLine);
+            }
+        }
+        charCounter = blkEnd;
+    };
+    for (const auto& child : m_layout->rootBlock().children) {
+        walk(child);
+    }
+
+    if (minLine > maxLine) {
+        // 选区没命中任何含 sourceLine 的块——退化到纯文本
+        copySelection();
+        return;
+    }
+
+    // 切 m_sourceText 的 [minLine, maxLine] 行（含两端）
+    const QStringList lines = m_sourceText.split(QChar('\n'));
+    if (minLine < 0) minLine = 0;
+    if (maxLine >= lines.size()) maxLine = lines.size() - 1;
+    QStringList selected;
+    for (int i = minLine; i <= maxLine; ++i) {
+        selected.append(lines.at(i));
+    }
+    const QString markdown = selected.join(QChar('\n'));
+
+    QApplication::clipboard()->setText(markdown);
+}
+
+void PreviewWidget::setSourceText(const QString& source)
+{
+    // [Spec 模块-preview/13 INV-3] 由 MainWindow 在 astReady 桥接 lambda 中调用，
+    // 与 updateAst 配套——保证 m_sourceText 始终对应当前 m_currentAst 解析时的源文
+    m_sourceText = source;
 }
 
 void PreviewWidget::openInBrowser()

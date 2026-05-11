@@ -1238,8 +1238,17 @@ MainWindow::TabData MainWindow::createTab()
     // 解析调度器：关联文档到预览
     tab.scheduler = new ParseScheduler(tab.splitter);
     tab.scheduler->setDocument(tab.editor->document());
-    connect(tab.scheduler, &ParseScheduler::astReady,
-            tab.preview, &PreviewWidget::updateAst);
+    // [Spec 模块-preview/13 INV-3] 桥接：在更新 AST 之前先把 raw source 拷给预览，
+    // 让 copyAsMarkdown 能切对应行。doc / preview / scheduler 同生命周期（同 tab）
+    {
+        PreviewWidget* previewPtr = tab.preview;
+        Document* docPtr = tab.editor->document();
+        connect(tab.scheduler, &ParseScheduler::astReady, tab.preview,
+                [previewPtr, docPtr](std::shared_ptr<AstNode> root) {
+                    if (docPtr) previewPtr->setSourceText(docPtr->text());
+                    previewPtr->updateAst(std::move(root));
+                });
+    }
 
     // 滚动同步：编辑器 → 预览
     tab.scrollSync = new ScrollSync(tab.editor, tab.preview, tab.splitter);

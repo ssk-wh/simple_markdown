@@ -61,6 +61,11 @@ public:
     // 查询当前是否有搜索栏可见（供 MainWindow 决定 Ctrl+F 路由）
     bool isSearchBarVisible() const;
 
+    // [Spec 模块-preview/13 INV-3] 记录与当前 AST 对应的 raw markdown 源——
+    // copyAsMarkdown 从这里切对应行。MainWindow 桥接 ParseScheduler::astReady 时
+    // 在 updateAst 之前调用同步
+    void setSourceText(const QString& source);
+
 public slots:
     void updateAst(std::shared_ptr<AstNode> root);
     void refreshPreview();
@@ -90,6 +95,9 @@ private:
     int textIndexAtPoint(const QPointF& point) const;
     void copySelection();
     void copyAsHtml();
+    // [Spec 模块-preview/13 INV-1/2] 把选区覆盖的 LayoutBlock 对应的 raw markdown
+    // 源行（m_sourceText 的子集）写入剪贴板。块级精度，半行选区会扩到整段。
+    void copyAsMarkdown();
     void openInBrowser();
     void addHighlight();
     void clearHighlights();
@@ -111,6 +119,9 @@ private:
 
     // 文本选区
     QString m_plainText;
+    // [Spec 模块-preview/13 INV-3] 与 m_currentAst 配套的 raw markdown 源拷贝，
+    // copyAsMarkdown 从这里切选区对应行
+    QString m_sourceText;
     int m_selStart = -1;
     int m_selEnd = -1;
     bool m_selecting = false;

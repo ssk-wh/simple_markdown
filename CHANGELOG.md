@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - 查找栏新增"点击外部自动关闭"行为：编辑区/预览区查找栏打开后，点击查找栏以外的任何区域（编辑/预览内容、工具栏、目录面板等）查找栏自动关闭并清除搜索高亮；点击查找栏自身的输入框、工具按钮或空白间隙不受影响（提供"专注完搜索就把它收起来"的自然手感，又不影响连续点上一个/下一个的稳定性）
+- 预览区右键菜单新增"Copy as Markdown"——选中预览内容后选这一项，复制到剪贴板的是**原始 Markdown 源文**（含 `**bold**` / `[link](url)` / 代码块围栏 ``` 等标记），方便粘贴到 GitHub Issue、Wiki 或其他 Markdown 编辑器；原有"Copy as Plain Text"（Ctrl+C 默认）和"Copy as HTML"保留不变
 
 ## [1.1.1] - 2026-05-07
 
