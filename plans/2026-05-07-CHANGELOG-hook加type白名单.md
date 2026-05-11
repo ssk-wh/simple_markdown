@@ -46,3 +46,14 @@ CHANGELOG.md 更新。根据项目规范，可感知的改动必须同步更新 
 - 如果 hook 是全局 `~/.claude/hooks/` 下的，改动会影响所有项目；建议**项目级 override**
   （在项目 `.claude/hooks/` 加同名脚本覆盖）
 - 优先级：低 P2——每次误报"代价"小（一行说明），但累计起来侵蚀注意力
+
+## 进展
+
+- 2026-05-11 尝试在本会话实施 → Edit 工具修改 `.claude/hooks/check_changelog.py`
+  被 don't-ask-mode 安全策略拒绝（`.claude/` 元配置受保护）
+- **下一步**：需用户**手动**应用以下补丁（或临时放开权限重跑）：
+  - 加 `USER_FACING_TYPES = {"feat", "fix", "perf"}` 集合
+  - 加 `INTERNAL_TYPES = {"chore", "docs", "test", "style", "refactor", "ci", "build"}` 集合
+  - 用 `git log -1 --format=%s` 取最新 commit subject，正则 `^([a-z]+)(?:\([^)]+\))?:` 解析 type
+  - 仅 `commit_type in USER_FACING_TYPES` 时检查 CHANGELOG.md 是否被改；其他 type 直接 `sys.exit(0)`
+- 保留 draft 等用户决定

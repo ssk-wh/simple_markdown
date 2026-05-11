@@ -380,27 +380,41 @@ void MainWindow::setupMenuBar()
 
     editMenu->addSeparator();
 
-    // [Spec 模块-preview/11 INV-6 + INV-9] Ctrl+F 按焦点路由 + 互斥：
-    // - 焦点在预览区时唤起预览搜索栏，否则唤起编辑器搜索栏
-    // - 任意时刻只一侧 SearchBar 可见——打开目标侧前先关非目标侧（含搜索高亮一并清）
+    // [Spec 模块-preview/11 INV-6 + INV-9] Ctrl+F 路由：焦点优先 + 可见性兜底，
+    // 与 INV-9 互斥要求结合：
+    // - 焦点在 preview/editor 且对应区域可见 → 该侧
+    // - 否则按可见性默认（editor 可见 → editor，否则 preview 可见 → preview）
+    // - 都不可见 → 静默 no-op（理论 currentTab 非空时至少一侧可见）
+    // 互斥：打开目标侧前先关非目标侧（含搜索高亮一并清）
     editMenu->addAction(tr("Find..."), [this]() {
         auto* tab = currentTab();
         if (!tab) return;
+
         QWidget* focused = QApplication::focusWidget();
         bool focusInPreview = false;
+        bool focusInEditor = false;
         for (QWidget* w = focused; w != nullptr; w = w->parentWidget()) {
-            if (w == tab->preview) {
-                focusInPreview = true;
-                break;
-            }
+            if (tab->preview && w == tab->preview) { focusInPreview = true; break; }
+            if (tab->editor  && w == tab->editor)  { focusInEditor  = true; break; }
         }
-        if (focusInPreview && tab->preview) {
+
+        const bool previewVisible = tab->preview && tab->preview->isVisible();
+        const bool editorVisible  = tab->editor  && tab->editor->isVisible();
+
+        auto openPreview = [&]() {
             if (tab->editor) tab->editor->hideSearchBar();
             tab->preview->showSearchBar();
-        } else {
+        };
+        auto openEditor = [&]() {
             if (tab->preview) tab->preview->hideSearchBar();
-            if (tab->editor) tab->editor->showSearchBar();
-        }
+            tab->editor->showSearchBar();
+        };
+
+        if (focusInPreview && previewVisible)        openPreview();
+        else if (focusInEditor && editorVisible)     openEditor();
+        else if (editorVisible)                      openEditor();   // 默认走编辑器
+        else if (previewVisible)                     openPreview();  // 纯预览模式兜底
+        // 两侧都不可见时不做事
     }, QKeySequence::Find);
 
     editMenu->addAction(tr("Replace..."), [this]() {

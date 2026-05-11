@@ -7,6 +7,7 @@
 #include <QKeyEvent>
 #include <QPainter>
 #include <QMouseEvent>
+#include <QApplication>
 #include <QTimer>
 
 static constexpr int kBtnW = 28;
@@ -60,7 +61,10 @@ SearchBar::SearchBar(QWidget* parent)
         emit findNext(m_findEdit->text());
     });
 
-    // Escape 关闭
+    // Escape 关闭——FocusOut 自动隐藏机制已彻底取消（INV-13）：
+    // 任何"延迟检查 hasFocus"在密集按钮交互下都存在窗口期 false 触发 hideBar 的隐患，
+    // 用户预期"打开搜索栏后保留到主动关闭"。仅保留 Esc 键 / m_btnClose 关闭按钮 /
+    // 主动 hideSearchBar API 三条显式关闭路径
     m_findEdit->installEventFilter(this);
     m_replaceEdit->installEventFilter(this);
 
@@ -139,13 +143,24 @@ bool SearchBar::eventFilter(QObject* obj, QEvent* event)
             return true;
         }
     }
-    // 失去焦点自动隐藏（延迟检查，避免在内部控件间切换时误关）
-    if (event->type() == QEvent::FocusOut) {
-        QTimer::singleShot(100, this, [this]() {
-            if (!m_findEdit->hasFocus() && !m_replaceEdit->hasFocus() && isVisible())
-                hideBar();
-        });
+
+    // [Spec 模块-preview/11 INV-15] 点击外部自动关闭：监听 qApp 的全局 MouseButtonPress，
+    // 用全局坐标判断点击位置是否落在 SearchBar 矩形外。不同于已删除的 FocusOut 隐藏
+    // （INV-13），坐标判断是同步且确定的，密集按钮点击不会误关
+    if (event->type() == QEvent::MouseButtonPress && isVisible()) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        const QRect myGlobal(mapToGlobal(QPoint(0, 0)), size());
+        if (!myGlobal.contains(me->globalPos())) {
+            // 延迟到下个事件循环 hideBar——避免在事件分发途中改 widget 显隐状态。
+            // 不消费事件：目标 widget 仍正常收到点击（如点编辑器内容能定位光标）
+            QTimer::singleShot(0, this, [this]() {
+                if (isVisible()) hideBar();
+            });
+        }
     }
+
+    // [Spec 模块-preview/11 INV-13] FocusOut 自动隐藏机制已删除（2026-05-11 第三轮修复）：
+    // 在密集按钮点击场景下任何 FocusOut 延迟检查都不可靠
     return QWidget::eventFilter(obj, event);
 }
 
@@ -156,6 +171,8 @@ QString SearchBar::searchText() const
 
 void SearchBar::keepFocus()
 {
+    // FocusOut 自动隐藏机制已删除（INV-13），keepFocus 只负责让 m_findEdit 重获焦点，
+    // 让用户可继续在搜索框输入或用 F3 / Shift+F3 跳转
     m_findEdit->setFocus();
 }
 
@@ -169,6 +186,8 @@ void SearchBar::showSearch()
     show();
     m_findEdit->setFocus();
     m_findEdit->selectAll();
+    // [INV-15] 装全局 filter 监听外部点击；Qt 对同一 object 重复 install 会自动去重
+    qApp->installEventFilter(this);
 }
 
 void SearchBar::showReplace()
@@ -181,13 +200,28 @@ void SearchBar::showReplace()
     show();
     m_findEdit->setFocus();
     m_findEdit->selectAll();
+    // [INV-15] 同 showSearch
+    qApp->installEventFilter(this);
 }
 
 void SearchBar::hideBar()
 {
+    // [INV-15] 隐藏前先 remove 全局 filter，避免隐藏过程中再次触发外部点击逻辑
+    qApp->removeEventFilter(this);
+
+    // 判定时机必须在 hide() 之前——hide() 后 m_findEdit 跟着隐藏，hasFocus 必然为 false。
+    // 仅当焦点仍在搜索栏内部控件时把焦点送回宿主——这是 Esc / 关闭按钮关闭的预期行为。
+    // 若焦点已在别处（如 INV-15 点击外部触发：用户点击的新 widget 已 setFocus 自己），
+    // 不再抢回——否则会让 Ctrl+F 路由判断的 focusInXxx 在 next loop 仍是旧侧
+    // （用户原报告：编辑器 Ctrl+F 后单击预览，再 Ctrl+F 仍在编辑器——预览搜索栏 hideBar
+    // 抢回 editor 焦点反过来 mirror 同样问题：preview SearchBar hideBar 抢回 preview 焦点）
+    const bool wasFocusInside =
+        (m_findEdit && m_findEdit->hasFocus()) ||
+        (m_replaceEdit && m_replaceEdit->hasFocus());
+
     hide();
     emit closed();
-    parentWidget()->setFocus();
+    if (wasFocusInside) parentWidget()->setFocus();
 }
 
 void SearchBar::updateButtonRects()

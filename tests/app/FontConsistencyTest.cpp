@@ -46,21 +46,22 @@ private:
 
 }  // namespace
 
-// 在多个 delta 下断言 INV-2 三项约束：xH ≤ 1px、capH ≤ 1px、height ≤ 3px。
-// 同时打印基线表格便于诊断。
-// 容忍度（2026-05-07 修订）：height 由 2px 放宽到 3px——见 plan
-// 「2026-05-07-CI-FontConsistencyTest-delta-4-Win失败」根因分析：Windows GDI/DirectWrite
-// 在不同 OS 版本下字体度量物理上分散，无法保证所有 runner 上选出 ≤ 2 的候选。
+// 在多个 delta 下断言 INV-2 四项约束（修订四，2026-05-11）：
+//   xH ≤ 1px、capH ≤ 3px、height ≤ 8px、avgCharWidth ≤ 2px
+// 阈值放宽理由：等宽字体（Courier New）vs 比例字体（Segoe UI）的 capH/height 系数
+// 天生差异 → 强行追求 capH≤1 会让 editor.pt 推得远大于 preview（如 delta=0 旧算法选
+// 15pt），导致 avgChar 差 36% 让用户主观感受"编辑器字号明显大"。新阈值容纳字体族
+// 先天垂直差异，同时把 avgCharWidth 作为水平视觉密度的硬约束。
 TEST(FontConsistencyTest, T_FONT_INV2_AllThreeMetricsAligned)
 {
     QImage device(800, 600, QImage::Format_RGB32);
 
     std::fprintf(stdout,
-                 "[FontConsistencyTest] INV-2 three-metric alignment "
+                 "[FontConsistencyTest] INV-2 four-metric alignment "
                  "(device: 800x600, dpr=%.2f):\n",
                  device.devicePixelRatioF());
     std::fprintf(stdout,
-                 "  delta | preview.pt | editor.pt | xH-diff | capH-diff | height-diff\n");
+                 "  delta | preview.pt | editor.pt | xH-diff | capH-diff | height-diff | avgChar-diff\n");
 
     int violations = 0;
     for (int delta : {-4, -2, 0, +2, +4}) {
@@ -73,25 +74,32 @@ TEST(FontConsistencyTest, T_FONT_INV2_AllThreeMetricsAligned)
         qreal xhDiff = std::abs(editFm.xHeight() - prevFm.xHeight());
         qreal capDiff = std::abs(editFm.capHeight() - prevFm.capHeight());
         qreal hDiff = std::abs(editFm.height() - prevFm.height());
+        qreal avgDiff = std::abs(editFm.averageCharWidth() - prevFm.averageCharWidth());
 
         std::fprintf(stdout,
-                     "  %5d | %10d | %9d | %7.3f | %9.3f | %11.3f\n",
+                     "  %5d | %10d | %9d | %7.3f | %9.3f | %11.3f | %12.3f\n",
                      delta, previewFont.pointSize(), editorBal.pointSize(),
-                     xhDiff, capDiff, hDiff);
+                     xhDiff, capDiff, hDiff, avgDiff);
 
-        EXPECT_LE(xhDiff, 1.0)
-            << "INV-2 xH 违反 at delta=" << delta << ": diff=" << xhDiff;
-        EXPECT_LE(capDiff, 1.0)
+        // 修订五（2026-05-11 方向 A1）：same family same pt 下四项度量天然完全相等。
+        // 阈值 0.5 留浮点余量；任何 family 不同退化（如未来又分等宽/比例）会立即触发
+        // 这个测试失败，作为防御。
+        EXPECT_LE(xhDiff, 0.5)
+            << "INV-2 xH 违反 at delta=" << delta << ": diff=" << xhDiff
+            << " — 检查 kEditorFontFamily 是否与 kPreviewFontFamily 相等";
+        EXPECT_LE(capDiff, 0.5)
             << "INV-2 capH 违反 at delta=" << delta << ": diff=" << capDiff;
-        EXPECT_LE(hDiff, 3.0)
+        EXPECT_LE(hDiff, 0.5)
             << "INV-2 height 违反 at delta=" << delta << ": diff=" << hDiff;
-        if (xhDiff > 1.0 || capDiff > 1.0 || hDiff > 3.0) ++violations;
+        EXPECT_LE(avgDiff, 0.5)
+            << "INV-2 avgCharWidth 违反 at delta=" << delta << ": diff=" << avgDiff;
+        if (xhDiff > 0.5 || capDiff > 0.5 || hDiff > 0.5 || avgDiff > 0.5) ++violations;
     }
     std::fflush(stdout);
 
     if (violations > 0) {
         ADD_FAILURE() << "Total violations: " << violations
-                      << " (expected 0 to satisfy INV-2)";
+                      << " (expected 0 to satisfy INV-2 four-metric)";
     }
 }
 
@@ -177,6 +185,63 @@ TEST(FontConsistencyTest, T_FONT_CandidateSearch_Delta0)
                      std::abs(fm.capHeight() - prevFm.capHeight()),
                      std::abs(fm.height() - prevFm.height()));
     }
+    std::fflush(stdout);
+    SUCCEED();
+}
+
+// 字体族实测对比：在 delta=0 下，把候选等宽字体族（Courier New / Consolas / Cascadia
+// Mono / Cascadia Code）与 Segoe UI 12pt 同 pt 对照，看哪个 family 同 pt 下四项度量
+// （xH / capH / height / avgChar）综合最接近——这是方向 G（spec 80）的实测依据。
+//
+// 若某 family 同 pt 下四项都接近预览，意味着我们可以用 same-pt 简单设置，不需要
+// balanceEditorFontSize 的 ±3pt 搜索 + score 加权（前几轮一直绕不开字体族先天差异
+// 的根源问题）。
+TEST(FontConsistencyTest, T_FONT_FamilyComparison_SamePt)
+{
+    QImage device(800, 600, QImage::Format_RGB32);
+    const int pt = font_defaults::kDefaultBaseFontSizePt;  // 12
+
+    QFont preview(font_defaults::kPreviewFontFamily, pt);
+    QFontMetricsF prevFm(preview, &device);
+
+    std::fprintf(stdout,
+                 "\n[FontConsistencyTest] family comparison at same pt=%d:\n"
+                 "  preview ref (%s): xH=%.2f capH=%.2f height=%.2f avgChar=%.2f\n"
+                 "  family             | xH    | capH  | height | avgChar | xH-Δ | capH-Δ | h-Δ  | avg-Δ\n",
+                 pt, font_defaults::kPreviewFontFamily,
+                 prevFm.xHeight(), prevFm.capHeight(),
+                 prevFm.height(), prevFm.averageCharWidth());
+
+    auto dump = [&](const char* family) {
+        QFont f(family, pt);
+        f.setStyleHint(QFont::Monospace);
+        QFontMetricsF fm(f, &device);
+        std::fprintf(stdout,
+                     "  %-18s | %5.2f | %5.2f | %6.2f | %7.2f | %4.2f | %6.2f | %4.2f | %5.2f\n",
+                     family,
+                     fm.xHeight(), fm.capHeight(), fm.height(), fm.averageCharWidth(),
+                     std::abs(fm.xHeight() - prevFm.xHeight()),
+                     std::abs(fm.capHeight() - prevFm.capHeight()),
+                     std::abs(fm.height() - prevFm.height()),
+                     std::abs(fm.averageCharWidth() - prevFm.averageCharWidth()));
+    };
+
+    // 候选清单（按优先级）：
+    // - Cascadia Mono / Cascadia Code: Microsoft 2019 设计，与 Segoe UI 同团队，理论
+    //   度量最接近 Segoe UI
+    // - Consolas: Vista 起的等宽字体，比 Courier New 现代
+    // - Courier New: 当前默认（IBM Selectric 时代），最远
+    // - Lucida Console: Win 自带
+    dump("Cascadia Mono");
+    dump("Cascadia Code");
+    dump("Consolas");
+    dump("Courier New");
+    dump("Lucida Console");
+
+    std::fprintf(stdout,
+                 "\n[Family comparison] 字体族在系统不可用时 Qt 会 fallback 到 styleHint 匹配；\n"
+                 "若某 family 的 avgChar/capH/height 与 preview 全部 ≤ 2px，可考虑作为\n"
+                 "kEditorFontFamily 取代 Courier New。\n");
     std::fflush(stdout);
     SUCCEED();
 }

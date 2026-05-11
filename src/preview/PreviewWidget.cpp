@@ -308,6 +308,11 @@ void PreviewWidget::setTheme(const Theme& theme)
     pal.setColor(QPalette::Window, theme.previewBg);
     viewport()->setPalette(pal);
 
+    // 同步主题给搜索栏，与编辑器侧 EditorWidget::setTheme 对齐——
+    // 此前缺失导致预览侧搜索栏一直用 SearchBar 默认 Theme（白底浅边框），与编辑器侧
+    // 的实际主题色脱节（用户感知为"两侧背景颜色不一致"）
+    if (m_searchBar) m_searchBar->setTheme(theme);
+
     viewport()->update();
 }
 
@@ -430,7 +435,15 @@ void PreviewWidget::onScrollAnimationFinished()
 
 void PreviewWidget::mousePressEvent(QMouseEvent* event)
 {
+    // [Spec 模块-preview/11 INV-6] 显式 setFocus 让单击预览即获焦，对齐 EditorWidget
+    // line 401 的处理。QAbstractScrollArea 把鼠标事件分发到 viewport（默认 NoFocus），
+    // viewport 不获焦也不会把焦点转给 self——必须在此显式调用，否则 MainWindow Ctrl+F
+    // 路由会判 focusInPreview=false 走错分支（用户报告：编辑器 Ctrl+F 后单击预览，
+    // 再 Ctrl+F 仍弹编辑器搜索栏；双击因 mouseDoubleClickEvent 路径下其他副作用碰巧
+    // 让焦点转移而被掩盖）
     if (event->button() == Qt::LeftButton) {
+        setFocus();
+
         // CRITICAL: DPI 改变检查
         // 问题场景：窗口从 A 屏（DPI=1.0）移到 B 屏（DPI=1.25）时：
         //   1. 鼠标事件在下一次 paint 之前可能先来
@@ -801,39 +814,62 @@ int PreviewWidget::textIndexAtPoint(const QPointF& point) const
     // 获取 device 以确保高 DPI 下的度量一致性
     QPaintDevice* device = viewport();
 
-    int closest = 0;
-    qreal closestDist = std::numeric_limits<qreal>::max();
+    // [Spec 模块-preview/12 INV-1] 双层 closest：
+    //  - inRow: 鼠标 y 落在 segment rect 垂直范围内的候选（同一视觉行）——优先取
+    //    dx 最近的；这一层防止用户在表格"行右侧空白"拖拽时 snap 跳到上下行
+    //  - any:   2D 欧氏距离最近候选，作为 fallback（鼠标 y 落在行间空白时使用）
+    int inRowClosest = -1;
+    qreal inRowMinDx = std::numeric_limits<qreal>::max();
+    int anyClosest = 0;
+    qreal anyMinDist = std::numeric_limits<qreal>::max();
 
     for (const auto& seg : segments) {
         if (seg.rect.contains(point)) {
             return hitTestSegment(seg, point.x() - seg.rect.x(), device);
         }
 
-        // 计算点到矩形的 2D 距离（解决表格单元格间隙定位问题）
-        qreal dx = 0, dy = 0;
-        if (point.x() < seg.rect.left())
-            dx = seg.rect.left() - point.x();
-        else if (point.x() > seg.rect.right())
-            dx = point.x() - seg.rect.right();
-        if (point.y() < seg.rect.top())
-            dy = seg.rect.top() - point.y();
-        else if (point.y() > seg.rect.bottom())
-            dy = point.y() - seg.rect.bottom();
+        // 候选 1：同一视觉行优先（鼠标 y 在 seg 垂直范围内）——表格右侧空白扩散修复
+        const bool inSameRow =
+            point.y() >= seg.rect.top() && point.y() <= seg.rect.bottom();
+        if (inSameRow) {
+            qreal dx = 0;
+            if (point.x() < seg.rect.left())       dx = seg.rect.left() - point.x();
+            else if (point.x() > seg.rect.right()) dx = point.x() - seg.rect.right();
 
+            if (dx < inRowMinDx) {
+                inRowMinDx = dx;
+                if (point.x() >= seg.rect.right())
+                    inRowClosest = seg.charStart + seg.charLen;
+                else if (point.x() <= seg.rect.left())
+                    inRowClosest = seg.charStart;
+                else
+                    inRowClosest = hitTestSegment(seg, point.x() - seg.rect.x(), device);
+            }
+        }
+
+        // 候选 2：2D 距离 fallback
+        qreal dx = 0, dy = 0;
+        if (point.x() < seg.rect.left())       dx = seg.rect.left() - point.x();
+        else if (point.x() > seg.rect.right()) dx = point.x() - seg.rect.right();
+        if (point.y() < seg.rect.top())        dy = seg.rect.top() - point.y();
+        else if (point.y() > seg.rect.bottom()) dy = point.y() - seg.rect.bottom();
         qreal dist = dy * dy + dx * dx;
 
-        if (dist < closestDist) {
-            closestDist = dist;
+        if (dist < anyMinDist) {
+            anyMinDist = dist;
             if (point.x() >= seg.rect.right())
-                closest = seg.charStart + seg.charLen;
+                anyClosest = seg.charStart + seg.charLen;
             else if (point.x() <= seg.rect.left())
-                closest = seg.charStart;
+                anyClosest = seg.charStart;
             else
-                closest = hitTestSegment(seg, point.x() - seg.rect.x(), device);
+                anyClosest = hitTestSegment(seg, point.x() - seg.rect.x(), device);
         }
     }
 
-    return closest;
+    // 优先同行候选——这是表格行右侧空白选区修复的关键：表格行 X 内拖到右侧空白时，
+    // 行 X 的 segments 必然在 inRow 候选集中，dx 最近通常就是该行最右 segment 末尾，
+    // 不会再 snap 到上下行 segment
+    return (inRowClosest >= 0) ? inRowClosest : anyClosest;
 }
 
 void PreviewWidget::addHighlight()
@@ -1101,67 +1137,136 @@ void PreviewWidget::onSearchResultsReady(QVector<QPair<int,int>> matches, int re
     viewport()->update();
 }
 
+// [Spec 模块-preview/11 INV-11] 同步重搜兜底：输入后立即回车（< 100ms debounce）时，
+// 异步 worker 尚未回填 m_searchHits，必须在此同步算一遍让回车即时生效。
+// 同步后让异步路径 requestId 自然过期（++m_searchRequestId + stop debounce）避免覆盖。
+void PreviewWidget::syncRecomputeSearchHits(const QString& text)
+{
+    m_currentSearchText = text;
+    m_searchDebounce.stop();
+    ++m_searchRequestId;  // 让正在飞或排队中的 worker 结果回填时 reqId 不匹配被丢弃
+    m_searchHits.clear();
+    if (!m_searchBar) return;
+    const Qt::CaseSensitivity cs = m_searchBar->isCaseSensitive()
+                                    ? Qt::CaseSensitive : Qt::CaseInsensitive;
+    // 与异步 worker 的 plain indexOf 路径对齐（V1 不支持正则 / 整词，与 spec INV 一致）
+    int pos = 0;
+    while ((pos = m_plainText.indexOf(text, pos, cs)) != -1) {
+        m_searchHits.append({pos, text.length()});
+        pos += text.length();
+    }
+}
+
+// [Spec 模块-preview/11 INV-12] 基于视口顶部 scrollY 找下一个/上一个命中。
+// forward=true：返回第一个 y > scrollY 的 hit 索引；都不满足回绕首项。
+// forward=false：返回最后一个 y < scrollY 的 hit 索引；都不满足回绕末项。
+//
+// 实现：与 scrollToCharOffset（line 1220 起）对齐——从 rootBlock().children 逐 top-level
+// 块遍历，extractBlockText 已递归累加子孙文本，命中即用父块 y（块级精度，与 spec INV-4
+// 一致）。**不能** walk(rootBlock())：root.bounds.y 永远为 0，会让所有 hit 都"命中"
+// 在 y=0，导致 forward 永远回绕首项（恰是用户报告 bug 3 的形态）。
+int PreviewWidget::pickHitIndexByScroll(bool forward) const
+{
+    if (m_searchHits.isEmpty() || !m_layout) return -1;
+    const qreal scrollY = const_cast<PreviewWidget*>(this)->verticalScrollBar()->value();
+
+    QVector<qreal> hitY(m_searchHits.size(), -1.0);
+    int charCounter = 0;
+    std::function<void(const LayoutBlock&)> walk = [&](const LayoutBlock& blk) {
+        const int blkStart = charCounter;
+        QString blkText;
+        extractBlockText(blk, blkText);
+        const int blkEnd = blkStart + blkText.length();
+        for (int i = 0; i < m_searchHits.size(); ++i) {
+            const int off = m_searchHits[i].first;
+            if (hitY[i] < 0 && off >= blkStart && off < blkEnd) {
+                hitY[i] = blk.bounds.y();
+            }
+        }
+        charCounter = blkEnd;
+    };
+
+    for (const auto& child : m_layout->rootBlock().children) {
+        walk(child);
+    }
+
+    if (forward) {
+        // 第一个 y > scrollY 的命中（严格大于：让用户看到的当前内容继续往下）
+        for (int i = 0; i < m_searchHits.size(); ++i) {
+            if (hitY[i] > scrollY) return i;
+        }
+        return 0;  // 回绕首项
+    } else {
+        // 反向：从末项往前找第一个 y < scrollY 的（hitY 与 m_searchHits 同序——
+        // 按文档顺序，y 单调不减，便于反向扫描）
+        for (int i = m_searchHits.size() - 1; i >= 0; --i) {
+            if (hitY[i] >= 0 && hitY[i] < scrollY) return i;
+        }
+        return m_searchHits.size() - 1;  // 回绕末项
+    }
+}
+
 void PreviewWidget::findNextHit(const QString& text)
 {
-    if (text.isEmpty() || m_searchHits.isEmpty()) return;
-    // 若搜索词改变，先同步重搜（用户按 Enter 时保证最新结果）
-    if (text != m_currentSearchText) {
-        m_currentSearchText = text;
-        m_searchDebounce.stop();
-        // 直接同步搜索一次让 findNext 即时生效
-        m_searchHits.clear();
-        const Qt::CaseSensitivity cs = m_searchBar->isCaseSensitive()
-                                        ? Qt::CaseSensitive : Qt::CaseInsensitive;
-        int pos = 0;
-        while ((pos = m_plainText.indexOf(text, pos, cs)) != -1) {
-            m_searchHits.append({pos, text.length()});
-            pos += text.length();
-        }
+    // [Spec 模块-preview/11 INV-11] 入口只过滤空文本——禁止再加 m_searchHits.isEmpty()
+    if (text.isEmpty()) return;
+    if (!m_searchBar) return;
+
+    // 同步重搜触发：文本变了 或 m_searchHits 尚未回填（首次回车/debounce 未触发）
+    if (text != m_currentSearchText || m_searchHits.isEmpty()) {
+        syncRecomputeSearchHits(text);
     }
+
     if (m_searchHits.isEmpty()) {
         m_currentSearchIndex = -1;
-        if (m_searchBar) m_searchBar->updateMatchInfo(-1, 0);
+        m_searchBar->updateMatchInfo(-1, 0);
         viewport()->update();
+        m_searchBar->keepFocus();  // [INV-10]
         return;
     }
-    // INV-4 跳转：循环递增索引
-    m_currentSearchIndex = (m_currentSearchIndex + 1) % m_searchHits.size();
-    scrollToCharOffset(m_searchHits[m_currentSearchIndex].first);
-    if (m_searchBar) {
-        m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
+
+    // [INV-12] 首次跳转（currentIndex==-1）按 scrollY 选起点；后续连续跳转按索引循环。
+    // 索引循环与编辑器 cursor 单调推进等价；位置语义只用于"用户尚未锁定任何一项"的初始
+    // 状态，否则在密集 hit 场景下反向会回绕末项（7/7→6/7→又 7/7）
+    if (m_currentSearchIndex < 0) {
+        m_currentSearchIndex = pickHitIndexByScroll(/*forward=*/true);
+    } else {
+        m_currentSearchIndex = (m_currentSearchIndex + 1) % m_searchHits.size();
     }
+    scrollToCharOffset(m_searchHits[m_currentSearchIndex].first);
+    m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
     viewport()->update();
+    m_searchBar->keepFocus();  // [INV-10]
 }
 
 void PreviewWidget::findPrevHit(const QString& text)
 {
-    if (text.isEmpty() || m_searchHits.isEmpty()) return;
-    if (text != m_currentSearchText) {
-        m_currentSearchText = text;
-        m_searchDebounce.stop();
-        m_searchHits.clear();
-        const Qt::CaseSensitivity cs = m_searchBar->isCaseSensitive()
-                                        ? Qt::CaseSensitive : Qt::CaseInsensitive;
-        int pos = 0;
-        while ((pos = m_plainText.indexOf(text, pos, cs)) != -1) {
-            m_searchHits.append({pos, text.length()});
-            pos += text.length();
-        }
+    if (text.isEmpty()) return;
+    if (!m_searchBar) return;
+
+    if (text != m_currentSearchText || m_searchHits.isEmpty()) {
+        syncRecomputeSearchHits(text);
     }
+
     if (m_searchHits.isEmpty()) {
         m_currentSearchIndex = -1;
-        if (m_searchBar) m_searchBar->updateMatchInfo(-1, 0);
+        m_searchBar->updateMatchInfo(-1, 0);
         viewport()->update();
+        m_searchBar->keepFocus();  // [INV-10]
         return;
     }
-    // INV-4 跳转：循环递减索引（首项 -1 时绕回末项）
-    m_currentSearchIndex = (m_currentSearchIndex - 1 + m_searchHits.size())
-                           % m_searchHits.size();
-    scrollToCharOffset(m_searchHits[m_currentSearchIndex].first);
-    if (m_searchBar) {
-        m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
+
+    // [INV-12] 反向同样语义：首次按 scrollY，后续索引循环
+    if (m_currentSearchIndex < 0) {
+        m_currentSearchIndex = pickHitIndexByScroll(/*forward=*/false);
+    } else {
+        m_currentSearchIndex = (m_currentSearchIndex - 1 + m_searchHits.size())
+                               % m_searchHits.size();
     }
+    scrollToCharOffset(m_searchHits[m_currentSearchIndex].first);
+    m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
     viewport()->update();
+    m_searchBar->keepFocus();  // [INV-10]
 }
 
 void PreviewWidget::scrollToCharOffset(int offset)

@@ -147,4 +147,13 @@ private:
     void findNextHit(const QString& text);
     void findPrevHit(const QString& text);
     void scrollToCharOffset(int offset);
+
+    // [Spec 模块-preview/11 INV-11] 输入后立即回车的同步搜索兜底——避免依赖
+    // 100ms debounce + 异步 worker；同步重搜后让异步路径 requestId 自然过期
+    void syncRecomputeSearchHits(const QString& text);
+
+    // [Spec 模块-preview/11 INV-12] 位置语义跳转——基于当前视口顶部 scrollY 选下一个/
+    // 上一个命中：forward=true 找第一个 hit.y > scrollY；都不满足回绕到首项 / 末项。
+    // 返回值为 m_searchHits 内的索引，调用方负责更新 m_currentSearchIndex 并滚动。
+    int pickHitIndexByScroll(bool forward) const;
 };
