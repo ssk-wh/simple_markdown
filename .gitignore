@@ -27,6 +27,10 @@ Thumbs.db
 # Temp (测试脚本/临时数据)
 tmp/
 
+# Python 缓存（hook 脚本 import 时产生）
+__pycache__/
+*.pyc
+
 # Claude Code per-agent worktrees
 .claude/worktrees/
 # Claude Code 会话级临时锁文件
