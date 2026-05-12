@@ -1,6 +1,6 @@
 ---
 date: 2026-05-07
-status: draft
+status: completed
 related_specs:
   - CLAUDE.md   # CHANGELOG 写作纪律
 ---
@@ -51,9 +51,13 @@ CHANGELOG.md 更新。根据项目规范，可感知的改动必须同步更新 
 
 - 2026-05-11 尝试在本会话实施 → Edit 工具修改 `.claude/hooks/check_changelog.py`
   被 don't-ask-mode 安全策略拒绝（`.claude/` 元配置受保护）
-- **下一步**：需用户**手动**应用以下补丁（或临时放开权限重跑）：
-  - 加 `USER_FACING_TYPES = {"feat", "fix", "perf"}` 集合
-  - 加 `INTERNAL_TYPES = {"chore", "docs", "test", "style", "refactor", "ci", "build"}` 集合
-  - 用 `git log -1 --format=%s` 取最新 commit subject，正则 `^([a-z]+)(?:\([^)]+\))?:` 解析 type
-  - 仅 `commit_type in USER_FACING_TYPES` 时检查 CHANGELOG.md 是否被改；其他 type 直接 `sys.exit(0)`
-- 保留 draft 等用户决定
+- 2026-05-12 完成补丁实现与单元测试，等待用户手动覆盖原文件：
+  - 新版 hook 内容已写入 `tmp/check_changelog_patched.py`
+  - 单元测试已写入 `tmp/test_check_changelog.py`，**24/24 全部通过**
+  - 覆盖用例：feat / fix / fix(scope) / perf 未改/已改 CHANGELOG；chore / docs /
+    test / style / refactor / ci / build 全部跳过；无 type 前缀保守跳过
+  - 抽离 `should_warn(subject, files)` 与 `parse_commit_type(subject)` 纯函数，
+    便于复测
+- 2026-05-12 用户选 B 临时放开权限，Agent 完成 Edit 覆盖 `.claude/hooks/check_changelog.py`
+- 真实路径端到端验证 13/13 通过，覆盖 feat/fix/perf/chore/docs/test/style/refactor/ci/build/fix(scope)/无前缀 等场景
+- ✅ 已完成，归档
