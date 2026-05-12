@@ -240,7 +240,13 @@ void EditorWidget::paintEvent(QPaintEvent* event)
     if (!qFuzzyCompare(currentDpr, m_lastDevicePixelRatio)) {
         m_lastDevicePixelRatio = currentDpr;
         if (m_layout && m_doc) {
-            m_layout->setFont(font());
+            // [Spec 横切关注点/80 INV-1/INV-3] 触发度量重算时**必须**用 layout 自身
+            // 当前字体（已通过 defaultEditorFont / MainWindow::applyFontSize 设置正确），
+            // 不能用 `font()`——QWidget::font() 默认从 QApplication 继承（中文 Windows
+            // 系统是 SimSun 9pt），会覆盖 INV-1 中心化常量，造成"编辑器字号始终不一致"
+            // （2026-05-12 用户连续 5 轮反馈根因：stderr trace 显示 paintEvent 首次
+            // DPI 检查时把 SimSun 9pt 写入 layout，覆盖 Segoe UI 12pt）
+            m_layout->setFont(m_layout->font());
             if (m_wordWrap) {
                 qreal textAreaWidth = viewport()->width() - m_gutterWidth - 16;
                 m_layout->setWrapWidth(textAreaWidth > 50 ? textAreaWidth : 50);

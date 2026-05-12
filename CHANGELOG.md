@@ -22,6 +22,10 @@ All notable changes to this project will be documented in this file.
 - 查找栏新增"点击外部自动关闭"行为：编辑区/预览区查找栏打开后，点击查找栏以外的任何区域（编辑/预览内容、工具栏、目录面板等）查找栏自动关闭并清除搜索高亮；点击查找栏自身的输入框、工具按钮或空白间隙不受影响（提供"专注完搜索就把它收起来"的自然手感，又不影响连续点上一个/下一个的稳定性）
 - 预览区右键菜单新增"Copy as Markdown"——选中预览内容后选这一项，复制到剪贴板的是**原始 Markdown 源文**（含 `**bold**` / `[link](url)` / 代码块围栏 ``` 等标记），方便粘贴到 GitHub Issue、Wiki 或其他 Markdown 编辑器；原有"Copy as Plain Text"（Ctrl+C 默认）和"Copy as HTML"保留不变
 
+### Changed
+- 预览区 Ctrl+C 复制现在默认就是 Markdown 源——剪贴板同时写入 `text/plain` 和 `text/markdown` 两种格式，粘贴方自动协商：Markdown 编辑器（GitHub Issue / Typora / VS Code 等）粘出渲染好的格式，纯文本接收方（聊天 / 邮件 / 终端）粘出含 `**bold**` 等标记字符。右键菜单上原"Copy as Markdown"独立项已合并到默认 Copy（避免重复入口）
+- 编辑区和预览区正文字体现在像素级一致：经过截图验证，定位到真正根因——`EditorWidget::paintEvent` 首次 DPI 检查路径错误用了 `QWidget::font()`（中文 Windows 系统默认继承 SimSun 9pt）覆盖了应有的 Segoe UI 12pt。修复后两侧 family + pt + 度量四项全部 0.000 px 对齐，连续 5 轮"字号不一致"反馈终于根治
+
 ## [1.1.1] - 2026-05-07
 
 ### Fixed
