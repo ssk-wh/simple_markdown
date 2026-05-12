@@ -90,6 +90,9 @@ protected:
 
 private:
     void updateScrollBars();
+    // [plan A1] 把当前 verticalScrollBar 位置 + viewport 高度 + ±2 屏 buffer 推给 layout
+    // 在每次 buildFromAst 之前调用，让 layout 走视口剪裁路径
+    void applyLayoutViewportCrop();
     QString extractPlainText() const;
     void extractBlockText(const struct LayoutBlock& block, QString& out) const;
     int textIndexAtPoint(const QPointF& point) const;
@@ -123,6 +126,9 @@ private:
     int m_selEnd = -1;
     bool m_selecting = false;
     qreal m_lastDevicePixelRatio = 0;
+    // [plan A1] 上次 applyLayoutViewportCrop 时的 scrollY，用于滚动节流判定
+    // -1.0 表示尚未首次 crop（视口未就绪 / 首次 layout 前）
+    qreal m_lastViewportCropTop = -1.0;
 
     // TOC 数据（发信号给外部 TocPanel）
     QVector<TocEntry> m_tocEntries;

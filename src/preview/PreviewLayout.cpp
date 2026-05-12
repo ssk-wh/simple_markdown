@@ -71,6 +71,23 @@ void PreviewLayout::setViewportWidth(qreal width)
     m_viewportWidth = width;
 }
 
+// [plan A1] 视口剪裁开关：设置后下一次 buildFromAst 走粗估占位路径
+void PreviewLayout::setViewportYRange(qreal topY, qreal bottomY)
+{
+    if (bottomY <= topY) {
+        clearViewportYRange();
+        return;
+    }
+    m_viewportYTop = topY;
+    m_viewportYBottom = bottomY;
+}
+
+void PreviewLayout::clearViewportYRange()
+{
+    m_viewportYTop = 0.0;
+    m_viewportYBottom = 0.0;
+}
+
 void PreviewLayout::setImageCache(ImageCache* cache)
 {
     m_imageCache = cache;
@@ -155,13 +172,110 @@ void PreviewLayout::buildFromAst(const std::shared_ptr<AstNode>& root)
     // 派生因子 0.1 → 12pt 下约 2-3px（与用户体感一致），高 DPI 下随字体度量缩放。
     const QFontMetricsF& fm = cachedFontMetrics(m_baseFont);
     qreal y = fm.height() * 0.1;
+
+    // [plan A1] 视口剪裁路径：viewport range 已设置时，视口外块走 quickEstimateHeight 粗估
+    // INV-16/17/18：placeholder 模式 inlineRuns 空、bounds 粗估，进入视口前必须升级
+    const bool useViewportCrop = hasViewportYRange();
+
     for (const auto& child : root->children) {
-        LayoutBlock block = layoutBlock(child.get(), m_viewportWidth);
+        LayoutBlock block;
+        if (useViewportCrop) {
+            // 先粗估一个高度上界，判定与视口是否相交（含 ±2 屏 buffer 已由 widget 端注入）
+            qreal estimatedH = quickEstimateHeight(child.get(), m_viewportWidth);
+            qreal blockTop = y;
+            qreal blockBottom = y + estimatedH;
+            bool inViewport = !(blockBottom < m_viewportYTop || blockTop > m_viewportYBottom);
+            if (inViewport) {
+                block = layoutBlock(child.get(), m_viewportWidth);  // 完整精算
+            } else {
+                block = makePlaceholder(child.get(), m_viewportWidth, estimatedH);
+            }
+        } else {
+            block = layoutBlock(child.get(), m_viewportWidth);
+        }
         block.bounds.moveTop(y);
         y += block.bounds.height() + 12.0; // 12px spacing between blocks
         m_root.children.push_back(std::move(block));
     }
     m_root.bounds = QRectF(0, 0, m_viewportWidth, y);
+}
+
+// [plan A1] 视口外块粗估高度：基于 source line 行数 × lineHeight + type 修正
+// 允许 ±30% 偏差（INV-15 例外，仅 placeholder 路径），进入视口前必须升级为 layoutBlock
+qreal PreviewLayout::quickEstimateHeight(const AstNode* node, qreal maxWidth) const
+{
+    Q_UNUSED(maxWidth);
+    if (!node) return m_lineHeight;
+
+    // 特殊类型：高度与 source line 行数无关
+    switch (node->type) {
+    case AstNodeType::ThematicBreak:
+        return 20.0;
+    case AstNodeType::Image:
+        // 块级图片默认占位高度，与 layoutBlock 中未命中 cache 时的 200px 一致
+        return 200.0;
+    case AstNodeType::CodeBlock: {
+        // 按 raw line 数 × codeLineHeight + 上下 padding，与 INV-14 精算近似（不做软换行预测）
+        int lines = qMax(1, (node->endLine - node->startLine + 1));
+        return lines * m_codeLineHeight + 16.0;
+    }
+    case AstNodeType::Heading: {
+        // headingLevel 1-6 → 1.8x-1.02x，与 layoutBlock 的 scale 表一致
+        qreal scale = 1.0;
+        switch (node->headingLevel) {
+        case 1: scale = 1.8; break;
+        case 2: scale = 1.5; break;
+        case 3: scale = 1.3; break;
+        case 4: scale = 1.15; break;
+        case 5: scale = 1.05; break;
+        case 6: scale = 1.02; break;
+        default: scale = 1.0; break;
+        }
+        // Heading 通常 1-2 行（含换行）
+        int lines = qMax(1, (node->endLine - node->startLine + 1));
+        qreal h = lines * m_lineHeight * scale;
+        if (node->headingLevel <= 2) h += 8.0;
+        return h;
+    }
+    case AstNodeType::Frontmatter: {
+        // entries 数 × 1.4 行高 + 卡片 padding
+        int entries = qMax<int>(1, static_cast<int>(node->frontmatterEntries.size()));
+        return entries * m_lineHeight + 24.0;
+    }
+    default:
+        break;
+    }
+
+    // 默认：按 source line 数 × lineHeight，软换行风险已被 ±30% 容忍度吸收
+    int lines = qMax(1, (node->endLine - node->startLine + 1));
+    return lines * m_lineHeight;
+}
+
+// [plan A1] 视口外占位块：类型 + source line 范围 + bounds，inlineRuns/children 保持空
+LayoutBlock PreviewLayout::makePlaceholder(const AstNode* node, qreal maxWidth, qreal estimatedH) const
+{
+    LayoutBlock block;
+    block.placeholderOnly = true;
+    block.sourceStartLine = node->startLine;
+    block.sourceEndLine = node->endLine;
+    block.bounds = QRectF(0, 0, maxWidth, estimatedH);
+
+    // 映射 AstNodeType → LayoutBlock::Type，便于上层判定（如 collectSourceMappings 走特定分支）
+    switch (node->type) {
+    case AstNodeType::Paragraph:     block.type = LayoutBlock::Paragraph; break;
+    case AstNodeType::Heading:       block.type = LayoutBlock::Heading; break;
+    case AstNodeType::CodeBlock:     block.type = LayoutBlock::CodeBlock; break;
+    case AstNodeType::BlockQuote:    block.type = LayoutBlock::BlockQuote; break;
+    case AstNodeType::List:          block.type = LayoutBlock::List; break;
+    case AstNodeType::Item:          block.type = LayoutBlock::ListItem; break;
+    case AstNodeType::Table:         block.type = LayoutBlock::Table; break;
+    case AstNodeType::Image:         block.type = LayoutBlock::Image; break;
+    case AstNodeType::ThematicBreak: block.type = LayoutBlock::ThematicBreak; break;
+    case AstNodeType::Frontmatter:   block.type = LayoutBlock::Frontmatter; break;
+    case AstNodeType::HtmlBlock:     block.type = LayoutBlock::HtmlBlock; break;
+    default:                         block.type = LayoutBlock::Paragraph; break;
+    }
+    return block;
 }
 
 qreal PreviewLayout::totalHeight() const

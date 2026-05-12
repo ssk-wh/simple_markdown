@@ -214,3 +214,148 @@ TEST(PreviewRenderBenchmark, BaselineReport_LargeDocument)
 
     SUCCEED();
 }
+
+// [plan A1 Step 3] 视口剪裁路径基线：模拟"打开文档时仅显示首屏"，验证 buildFromAst
+// 在 setViewportYRange(0, 800) 下的 ROI——预期视口内仅 layoutBlock 少量块，其余走 quickEstimateHeight
+TEST(PreviewRenderBenchmark, BaselineReport_ViewportCropped)
+{
+    const int kSizes[] = {1000, 5000, 10000, 20000};
+    QImage device(1600, 1200, QImage::Format_RGB32);
+    QFont base("Segoe UI", 12);
+
+    for (int targetLines : kSizes) {
+        QString doc = generateLargeMarkdown(targetLines);
+        int actualLines = doc.count('\n') + 1;
+
+        MarkdownParser parser;
+        auto astUnique = parser.parse(doc);
+        ASSERT_NE(astUnique, nullptr);
+        std::shared_ptr<AstNode> ast(std::move(astUnique));
+
+        PreviewLayout layout;
+        layout.setFont(base);
+        layout.updateMetrics(&device);
+        layout.setViewportWidth(1200.0);
+        // 模拟首屏视口 = 800px（约 1 屏）+ ±2 屏 buffer → 把视口设为 [0, 2400]
+        // widget 端会按视口高度 + 2*viewport 算 buffer，这里直接给等价值
+        layout.setViewportYRange(0.0, 2400.0);
+
+        std::fprintf(stdout,
+                     "\n[PreviewRenderBenchmark::Cropped] doc lines=%d (target %d), viewport=[0,2400]\n",
+                     actualLines, targetLines);
+        std::fflush(stdout);
+
+        constexpr int kWarmup = 3;
+        for (int i = 0; i < kWarmup; ++i) {
+            layout.buildFromAst(ast);
+        }
+
+        // 稳态：固定视口，30 次
+        {
+            QVector<qint64> nss;
+            nss.reserve(30);
+            for (int i = 0; i < 30; ++i) {
+                QElapsedTimer t;
+                t.start();
+                layout.buildFromAst(ast);
+                nss.append(t.nsecsElapsed());
+            }
+            Stats s = summarize(nss);
+            char label[80];
+            std::snprintf(label, sizeof(label), "%6d lines, viewport-crop steady, 30x", actualLines);
+            printStats(label, s);
+        }
+
+        // 拖拽：宽度变化触发完整 rebuild（仍走视口剪裁）
+        {
+            QVector<qint64> nss;
+            nss.reserve(21);
+            for (int w = 800; w <= 1600; w += 40) {
+                layout.setViewportWidth(static_cast<qreal>(w));
+                QElapsedTimer t;
+                t.start();
+                layout.buildFromAst(ast);
+                nss.append(t.nsecsElapsed());
+            }
+            Stats s = summarize(nss);
+            char label[80];
+            std::snprintf(label, sizeof(label), "%6d lines, viewport-crop drag, 21x", actualLines);
+            printStats(label, s);
+        }
+    }
+    SUCCEED();
+}
+
+// 基线报告：跨文档规模（1k / 5k / 10k / 20k 行）测 buildFromAst 耗时
+// 目的：为 plan「2026-05-12-A1预览视口剪裁渲染」量化决策——
+//   - 若 10k+ 行 P95 突破 16ms 单帧预算 → 视口剪裁有必要
+//   - 若仍在预算内 → A1 可能不紧急，与 A2 增量解析比较 ROI
+// 与 BaselineReport_LargeDocument 共享 Stats / printStats / generateLargeMarkdown，
+// 避免「同一语义两份独立代码」反模式（CLAUDE.md 反模式 B）
+TEST(PreviewRenderBenchmark, BaselineReport_ScalingDocument)
+{
+    const int kSizes[] = {1000, 5000, 10000, 20000};
+    QImage device(1600, 1200, QImage::Format_RGB32);
+    QFont base("Segoe UI", 12);
+
+    for (int targetLines : kSizes) {
+        QString doc = generateLargeMarkdown(targetLines);
+        int actualLines = doc.count('\n') + 1;
+
+        MarkdownParser parser;
+        auto astUnique = parser.parse(doc);
+        ASSERT_NE(astUnique, nullptr);
+        std::shared_ptr<AstNode> ast(std::move(astUnique));
+
+        PreviewLayout layout;
+        layout.setFont(base);
+        layout.updateMetrics(&device);
+        layout.setViewportWidth(1200.0);
+
+        std::fprintf(stdout,
+                     "\n[PreviewRenderBenchmark::Scaling] doc lines=%d (target %d), bytes=%lld\n",
+                     actualLines, targetLines, static_cast<long long>(doc.size()));
+        std::fflush(stdout);
+
+        // Warmup
+        constexpr int kWarmup = 3;
+        for (int i = 0; i < kWarmup; ++i) {
+            layout.buildFromAst(ast);
+        }
+
+        // 稳态：固定 1200 宽度反复 30 次
+        {
+            QVector<qint64> nss;
+            nss.reserve(30);
+            for (int i = 0; i < 30; ++i) {
+                QElapsedTimer t;
+                t.start();
+                layout.buildFromAst(ast);
+                nss.append(t.nsecsElapsed());
+            }
+            Stats s = summarize(nss);
+            char label[64];
+            std::snprintf(label, sizeof(label), "%6d lines, steady 1200, 30x", actualLines);
+            printStats(label, s);
+        }
+
+        // 拖拽：宽度 800→1600 step 40（21 个采样点，模拟 splitter 拖拽）
+        {
+            QVector<qint64> nss;
+            nss.reserve(21);
+            for (int w = 800; w <= 1600; w += 40) {
+                layout.setViewportWidth(static_cast<qreal>(w));
+                QElapsedTimer t;
+                t.start();
+                layout.buildFromAst(ast);
+                nss.append(t.nsecsElapsed());
+            }
+            Stats s = summarize(nss);
+            char label[64];
+            std::snprintf(label, sizeof(label), "%6d lines, drag 800-1600 step 40", actualLines);
+            printStats(label, s);
+        }
+    }
+
+    SUCCEED();
+}

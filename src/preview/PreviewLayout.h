@@ -38,6 +38,10 @@ struct LayoutBlock {
     int sourceStartLine = -1;
     int sourceEndLine = -1;
 
+    // [plan A1] 视口剪裁占位标记：true 表示 bounds 是 quickEstimateHeight 粗估，
+    // inlineRuns/children 为空，PreviewPainter 必须跳过具体绘制
+    bool placeholderOnly = false;
+
     // 段落/标题：行内内容
     std::vector<InlineRun> inlineRuns;
 
@@ -79,6 +83,11 @@ public:
     ~PreviewLayout();
 
     void setViewportWidth(qreal width);
+    // [plan A1] 设置视口 Y 范围（像素，含 ±2 屏 buffer），用于 buildFromAst 视口剪裁
+    // 不传或 bottomY <= topY 时退回全量模式（默认行为）
+    void setViewportYRange(qreal topY, qreal bottomY);
+    void clearViewportYRange();
+    bool hasViewportYRange() const { return m_viewportYBottom > m_viewportYTop; }
     void setImageCache(ImageCache* cache);
     void setFont(const QFont& baseFont);
     // [Spec 模块-preview/02 INV-13] 正文行高乘数（默认 1.5，作用范围仅正文段落 / List / Table）
@@ -102,6 +111,11 @@ public:
 private:
     LayoutBlock layoutBlock(const AstNode* node, qreal maxWidth);
     LayoutBlock layoutFrontmatter(const AstNode* node, qreal maxWidth);
+    // [plan A1] 视口外块的粗估高度（不构建 inlineRuns/children）
+    // 允许 ±30% 偏差，进入视口前必须升级为 layoutBlock 精算
+    qreal quickEstimateHeight(const AstNode* node, qreal maxWidth) const;
+    // [plan A1] 构造视口外占位块（type + sourceLine + 粗估 bounds）
+    LayoutBlock makePlaceholder(const AstNode* node, qreal maxWidth, qreal estimatedH) const;
     void collectInlineRuns(const AstNode* node, std::vector<InlineRun>& runs,
                            QFont currentFont, QColor currentColor);
     qreal estimateParagraphHeight(const std::vector<InlineRun>& runs, qreal maxWidth) const;
@@ -124,6 +138,9 @@ private:
     qreal m_lineHeight = 24.0;
     qreal m_codeLineHeight = 20.0;
     QPaintDevice* m_device = nullptr;  // [高 DPI 修复] 用于高度估计中的字体度量
+    // [plan A1] 视口 Y 范围：m_viewportYBottom > m_viewportYTop 时启用视口剪裁
+    qreal m_viewportYTop = 0.0;
+    qreal m_viewportYBottom = 0.0;
     ImageCache* m_imageCache = nullptr;
     // [Spec 模块-preview/02 INV-12] cache key 用字体属性元组拼成的字符串，
     // 而非 qHash(QFont)：Qt 5.12 的 qHash 在不同 pointSize 下也会冲突，

@@ -170,6 +170,7 @@ void PreviewWidget::updateAst(std::shared_ptr<AstNode> root)
     if (contentWidth < 100) contentWidth = 100;
 
     m_layout->setViewportWidth(contentWidth);
+    applyLayoutViewportCrop();  // [plan A1] 视口剪裁
     m_layout->buildFromAst(m_currentAst);
 
     m_plainText = extractPlainText();
@@ -203,6 +204,7 @@ void PreviewWidget::rebuildLayout()
     qreal contentWidth = m_wordWrap ? (viewport()->width() - 40) : 10000;
     if (contentWidth < 100) contentWidth = 100;
     m_layout->setViewportWidth(contentWidth);
+    applyLayoutViewportCrop();  // [plan A1] 视口剪裁
     m_layout->buildFromAst(m_currentAst);
     updateScrollBars();
 }
@@ -276,7 +278,36 @@ void PreviewWidget::resizeEvent(QResizeEvent* event)
 
 void PreviewWidget::scrollContentsBy(int /*dx*/, int /*dy*/)
 {
+    // [plan A1] 滚动到视口范围接近 placeholder 块时，重新 layout 让其升级为精算。
+    // 节流：仅当滚动距离超过半屏才 rebuild，避免连续滚动每帧都 rebuild。
+    // benchmark 数据显示 20k 行视口剪裁 rebuild 仅 ~4.5ms（远低于 16ms 单帧线），
+    // 即便每半屏触发一次也只是 < 10% CPU。
+    if (m_currentAst && m_layout) {
+        qreal scrollY = verticalScrollBar()->value();
+        qreal vpH = viewport()->height();
+        if (vpH > 0 && qAbs(scrollY - m_lastViewportCropTop) > vpH * 0.5) {
+            applyLayoutViewportCrop();
+            m_layout->buildFromAst(m_currentAst);
+        }
+    }
     viewport()->update();
+}
+
+// [plan A1] 把当前视口 ±2 屏 buffer 推给 layout，让下一次 buildFromAst 走视口剪裁
+void PreviewWidget::applyLayoutViewportCrop()
+{
+    if (!m_layout) return;
+    qreal scrollY = verticalScrollBar()->value();
+    qreal vpH = viewport()->height();
+    if (vpH <= 0) {
+        // 视口尚未就绪（widget 还没首次 show），退回全量模式
+        m_layout->clearViewportYRange();
+        return;
+    }
+    // ±2 屏 buffer：给滚动节流留宽容度，避免快速滚动时刚滚到边缘就触发 rebuild
+    qreal buffer = vpH * 2.0;
+    m_layout->setViewportYRange(scrollY - buffer, scrollY + vpH + buffer);
+    m_lastViewportCropTop = scrollY;
 }
 
 void PreviewWidget::updateScrollBars()
@@ -306,6 +337,7 @@ void PreviewWidget::setTheme(const Theme& theme)
     m_layout->setTheme(theme);
     // 重建 layout 以更新 InlineRun 中的主题色
     if (m_currentAst) {
+        applyLayoutViewportCrop();  // [plan A1] 视口剪裁
         m_layout->buildFromAst(m_currentAst);
         updateScrollBars();
     }
@@ -341,6 +373,7 @@ void PreviewWidget::setWordWrap(bool enabled)
         qreal contentWidth = m_wordWrap ? (viewport()->width() - 40) : 10000;
         if (contentWidth < 100) contentWidth = 100;
         m_layout->setViewportWidth(contentWidth);
+        applyLayoutViewportCrop();  // [plan A1] 视口剪裁
         m_layout->buildFromAst(m_currentAst);
         m_plainText = extractPlainText();
         updateScrollBars();
@@ -777,6 +810,7 @@ void PreviewWidget::openInBrowser()
 void PreviewWidget::refreshPreview()
 {
     if (m_currentAst) {
+        applyLayoutViewportCrop();  // [plan A1] 视口剪裁
         m_layout->buildFromAst(m_currentAst);
         m_plainText = extractPlainText();
         buildHeadingCharOffsets();
