@@ -95,9 +95,6 @@ private:
     int textIndexAtPoint(const QPointF& point) const;
     void copySelection();
     void copyAsHtml();
-    // [Spec 模块-preview/13 INV-1/2] 把选区覆盖的 LayoutBlock 对应的 raw markdown
-    // 源行（m_sourceText 的子集）写入剪贴板。块级精度，半行选区会扩到整段。
-    void copyAsMarkdown();
     void openInBrowser();
     void addHighlight();
     void clearHighlights();

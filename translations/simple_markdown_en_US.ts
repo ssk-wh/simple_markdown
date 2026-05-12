@@ -673,12 +673,12 @@ Open the crash reports folder?</translation>
 <context>
     <name>PreviewWidget</name>
     <message>
-        <source>Copy as Plain Text</source>
-        <translation type="unfinished"></translation>
+        <source>Copy</source>
+        <translation>Copy</translation>
     </message>
     <message>
         <source>Copy as HTML</source>
-        <translation type="unfinished"></translation>
+        <translation>Copy as HTML</translation>
     </message>
     <message>
         <source>Select All</source>

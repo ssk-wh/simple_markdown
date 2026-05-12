@@ -23,7 +23,8 @@ All notable changes to this project will be documented in this file.
 - 预览区右键菜单新增"Copy as Markdown"——选中预览内容后选这一项，复制到剪贴板的是**原始 Markdown 源文**（含 `**bold**` / `[link](url)` / 代码块围栏 ``` 等标记），方便粘贴到 GitHub Issue、Wiki 或其他 Markdown 编辑器；原有"Copy as Plain Text"（Ctrl+C 默认）和"Copy as HTML"保留不变
 
 ### Changed
-- 预览区 Ctrl+C 复制现在默认就是 Markdown 源——剪贴板同时写入 `text/plain` 和 `text/markdown` 两种格式，粘贴方自动协商：Markdown 编辑器（GitHub Issue / Typora / VS Code 等）粘出渲染好的格式，纯文本接收方（聊天 / 邮件 / 终端）粘出含 `**bold**` 等标记字符。右键菜单上原"Copy as Markdown"独立项已合并到默认 Copy（避免重复入口）
+- 预览区 Ctrl+C 复制现在默认就是 Markdown 源——剪贴板同时写入 `text/plain` 和 `text/markdown` 两种格式，粘贴方自动协商：Markdown 编辑器（GitHub Issue / Typora / VS Code 等）粘出渲染好的格式，纯文本接收方（聊天 / 邮件 / 终端）粘出含 `**bold**` 等标记字符。右键菜单上原"Copy as Markdown"独立项已彻底删除（默认复制即 Markdown，无需重复入口）
+- 预览区右键菜单的"Copy"项现在正确翻译为中文"复制"（之前漏了 i18n 条目，中文界面下显示为英文）
 - 编辑区和预览区正文字体现在像素级一致：经过截图验证，定位到真正根因——`EditorWidget::paintEvent` 首次 DPI 检查路径错误用了 `QWidget::font()`（中文 Windows 系统默认继承 SimSun 9pt）覆盖了应有的 Segoe UI 12pt。修复后两侧 family + pt + 度量四项全部 0.000 px 对齐，连续 5 轮"字号不一致"反馈终于根治
 
 ## [1.1.1] - 2026-05-07

@@ -692,8 +692,8 @@ Open the crash reports folder?</source>
 <context>
     <name>PreviewWidget</name>
     <message>
-        <source>Copy as Plain Text</source>
-        <translation>复制为纯文本</translation>
+        <source>Copy</source>
+        <translation>复制</translation>
     </message>
     <message>
         <source>Copy as HTML</source>
