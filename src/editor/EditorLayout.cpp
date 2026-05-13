@@ -164,6 +164,14 @@ void EditorLayout::ensureLayout(int line) const
     info.height = y;
     info.layout = std::move(tl);
     info.dirty = false;
+
+    // [plan A7 2026-05-13] 该行实际 height 已精算，invalidate yCache 让下次 lineAtY/lineY
+    // 重建时拿到精确值。否则 EditorPainter::paint 用本地 cursor Y 推进（精算），而
+    // EditorLayout::hitTest 用 lineAtY → yCache（估算）→ 选区与视觉错位（CLAUDE.md
+    // 反模式 B：同一语义两份独立代码）。
+    // 成本：每次 ensureLayout 后 m_yCacheDirty=true，下次 lineAtY 重建 N 行 O(N) 但
+    // 由于 lineHeight 现在 O(1)（不再触发 ensureLayout），整体 < 1ms。
+    m_yCacheDirty = true;
 }
 
 void EditorLayout::ensureYCache() const
@@ -282,13 +290,18 @@ qreal EditorLayout::lineHeight(int line) const
     if (!info.dirty && info.layout)
         return info.height;
 
-    // 需要实际高度时才触发布局（换行或自定义行距）
-    if (m_wrapWidth > 0 || !qFuzzyCompare(m_lineSpacingFactor, 1.0)) {
-        ensureLayout(line);
-        return info.layout ? info.height : m_defaultLineHeight * m_lineSpacingFactor;
-    }
-
-    return m_defaultLineHeight;
+    // [plan A7 2026-05-13] 未 layout 的行返回估算行高，**不**触发 ensureLayout。
+    // 原实现在 wrap 模式或自定义行距时会调 ensureLayout(line)，配合
+    // ensureYCache() 的 for 循环 → setWrapWidth 触发 rebuild 后，下次调
+    // totalHeight/lineY 会对所有 N 行 ensureLayout（含 QTextLayout 排版 +
+    // SyntaxHighlighter token 化），10k 行 ~ 100ms+ 卡顿。
+    // 改为估算：估算行高 = m_defaultLineHeight * m_lineSpacingFactor。
+    // wrap 模式下多行 wrap 行会被低估——这是 placeholder 风格 trade-off：
+    // 滚动条 maximum 在视口外行尚未精算时偏小，paint 视口内行时 ensureLayout
+    // 触发后实际高度回填到 info.height，下次 ensureYCache（被 invalidate 后）
+    // 重建时会用上准确值。用户感知到的是「滚动条随滚动而轻微变长」，
+    // 比拖动卡 100ms+ 可接受得多。
+    return m_defaultLineHeight * m_lineSpacingFactor;
 }
 
 qreal EditorLayout::totalHeight() const

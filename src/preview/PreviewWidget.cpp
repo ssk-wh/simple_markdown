@@ -715,62 +715,14 @@ void PreviewWidget::copySelection()
     int end = qMax(m_selStart, m_selEnd);
     if (start == end) return;
 
+    // [2026-05-13 用户决策] 预览区复制只输出纯文本（所见即所得）。
+    // 历史：1.1.2 设计为 Ctrl+C 输出 markdown 源，但经多轮迭代（Heading/Table 子集特化、
+    // text/plain 与 text/markdown 双 MIME 等）始终无法稳定满足"复制时所见即所得"的体感。
+    // 用户最终决定放弃 markdown 复制路径，统一为纯文本切片——逻辑极简、行为可预测。
+    // 富文本场景（Word/Notion）由右键菜单的「Copy as HTML」独立项覆盖。
     QString plain = m_plainText.mid(start, end - start);
-
-    // [Spec 模块-preview/13 INV-2 修订二，2026-05-12] 默认 Ctrl+C 同时写入纯文本和
-    // Markdown 源——粘贴方按 MIME 协商自动选格式：
-    //   - 支持 markdown 的编辑器（如 GitHub、VS Code、Typora）读 text/plain 的 markdown 文本
-    //   - 纯文本接收方（如聊天 / 邮件 / 终端）只读 text/plain 拿到内容
-    // 用户原话："如果是直接 md 格式的输入区域，我粘贴后就是 md，如果是纯文本接收区域，
-    // 我粘贴后就是纯文本"。
-    // 实现：用 QMimeData 同时设 text 和 markdown MIME；text 就用 markdown 原文（带标记），
-    // 这样无差别接收方拿到的也是 markdown 字符——这是最贴近"我看到的预览所对应的源文"
-    // 的语义。
-    QString markdown;
-    if (!m_sourceText.isEmpty() && m_layout) {
-        int minLine = INT_MAX, maxLine = -1;
-        int charCounter = 0;
-        std::function<void(const LayoutBlock&)> walk = [&](const LayoutBlock& blk) {
-            const int blkStart = charCounter;
-            QString blkText;
-            extractBlockText(blk, blkText);
-            const int blkEnd = blkStart + blkText.length();
-            if (blkEnd > start && blkStart < end) {
-                if (blk.sourceStartLine >= 0) {
-                    minLine = qMin(minLine, blk.sourceStartLine);
-                    const int endLine = (blk.sourceEndLine >= 0) ? blk.sourceEndLine
-                                                                  : blk.sourceStartLine;
-                    maxLine = qMax(maxLine, endLine);
-                }
-            }
-            charCounter = blkEnd;
-        };
-        for (const auto& child : m_layout->rootBlock().children) {
-            walk(child);
-        }
-        if (minLine <= maxLine) {
-            const QStringList lines = m_sourceText.split(QChar('\n'));
-            if (minLine < 0) minLine = 0;
-            if (maxLine >= lines.size()) maxLine = lines.size() - 1;
-            QStringList selected;
-            for (int i = minLine; i <= maxLine; ++i) {
-                selected.append(lines.at(i));
-            }
-            markdown = selected.join(QChar('\n'));
-        }
-    }
-
     QMimeData* mime = new QMimeData();
-    if (!markdown.isEmpty()) {
-        // text/plain 用 markdown 原文——这样支持 markdown 的接收方粘出 markdown，
-        // 纯文本接收方粘出含标记的字符（用户期望：复制即 markdown 源）
-        mime->setText(markdown);
-        // 同时设 text/markdown MIME（部分应用按此 MIME 识别）
-        mime->setData(QStringLiteral("text/markdown"), markdown.toUtf8());
-    } else {
-        // 退化：没有 m_sourceText（如 ChangelogDialog 场景）→ 用预览 plain text
-        mime->setText(plain);
-    }
+    mime->setText(plain);
     QApplication::clipboard()->setMimeData(mime);
 }
 

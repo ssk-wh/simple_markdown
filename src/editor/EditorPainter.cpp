@@ -35,6 +35,16 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
     // 背景
     painter->fillRect(painter->clipBoundingRect(), m_theme.editorBg);
 
+    // [plan A7 2026-05-13] 预热视口内行的 ensureLayout —— 触发 EditorLayout::ensureLayout
+    // 末尾的 invalidateYCache，使后续所有 lineY 调用都拿到 ensureYCache 重建后的精算值。
+    // 之前的 bug 链路：lineHeight 估算路径让 yCache 偏离 paint 实际位置 → 选区拖动 hitTest
+    // 用估算 yCache 找行 → 与视觉位置不一致。预热后 yCache 与 paint 视觉完全一致。
+    // 也涵盖光标 / 搜索高亮 / IME 等所有用 lineY 的路径——一处预热，全局一致（CLAUDE.md
+    // 反模式 B「同一语义两份独立代码」反向修复）。
+    for (int line = firstLine; line <= lastLine && line < layout->lineCount(); ++line) {
+        layout->layoutForLine(line);
+    }
+
     // 当前行高亮
     if (!doc->selection().hasSelection()) {
         qreal cy = layout->lineY(cursorPos.line) - scrollY;
@@ -95,6 +105,10 @@ void EditorPainter::paint(QPainter* painter, EditorLayout* layout, Document* doc
         selEndPos = doc->selection().range().end();
     }
 
+    // [plan A7 2026-05-13] paint 入口已预热视口内行 ensureLayout（见函数顶部），yCache
+    // 重建时已用精算 height，lineY(line) 与 paint 实际位置完全一致——不需要本地 cursor Y
+    // 推进逻辑。回退到原 lineY(line) - scrollY 模式，与 EditorLayout::hitTest /
+    // positionToPoint / cursorRect 共享同一坐标系，避免选区错位回归。
     for (int line = firstLine; line <= lastLine && line < layout->lineCount(); ++line) {
         QTextLayout* tl = layout->layoutForLine(line);
         if (!tl) continue;

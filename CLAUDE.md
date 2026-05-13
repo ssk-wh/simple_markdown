@@ -252,8 +252,10 @@ build_on_win.bat release    :: Windows
 ./build_on_linux.sh release  # Linux
 ```
 
-> **注意**：编译前 taskkill 仅在目标进程锁定了 build 目录下的 exe 时才需要。
-> 如果用户启动的是从其他位置（如安装目录）运行的 SimpleMarkdown，不要杀死它。
+> **注意**：编译 / 验证 / 打包前都先 `Stop-Process -Name SimpleMarkdown -Force`（PowerShell）
+> 或 `taskkill /F /IM SimpleMarkdown.exe`（cmd）。单实例机制会让 build 目录的 exe 启动后
+> 被转发到安装版（旧版本），导致验证修复时实际跑的还是没修过的版本（2026-05-13 实测踩到）。
+> memory `feedback_kill_before_run.md` 「任何情况都先 taskkill」是底线规则。
 
 ### 编译后自动跑单元测试
 
