@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.7] - 2026-05-13
+
+### Improved
+- 编辑器空闲时 CPU 占用大幅下降——后台用于预加载视口附近行布局的定时器在预加载完毕后会自动停止（之前永不停止，闲置时仍以每秒 20 次触发，造成持续可感知的 CPU 占用）。滚动或编辑内容时该定时器会自动重启完成新区域的预加载
+
 ## [1.1.6] - 2026-05-13
 
 ### Added

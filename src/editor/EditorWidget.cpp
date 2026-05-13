@@ -126,11 +126,16 @@ EditorWidget::EditorWidget(QWidget* parent)
                                   Q_ARG(bool, m_searchBar->isRegex()));
     });
 
-    // 空闲时预加载可见区域附近的行布局
+    // 空闲时预加载可见区域附近的行布局——预加载完毕后**停止 timer**，避免闲置空转
+    // 占用 CPU（之前固定 50ms 周期 + 永不停止 = ~20Hz 闲置耗电）。
+    // [2026-05-13 CPU 修复] 视口/文档变化时重启（由 scrollContentsBy / textChanged 触发）
     m_idlePreloadTimer.setInterval(50);
     m_idlePreloadTimer.setSingleShot(false);
     connect(&m_idlePreloadTimer, &QTimer::timeout, this, [this]() {
-        if (!m_doc || m_layout->lineCount() == 0) return;
+        if (!m_doc || m_layout->lineCount() == 0) {
+            m_idlePreloadTimer.stop();
+            return;
+        }
 
         int first = firstVisibleLine();
         int last = lastVisibleLine();
@@ -145,6 +150,8 @@ EditorWidget::EditorWidget(QWidget* parent)
             m_lastPreloadLine = i;
             return; // 每次只预加载一行，避免阻塞
         }
+        // 预加载范围内所有行已 layout → 停止 timer，闲置 0 CPU 占用
+        m_idlePreloadTimer.stop();
     });
     m_idlePreloadTimer.start();
 
@@ -408,6 +415,8 @@ void EditorWidget::scrollContentsBy(int dx, int dy)
     Q_UNUSED(dx);
     Q_UNUSED(dy);
     m_lastPreloadLine = -1; // 重置预加载状态
+    // [2026-05-13 CPU 修复] 视口变化 → 重启预加载 timer 覆盖新视口附近
+    m_idlePreloadTimer.start();
     viewport()->update();
 }
 
@@ -582,6 +591,9 @@ void EditorWidget::onTextChanged(int offset, int removedLen, int addedLen)
     // 对于常规大小的文件（<10000行），rebuild 很快
     m_layout->rebuild();
     updateScrollBars();
+    // [2026-05-13 CPU 修复] 文档变化 → 重启预加载 timer 覆盖新内容
+    m_lastPreloadLine = -1;
+    m_idlePreloadTimer.start();
     viewport()->update();
 
     auto pos = m_doc->selection().cursorPosition();
