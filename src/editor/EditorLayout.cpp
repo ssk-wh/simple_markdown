@@ -290,17 +290,21 @@ qreal EditorLayout::lineHeight(int line) const
     if (!info.dirty && info.layout)
         return info.height;
 
-    // [plan A7 2026-05-13] 未 layout 的行返回估算行高，**不**触发 ensureLayout。
-    // 原实现在 wrap 模式或自定义行距时会调 ensureLayout(line)，配合
-    // ensureYCache() 的 for 循环 → setWrapWidth 触发 rebuild 后，下次调
-    // totalHeight/lineY 会对所有 N 行 ensureLayout（含 QTextLayout 排版 +
-    // SyntaxHighlighter token 化），10k 行 ~ 100ms+ 卡顿。
-    // 改为估算：估算行高 = m_defaultLineHeight * m_lineSpacingFactor。
-    // wrap 模式下多行 wrap 行会被低估——这是 placeholder 风格 trade-off：
-    // 滚动条 maximum 在视口外行尚未精算时偏小，paint 视口内行时 ensureLayout
-    // 触发后实际高度回填到 info.height，下次 ensureYCache（被 invalidate 后）
-    // 重建时会用上准确值。用户感知到的是「滚动条随滚动而轻微变长」，
-    // 比拖动卡 100ms+ 可接受得多。
+    // [plan A7 2026-05-13 + 2026-05-13 base64 修订] 普通行返回估算行高，
+    // **超长行**（如粘贴 base64 图片 ~10万字符）强制 ensureLayout 取精算高度。
+    //
+    // 起因：A7 估算路径让 wrap 模式下多视觉行的 base64 行高被低估为单行 →
+    // totalHeight 偏小 → 滚动条 maximum 偏小 → 用户无法滚动到底部。
+    // 阈值 1000：典型 Markdown 行 < 200 字符（wrap 一次内），base64 图片
+    // 几万字符必超。普通文档不会触发 ensureLayout（A7 性能收益保留）。
+    if (m_doc && m_wrapWidth > 0) {
+        const int textLen = m_doc->lineText(line).length();
+        if (textLen > 1000) {
+            ensureLayout(line);
+            if (info.layout) return info.height;
+        }
+    }
+
     return m_defaultLineHeight * m_lineSpacingFactor;
 }
 

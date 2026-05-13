@@ -212,9 +212,12 @@ MainWindow::MainWindow(QWidget* parent)
             tab->preview->smoothScrollToSourceLine(sourceLine);
     });
 
-    // [plan B11 2026-05-12] Ctrl+1..9 跳转到 TOC 前 9 个章节——键盘工作流增强
-    // 复用 TocPanel::headingClicked 同款跳转路径（smoothScrollToSourceLine），保证
-    // 与"鼠标点 TOC 项"行为一致：预览滚动 + TOC 高亮 + 编辑器 sourceLine 同步
+    // [plan B11 2026-05-12 / 修订二 2026-05-13] Ctrl+1..9 跳转到文档**章节**——
+    // 章节级别的判定规则：
+    //   1. 找文档最高级别 heading（topLevel）
+    //   2. 如果 topLevel 只有 1 个（典型"文档大标题 H1 + N 个章节 H2"），章节级为**次级**
+    //   3. 否则章节级 = topLevel（多 H1 / 没 H1 都按此判定）
+    // 这样跳转直觉与"章节序号"一致（VS Code 大纲、网页书签同理）。
     for (int i = 1; i <= 9; ++i) {
         auto* sc = new QShortcut(QKeySequence(Qt::CTRL | static_cast<Qt::Key>(Qt::Key_0 + i)),
                                  this);
@@ -222,8 +225,39 @@ MainWindow::MainWindow(QWidget* parent)
             auto* tab = currentTab();
             if (!tab) return;
             const auto& entries = tab->preview->tocEntries();
-            if (i - 1 >= entries.size()) return;  // 章节不足 i 项，静默无反应
-            tab->preview->smoothScrollToSourceLine(entries.at(i - 1).sourceLine);
+            if (entries.isEmpty()) return;
+
+            // 步骤 1：找最高级别
+            int topLevel = INT_MAX;
+            for (const auto& e : entries) {
+                if (e.level < topLevel) topLevel = e.level;
+            }
+            // 步骤 2：统计最高级别数量
+            int topCount = 0;
+            for (const auto& e : entries) {
+                if (e.level == topLevel) ++topCount;
+            }
+            // 步骤 3：决定章节级别
+            int chapterLevel = topLevel;
+            if (topCount == 1) {
+                // 只有 1 个最高级（文档大标题）→ 章节级是次级
+                int nextLevel = INT_MAX;
+                for (const auto& e : entries) {
+                    if (e.level > topLevel && e.level < nextLevel) nextLevel = e.level;
+                }
+                if (nextLevel != INT_MAX) chapterLevel = nextLevel;
+            }
+
+            // 步骤 4：取章节级别的第 i 项
+            int hit = 0;
+            for (const auto& e : entries) {
+                if (e.level != chapterLevel) continue;
+                if (++hit == i) {
+                    tab->preview->smoothScrollToSourceLine(e.sourceLine);
+                    return;
+                }
+            }
+            // 章节不足 i 项，静默无反应
         });
     }
 
@@ -1242,6 +1276,8 @@ MainWindow::TabData MainWindow::createTab()
                 if (m_displayBothAct) m_displayBothAct->setChecked(newMode == 0);
                 if (m_displayEditorAct) m_displayEditorAct->setChecked(newMode == 1);
                 if (m_displayPreviewAct) m_displayPreviewAct->setChecked(newMode == 2);
+                // [2026-05-13] splitter 拖拽改变 m_displayMode 时也更新行号 label 可见性
+                if (m_statusCursorPos) m_statusCursorPos->setVisible(newMode != 2);
                 if (newMode == 1)
                     showToast(tr("Preview hidden. Restore via View > Display Area."));
                 else if (newMode == 2)
@@ -2836,6 +2872,14 @@ void MainWindow::connectTabStatusBar(const TabData& tab)
 
 void MainWindow::updateCursorPosition(int line, int column)
 {
+    if (!m_statusCursorPos) return;
+    // [2026-05-13] 仅预览模式下编辑区不可见——行/列号失去参考意义，强制隐藏 label。
+    // 兜底 applyDisplayMode 的 setVisible（避免任何路径让 label 重新出现）。
+    if (m_displayMode == 2) {
+        m_statusCursorPos->hide();
+        return;
+    }
+    if (!m_statusCursorPos->isVisible()) m_statusCursorPos->show();
     m_statusCursorPos->setText(tr("Ln %1, Col %2").arg(line + 1).arg(column + 1));
 }
 

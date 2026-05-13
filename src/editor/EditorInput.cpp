@@ -8,6 +8,8 @@
 #include <QClipboard>
 #include <QMimeData>
 #include <QImage>
+#include <QBuffer>
+#include <QByteArray>
 #include <QFileInfo>
 #include <QDir>
 #include <QDateTime>
@@ -352,13 +354,18 @@ void EditorInput::paste() {
     const QMimeData* mime = cb->mimeData();
 
     // [plan B7 2026-05-12] 剪贴板含图片 → 保存到 ./images/ 并插入 ![](images/...)
-    if (mime && mime->hasImage()) {
+    // hasImage() 不识别某些应用直接写 image/png MIME 的情况——也检查 formats()
+    bool hasImg = mime && (mime->hasImage()
+                        || mime->hasFormat(QStringLiteral("image/png"))
+                        || mime->hasFormat(QStringLiteral("image/jpeg"))
+                        || mime->hasFormat(QStringLiteral("image/bmp")));
+    if (hasImg) {
         QString relPath = saveClipboardImageToImagesDir();
         if (!relPath.isEmpty()) {
             insertText(QStringLiteral("![](%1)").arg(relPath));
             return;
         }
-        // 保存失败（未保存文档 / 写入失败）→ fallback 到下面的文本路径
+        // 保存失败 → fallback 到下面的文本路径
     }
 
     QString text = cb->text();
@@ -390,20 +397,39 @@ void EditorInput::paste() {
 }
 
 // [plan B7] 把剪贴板图片保存到 ./images/，返回相对路径（"images/<filename>.png"）。
-// 未保存文档 / 文件写入失败 / 剪贴板无图片 → 返回空。
+// 未保存文档 → fallback 到 base64 data URI 嵌入（避免完全无反应）。
+// 剪贴板无图片 / 文件写入失败 → 返回空。
 QString EditorInput::saveClipboardImageToImagesDir()
 {
     auto* cb = QApplication::clipboard();
     const QMimeData* mime = cb->mimeData();
-    if (!mime || !mime->hasImage()) return QString();
+    if (!mime) return QString();
 
-    QImage img = qvariant_cast<QImage>(mime->imageData());
+    // 优先 hasImage()；fallback 到 image/* MIME 的原始字节数据
+    QImage img;
+    if (mime->hasImage()) {
+        img = qvariant_cast<QImage>(mime->imageData());
+    }
+    if (img.isNull()) {
+        for (const QString& fmt : {QStringLiteral("image/png"),
+                                   QStringLiteral("image/jpeg"),
+                                   QStringLiteral("image/bmp")}) {
+            if (mime->hasFormat(fmt)) {
+                QByteArray data = mime->data(fmt);
+                if (img.loadFromData(data)) break;
+            }
+        }
+    }
     if (img.isNull()) return QString();
 
+    // 未保存文档：fallback 到 base64 内嵌——文档自包含，用户保存后随源文一起持久化
     if (!doc() || doc()->filePath().isEmpty()) {
-        // 未保存文档无 documentDir 锚点——简化策略：要求先保存。
-        // 调用方（paste）回退到默认文本路径。
-        return QString();
+        QByteArray bytes;
+        QBuffer buf(&bytes);
+        buf.open(QIODevice::WriteOnly);
+        if (!img.save(&buf, "PNG")) return QString();
+        return QStringLiteral("data:image/png;base64,%1")
+                .arg(QString::fromLatin1(bytes.toBase64()));
     }
 
     QFileInfo docInfo(doc()->filePath());
