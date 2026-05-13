@@ -353,6 +353,14 @@ void EditorWidget::resizeEvent(QResizeEvent* event)
 {
     QAbstractScrollArea::resizeEvent(event);
 
+    // [plan CPU 闲置占用 2026-05-13] 同 PreviewWidget——尺寸未变跳过 setWrapWidth
+    if (event->oldSize().isValid() && event->oldSize() == event->size()) {
+        if (m_searchBar && m_searchBar->isVisible()) {
+            m_searchBar->move(width() - m_searchBar->width() - 20, 10);
+        }
+        return;
+    }
+
     // [Spec 模块-app/13 INV-SNAP-LAZY-PANE-REBUILD]
     // 父 SnapSplitter 拖拽期间跳过 EditorLayout::rebuild：m_layout->setWrapWidth
     // 内部走 m_lines.clear() 抛弃全部 QTextLayout 缓存，每帧都做开销不小。
@@ -929,12 +937,20 @@ void EditorWidget::insertImageMarkdown(const QString& imagePath)
 {
     if (!m_doc) return;
 
-    QString relPath = imagePath;
-    // 如果当前文档已保存，使用相对路径
+    QString relPath;
     QString docPath = m_doc->filePath();
     if (!docPath.isEmpty()) {
-        QDir docDir = QFileInfo(docPath).absoluteDir();
-        relPath = docDir.relativeFilePath(imagePath);
+        // [plan B8 2026-05-12] 已保存文档：把图片**复制**到 ./images/ 并插入相对路径。
+        // 让文档自包含——拖外部图片后即使原文件被删/移动，本地副本仍可访问。
+        relPath = m_input->copyImageFileToImagesDir(imagePath);
+        if (relPath.isEmpty()) {
+            // 复制失败 fallback 到原文件路径相对化（旧行为，保险兜底）
+            QDir docDir = QFileInfo(docPath).absoluteDir();
+            relPath = docDir.relativeFilePath(imagePath);
+        }
+    } else {
+        // 未保存文档：无 documentDir 锚点，仍用原绝对路径
+        relPath = imagePath;
     }
 
     // 使用正斜杠（Markdown 通用）

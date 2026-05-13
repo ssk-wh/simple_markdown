@@ -7,6 +7,7 @@
 #include <QLibraryInfo>
 #include "MainWindow.h"
 #include "../core/PerfProbe.h"
+#include "../core/LongTaskProbe.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -155,7 +156,9 @@ int main(int argc, char* argv[])
         }
     }
 
-    QApplication app(argc, argv);
+    // [plan A4 2026-05-12] 使用 SmApplication 子类——重写 notify() 监测主线程
+    // 长任务（> 16ms），仅在 perfEnabled() 时生效，关闭态零开销
+    core::SmApplication app(argc, argv);
     fprintf(stderr, "[2] QApplication created\n");
     fflush(stderr);
 

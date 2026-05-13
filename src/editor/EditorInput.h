@@ -15,6 +15,9 @@ public:
     // IME 提交文本
     void insertText(const QString& text);
 
+    // [plan B7/B8 2026-05-12] 图片落地 helper（EditorWidget::insertImageMarkdown 复用）
+    QString copyImageFileToImagesDir(const QString& srcPath);
+
 private:
     EditorWidget* m_editor;
 
@@ -52,6 +55,10 @@ private:
     void cut();
     void copy();
     void paste();
+
+    // [plan B7 2026-05-12] 把剪贴板里的图片保存到当前文档同级 ./images/ 并返回
+    // 相对路径（如 "images/doc-20260513-091530.png"）。失败/未保存文档返回空。
+    QString saveClipboardImageToImagesDir();
 
     // TextPosition <-> offset 转换
     int posToOffset(TextPosition pos);

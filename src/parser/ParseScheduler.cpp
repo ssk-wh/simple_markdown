@@ -57,6 +57,17 @@ void ParseScheduler::setDocument(Document* doc)
 void ParseScheduler::onTextChanged()
 {
     m_editSeq++;
+    // [plan A6 2026-05-12] 防抖窗口自适应文档规模：行数越大，单次 parse 越贵
+    // （INV-4 「10k 行 < 50ms」），固定 30ms 防抖在大文档持续输入时排队累积。
+    // 映射：≤1k 行 → 30ms（现状），≤5k 行 → 50ms，> 5k 行 → 80ms。
+    // 用户停止输入后 80ms 内预览必更新——可接受。
+    int debounceMs = 30;
+    if (m_doc) {
+        int lines = m_doc->lineCount();
+        if (lines > 5000)       debounceMs = 80;
+        else if (lines > 1000)  debounceMs = 50;
+    }
+    m_debounceTimer.setInterval(debounceMs);
     m_debounceTimer.start();
 }
 

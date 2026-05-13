@@ -246,6 +246,17 @@ void PreviewWidget::resizeEvent(QResizeEvent* event)
 {
     QAbstractScrollArea::resizeEvent(event);
 
+    // [plan CPU 闲置占用 2026-05-13] 尺寸未变（Qt 系统因 LayoutRequest 等内部事件
+    // 反复发送同尺寸的 resize event）→ 跳过 rebuildLayout。否则闲置时 layout 反复
+    // 触发，buildFromAst 每秒数次累计推高 CPU 占用。
+    if (event->oldSize().isValid() && event->oldSize() == event->size()) {
+        // 仅同步 SearchBar 位置（cheap），不重排
+        if (m_searchBar && m_searchBar->isVisible()) {
+            m_searchBar->move(width() - m_searchBar->width() - 20, 10);
+        }
+        return;
+    }
+
     // 同步 DPI 度量，确保高 DPI 初始化正确
     qreal currentDpr = viewport()->devicePixelRatioF();
     if (!qFuzzyCompare(currentDpr, m_lastDevicePixelRatio)) {

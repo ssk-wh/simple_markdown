@@ -25,6 +25,10 @@ public:
     // 获取图片（可能触发异步下载）。返回 nullptr 表示尚未就绪
     QPixmap* get(const QString& url);
 
+    // [plan A5 2026-05-12] 只读图片尺寸不解码像素——layout 阶段算高度用，
+    // 避免视口外图片在 layout 阶段被立即 decode 到 QPixmap 缓存
+    QSize getSize(const QString& url);
+
     bool isFailed(const QString& url) const;
     bool isLoading(const QString& url) const;
     bool isNetworkUrl(const QString& url) const;
@@ -45,6 +49,8 @@ private:
     void onNetworkReply(QNetworkReply* reply);
 
     QHash<QString, QPixmap> m_cache;
+    // [plan A5] 尺寸缓存（只读 header 不解码像素）：layout 阶段查询不触发全图加载
+    QHash<QString, QSize> m_sizeCache;
     QSet<QString> m_failedUrls;
     QSet<QString> m_loadingUrls;   // 正在下载的网络 URL
     QString m_documentDir;         // 当前文档所在目录

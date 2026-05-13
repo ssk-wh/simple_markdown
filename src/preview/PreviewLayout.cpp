@@ -198,6 +198,23 @@ void PreviewLayout::buildFromAst(const std::shared_ptr<AstNode>& root)
         m_root.children.push_back(std::move(block));
     }
     m_root.bounds = QRectF(0, 0, m_viewportWidth, y);
+    // [plan A3] mappings 缓存失效——下次 sourceLineToY/yToSourceLine 重建
+    m_mappingsCacheDirty = true;
+}
+
+// [plan A3 2026-05-12] 按需重建 sourceLine ↔ Y 双向映射缓存。
+// 之前每次 sourceLineToY / yToSourceLine 都重新 collectSourceMappings + sort，
+// 10k 行每帧多次调用累积可达毫秒级。改为 buildFromAst 后失效，首次访问重建一次。
+void PreviewLayout::ensureMappingsCache() const
+{
+    if (!m_mappingsCacheDirty) return;
+    m_mappingsBySourceLine.clear();
+    collectSourceMappings(m_root, 0, m_mappingsBySourceLine);
+    std::sort(m_mappingsBySourceLine.begin(), m_mappingsBySourceLine.end());
+    m_mappingsByY = m_mappingsBySourceLine;
+    std::sort(m_mappingsByY.begin(), m_mappingsByY.end(),
+              [](const auto& a, const auto& b) { return a.second < b.second; });
+    m_mappingsCacheDirty = false;
 }
 
 // [plan A1] 视口外块粗估高度：基于 source line 行数 × lineHeight + type 修正
@@ -304,10 +321,12 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
             block.imageUrl = imgNode->url;
             qreal imgHeight = 200.0;
             if (m_imageCache) {
-                QPixmap* pix = m_imageCache->get(block.imageUrl);
-                if (pix && !pix->isNull() && pix->width() > 0) {
-                    qreal scale = qMin(1.0, maxWidth / static_cast<qreal>(pix->width()));
-                    imgHeight = pix->height() * scale;
+                // [plan A5 2026-05-12] 用 getSize 只读图片 header 拿尺寸，**不**触发
+                // 全图像素解码——视口外图片在 layout 阶段不解码（首屏耗时 + 内存）
+                QSize imgSize = m_imageCache->getSize(block.imageUrl);
+                if (imgSize.isValid() && imgSize.width() > 0) {
+                    qreal scale = qMin(1.0, maxWidth / static_cast<qreal>(imgSize.width()));
+                    imgHeight = imgSize.height() * scale;
                 }
             }
             block.bounds = QRectF(0, 0, maxWidth, imgHeight);
@@ -827,12 +846,10 @@ void PreviewLayout::collectSourceMappings(const LayoutBlock& block, qreal offset
 
 qreal PreviewLayout::sourceLineToY(int sourceLine) const
 {
-    std::vector<std::pair<int, qreal>> mappings;
-    collectSourceMappings(m_root, 0, mappings);
-
+    // [plan A3] 使用缓存——避免每次 O(N) collectSourceMappings + sort
+    ensureMappingsCache();
+    const auto& mappings = m_mappingsBySourceLine;
     if (mappings.empty()) return 0;
-
-    std::sort(mappings.begin(), mappings.end());
 
     // 二分查找最近的源码行
     auto it = std::lower_bound(mappings.begin(), mappings.end(),
@@ -858,14 +875,10 @@ qreal PreviewLayout::sourceLineToY(int sourceLine) const
 
 int PreviewLayout::yToSourceLine(qreal y) const
 {
-    std::vector<std::pair<int, qreal>> mappings;
-    collectSourceMappings(m_root, 0, mappings);
-
+    // [plan A3] 使用缓存——避免每次 O(N) collectSourceMappings + sort
+    ensureMappingsCache();
+    const auto& mappings = m_mappingsByY;
     if (mappings.empty()) return 0;
-
-    // 按 Y 坐标排序
-    std::sort(mappings.begin(), mappings.end(),
-              [](const auto& a, const auto& b) { return a.second < b.second; });
 
     // 查找最近的 Y 坐标
     auto it = std::lower_bound(mappings.begin(), mappings.end(),

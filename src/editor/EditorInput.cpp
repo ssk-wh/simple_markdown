@@ -6,6 +6,12 @@
 #include <QScrollBar>
 #include <QApplication>
 #include <QClipboard>
+#include <QMimeData>
+#include <QImage>
+#include <QFileInfo>
+#include <QDir>
+#include <QDateTime>
+#include <QRegularExpression>
 #include <algorithm>
 
 EditorInput::EditorInput(EditorWidget* editor)
@@ -342,10 +348,107 @@ void EditorInput::copy() {
 }
 
 void EditorInput::paste() {
-    QString text = QApplication::clipboard()->text();
-    if (!text.isEmpty()) {
-        insertText(text);
+    auto* cb = QApplication::clipboard();
+    const QMimeData* mime = cb->mimeData();
+
+    // [plan B7 2026-05-12] 剪贴板含图片 → 保存到 ./images/ 并插入 ![](images/...)
+    if (mime && mime->hasImage()) {
+        QString relPath = saveClipboardImageToImagesDir();
+        if (!relPath.isEmpty()) {
+            insertText(QStringLiteral("![](%1)").arg(relPath));
+            return;
+        }
+        // 保存失败（未保存文档 / 写入失败）→ fallback 到下面的文本路径
     }
+
+    QString text = cb->text();
+    if (text.isEmpty()) return;
+
+    // [plan B6 2026-05-12] 粘贴 URL 智能转 Markdown 链接：剪贴板 trim 后是单一 URL
+    // 且当前有选区 → 替换选区为 [选中文字](url)。否则走默认 paste 路径。
+    const QString trimmed = text.trimmed();
+    static const QRegularExpression urlRe(
+        QStringLiteral("^https?://\\S+$"),
+        QRegularExpression::CaseInsensitiveOption);
+    const bool isSingleUrl = !trimmed.contains('\n')
+                          && urlRe.match(trimmed).hasMatch();
+    if (isSingleUrl && sel().hasSelection()) {
+        TextPosition start = sel().range().start();
+        TextPosition end = sel().range().end();
+        int startOff = posToOffset(start);
+        int endOff = posToOffset(end);
+        QString selected = doc()->textAt(startOff, endOff - startOff);
+
+        doc()->remove(startOff, endOff - startOff);
+        const QString wrapped = QStringLiteral("[%1](%2)").arg(selected, trimmed);
+        doc()->insert(startOff, wrapped);
+        sel().setCursorPosition(offsetToPos(startOff + wrapped.length()));
+        return;
+    }
+
+    insertText(text);
+}
+
+// [plan B7] 把剪贴板图片保存到 ./images/，返回相对路径（"images/<filename>.png"）。
+// 未保存文档 / 文件写入失败 / 剪贴板无图片 → 返回空。
+QString EditorInput::saveClipboardImageToImagesDir()
+{
+    auto* cb = QApplication::clipboard();
+    const QMimeData* mime = cb->mimeData();
+    if (!mime || !mime->hasImage()) return QString();
+
+    QImage img = qvariant_cast<QImage>(mime->imageData());
+    if (img.isNull()) return QString();
+
+    if (!doc() || doc()->filePath().isEmpty()) {
+        // 未保存文档无 documentDir 锚点——简化策略：要求先保存。
+        // 调用方（paste）回退到默认文本路径。
+        return QString();
+    }
+
+    QFileInfo docInfo(doc()->filePath());
+    QString imagesDir = docInfo.absolutePath() + QStringLiteral("/images");
+    if (!QDir().mkpath(imagesDir)) return QString();
+
+    QString baseName = docInfo.completeBaseName();
+    if (baseName.isEmpty()) baseName = QStringLiteral("image");
+    QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"));
+    QString filename = QStringLiteral("%1-%2.png").arg(baseName, timestamp);
+    int counter = 1;
+    while (QFileInfo::exists(imagesDir + QLatin1Char('/') + filename)) {
+        filename = QStringLiteral("%1-%2-%3.png").arg(baseName, timestamp).arg(counter++);
+    }
+
+    QString fullPath = imagesDir + QLatin1Char('/') + filename;
+    if (!img.save(fullPath, "PNG")) return QString();
+    return QStringLiteral("images/%1").arg(filename);
+}
+
+// [plan B8] 把已存在的图片文件复制到 ./images/，返回相对路径。
+QString EditorInput::copyImageFileToImagesDir(const QString& srcPath)
+{
+    if (srcPath.isEmpty()) return QString();
+    QFileInfo src(srcPath);
+    if (!src.exists() || !src.isFile()) return QString();
+
+    if (!doc() || doc()->filePath().isEmpty()) return QString();
+
+    QFileInfo docInfo(doc()->filePath());
+    QString imagesDir = docInfo.absolutePath() + QStringLiteral("/images");
+    if (!QDir().mkpath(imagesDir)) return QString();
+
+    QString baseName = src.completeBaseName();
+    QString suffix = src.suffix().toLower();
+    if (suffix.isEmpty()) suffix = QStringLiteral("png");
+    QString filename = QStringLiteral("%1.%2").arg(baseName, suffix);
+    int counter = 1;
+    while (QFileInfo::exists(imagesDir + QLatin1Char('/') + filename)) {
+        filename = QStringLiteral("%1-%2.%3").arg(baseName).arg(counter++).arg(suffix);
+    }
+
+    QString fullPath = imagesDir + QLatin1Char('/') + filename;
+    if (!QFile::copy(srcPath, fullPath)) return QString();
+    return QStringLiteral("images/%1").arg(filename);
 }
 
 void EditorInput::wrapSelection(const QString& before, const QString& after)

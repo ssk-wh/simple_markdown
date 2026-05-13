@@ -141,6 +141,12 @@ private:
     // [plan A1] 视口 Y 范围：m_viewportYBottom > m_viewportYTop 时启用视口剪裁
     qreal m_viewportYTop = 0.0;
     qreal m_viewportYBottom = 0.0;
+    // [plan A3 2026-05-12] sourceLine ↔ Y 映射缓存：avoid 每次 sourceLineToY/yToSourceLine
+    // 都 O(N) 重新 collectSourceMappings + sort。buildFromAst 末尾设 dirty=true
+    mutable std::vector<std::pair<int, qreal>> m_mappingsBySourceLine;  // 按 sourceLine 升序
+    mutable std::vector<std::pair<int, qreal>> m_mappingsByY;            // 按 Y 升序
+    mutable bool m_mappingsCacheDirty = true;
+    void ensureMappingsCache() const;
     ImageCache* m_imageCache = nullptr;
     // [Spec 模块-preview/02 INV-12] cache key 用字体属性元组拼成的字符串，
     // 而非 qHash(QFont)：Qt 5.12 的 qHash 在不同 pointSize 下也会冲突，

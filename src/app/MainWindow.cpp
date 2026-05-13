@@ -212,6 +212,21 @@ MainWindow::MainWindow(QWidget* parent)
             tab->preview->smoothScrollToSourceLine(sourceLine);
     });
 
+    // [plan B11 2026-05-12] Ctrl+1..9 跳转到 TOC 前 9 个章节——键盘工作流增强
+    // 复用 TocPanel::headingClicked 同款跳转路径（smoothScrollToSourceLine），保证
+    // 与"鼠标点 TOC 项"行为一致：预览滚动 + TOC 高亮 + 编辑器 sourceLine 同步
+    for (int i = 1; i <= 9; ++i) {
+        auto* sc = new QShortcut(QKeySequence(Qt::CTRL | static_cast<Qt::Key>(Qt::Key_0 + i)),
+                                 this);
+        connect(sc, &QShortcut::activated, this, [this, i]() {
+            auto* tab = currentTab();
+            if (!tab) return;
+            const auto& entries = tab->preview->tocEntries();
+            if (i - 1 >= entries.size()) return;  // 章节不足 i 项，静默无反应
+            tab->preview->smoothScrollToSourceLine(entries.at(i - 1).sourceLine);
+        });
+    }
+
     connect(m_tocPanel, &TocPanel::clearSectionMarksRequested, this, [this](int entryIndex) {
         auto* tab = currentTab();
         if (tab)
@@ -3339,6 +3354,13 @@ void MainWindow::applyDisplayMode()
         tab->preview->show();
         tab->splitter->setSizes({0, 1});
         break;
+    }
+
+    // [plan 2026-05-13-仅预览模式下隐藏左下角行号列号] 仅预览模式编辑区不可见，
+    // 行/列号失去参考意义——隐藏 m_statusCursorPos 标签，其他状态（字数 / 行数 / 编码等）
+    // 与文档相关仍保留
+    if (m_statusCursorPos) {
+        m_statusCursorPos->setVisible(m_displayMode != 2);
     }
 }
 

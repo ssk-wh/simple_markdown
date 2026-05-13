@@ -26,6 +26,7 @@ void ImageCache::setDocumentDir(const QString& dir)
     m_documentDir = dir;
     // 文档路径变更时清空缓存，因为相对路径的含义变了
     clear();
+    m_sizeCache.clear();
 }
 
 QString ImageCache::resolveLocalPath(const QString& url) const
@@ -135,6 +136,38 @@ void ImageCache::onNetworkReply(QNetworkReply* reply)
     }
 
     emit imageReady(url);
+}
+
+// [plan A5 2026-05-12] 只读图片头拿尺寸——不解码像素，layout 阶段用。
+// 网络 / data URI 暂不支持（layout 时还未下载完，paint 时再 fallback 到 get）
+QSize ImageCache::getSize(const QString& url)
+{
+    if (url.isEmpty()) return QSize();
+
+    auto cit = m_sizeCache.find(url);
+    if (cit != m_sizeCache.end()) return cit.value();
+
+    // 已 decode 的图片直接读其尺寸
+    auto pit = m_cache.find(url);
+    if (pit != m_cache.end() && !pit.value().isNull()) {
+        QSize s = pit.value().size();
+        m_sizeCache.insert(url, s);
+        return s;
+    }
+
+    // data URI / 网络 URL 在 layout 阶段无法仅读 header——返回空，
+    // layout 用默认 200px 占位，paint 时 get() 触发实际加载
+    if (isDataUri(url) || isNetworkUrl(url)) return QSize();
+
+    // 本地文件：QImageReader 只读 header
+    QString path = resolveLocalPath(url);
+    if (path.isEmpty()) return QSize();
+    QImageReader reader(path);
+    QSize size = reader.size();
+    if (size.isValid()) {
+        m_sizeCache.insert(url, size);
+    }
+    return size;
 }
 
 QPixmap* ImageCache::get(const QString& url)
