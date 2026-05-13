@@ -212,54 +212,12 @@ MainWindow::MainWindow(QWidget* parent)
             tab->preview->smoothScrollToSourceLine(sourceLine);
     });
 
-    // [plan B11 2026-05-12 / 修订二 2026-05-13] Ctrl+1..9 跳转到文档**章节**——
-    // 章节级别的判定规则：
-    //   1. 找文档最高级别 heading（topLevel）
-    //   2. 如果 topLevel 只有 1 个（典型"文档大标题 H1 + N 个章节 H2"），章节级为**次级**
-    //   3. 否则章节级 = topLevel（多 H1 / 没 H1 都按此判定）
-    // 这样跳转直觉与"章节序号"一致（VS Code 大纲、网页书签同理）。
-    for (int i = 1; i <= 9; ++i) {
-        auto* sc = new QShortcut(QKeySequence(Qt::CTRL | static_cast<Qt::Key>(Qt::Key_0 + i)),
-                                 this);
-        connect(sc, &QShortcut::activated, this, [this, i]() {
-            auto* tab = currentTab();
-            if (!tab) return;
-            const auto& entries = tab->preview->tocEntries();
-            if (entries.isEmpty()) return;
-
-            // 步骤 1：找最高级别
-            int topLevel = INT_MAX;
-            for (const auto& e : entries) {
-                if (e.level < topLevel) topLevel = e.level;
-            }
-            // 步骤 2：统计最高级别数量
-            int topCount = 0;
-            for (const auto& e : entries) {
-                if (e.level == topLevel) ++topCount;
-            }
-            // 步骤 3：决定章节级别
-            int chapterLevel = topLevel;
-            if (topCount == 1) {
-                // 只有 1 个最高级（文档大标题）→ 章节级是次级
-                int nextLevel = INT_MAX;
-                for (const auto& e : entries) {
-                    if (e.level > topLevel && e.level < nextLevel) nextLevel = e.level;
-                }
-                if (nextLevel != INT_MAX) chapterLevel = nextLevel;
-            }
-
-            // 步骤 4：取章节级别的第 i 项
-            int hit = 0;
-            for (const auto& e : entries) {
-                if (e.level != chapterLevel) continue;
-                if (++hit == i) {
-                    tab->preview->smoothScrollToSourceLine(e.sourceLine);
-                    return;
-                }
-            }
-            // 章节不足 i 项，静默无反应
-        });
-    }
+    // [2026-05-13] Ctrl+1..9 章节跳转功能已移除——A1 视口剪裁让 sourceLineToY 累加
+    // placeholder 粗估 Y，跳转目标在视口外时位置严重偏差，多次按才能到位。
+    // 完整修复需要"跳转前全量 buildFromAst"（10k 行 ~117ms 卡顿）或 sourceLineToY
+    // 走"按行数直接累加"的独立精算路径——成本不值，用户选择移除该功能。
+    // 章节跳转仍可通过右侧目录面板点击实现（共用 smoothScrollToSourceLine 路径，
+    // 用户已接受其潜在偏差）。
 
     connect(m_tocPanel, &TocPanel::clearSectionMarksRequested, this, [this](int entryIndex) {
         auto* tab = currentTab();
