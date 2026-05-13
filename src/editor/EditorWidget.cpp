@@ -262,43 +262,90 @@ void EditorWidget::paintEvent(QPaintEvent* event)
     int last = lastVisibleLine();
     qreal sy = scrollY();
 
-    // 绘制行号栏背景
-    painter.fillRect(0, 0, m_gutterWidth, viewport()->height(), m_theme.editorGutterBg);
+    const int lineCount = m_layout->lineCount();
+    first = qMax(0, first);
+    last = qMin(lineCount - 1, last);
 
-    // 绘制行号
-    painter.setPen(m_theme.editorLineNumber);
-    QFont gutterFont = m_layout->font();
-    gutterFont.setPointSize(gutterFont.pointSize() - 1);
-    painter.setFont(gutterFont);
-    for (int line = first; line <= last && line < m_layout->lineCount(); ++line) {
-        qreal y = m_layout->lineY(line) - sy;
-        painter.drawText(QRectF(0, y, m_gutterWidth - 8, m_layout->lineHeight(line)),
-                         Qt::AlignRight | Qt::AlignVCenter,
-                         QString::number(line + 1));
-    }
-
-    // 绘制分隔线
-    painter.setPen(m_theme.editorGutterLine);
-    painter.drawLine(m_gutterWidth - 1, 0, m_gutterWidth - 1, viewport()->height());
-
-    // 绘制文本区域
-    painter.save();
-    painter.setClipRect(m_gutterWidth, 0, viewport()->width() - m_gutterWidth, viewport()->height());
-
-    // 获取系统强调色作为选区颜色
+    // 选区颜色（系统强调色）
     QColor selColor = palette().highlight().color();
     if (!selColor.isValid() || selColor == Qt::white)
         selColor = QColor(0, 51, 153);
     selColor.setAlpha(100);
-
     m_painter->setSelectionColor(selColor);
-    m_painter->paint(&painter, m_layout, m_doc, first, last,
-                     m_gutterWidth, sy, scrollX(),
-                     m_cursorVisible && hasFocus(),
-                     m_doc->selection().cursorPosition(),
-                     m_preeditString,
-                     m_searchMatches,
-                     m_currentMatchIndex);
+
+    // 视图整体背景（含 gutter 和文本区）
+    painter.fillRect(0, 0, m_gutterWidth, viewport()->height(), m_theme.editorGutterBg);
+
+    // 行号字体（比文本字体小 1pt）——但绘制时使用 baseline 对齐到文本第一视觉行 ascent，
+    // 不再依赖 singleLineH 矩形 VCenter
+    QFont gutterFont = m_layout->font();
+    gutterFont.setPointSize(gutterFont.pointSize() - 1);
+
+    // [plan A8 2026-05-13] 行号与文本绘制合一：单 per-line loop，本地 cy 推进。
+    // 行号画在 (0, cy, gutterWidth, singleLineH)；文本通过 paintLine 画在 (gutterWidth, cy, ..)。
+    // cy 由 layout->lineHeight(line) 精算推进——layoutForLine 触发 ensureLayout 后该行 height
+    // 是精确值。这从根本上消除"行号 yCache 与 文本 yCache 不一致"的契约脆弱性。
+    //
+    // 起点 cy 来自 lineY(firstLine) - sy——firstVisibleLine 基于估算 yCache 可能略偏，
+    // 但只是整体偏移（不影响 line 内对齐）；后续 paint 进展中 yCache 会被 ensureLayout 末尾
+    // 的 invalidateYCache 重建精算，下次 paint 自然收敛。
+    qreal cy = m_layout->lineY(first) - sy;
+
+    const TextPosition cursorPos = m_doc->selection().cursorPosition();
+    const bool hasSelection = m_doc->selection().hasSelection();
+    TextPosition selStartPos, selEndPos;
+    if (hasSelection) {
+        selStartPos = m_doc->selection().range().start();
+        selEndPos = m_doc->selection().range().end();
+    }
+    const qreal viewWidth = viewport()->width();
+
+    QFontMetricsF gutterFm(gutterFont);
+    for (int line = first; line <= last && line < lineCount; ++line) {
+        // 触发该行 ensureLayout
+        QTextLayout* tl = m_layout->layoutForLine(line);
+
+        // 行号——用 baseline 对齐：取该行第一视觉行的 ascent 算文本基线，
+        // 行号画在同一 baseline 上。这样无论文本字号是否被 syntax highlighter 放大
+        // （标题等），行号与文本视觉行底线对齐——VS Code / Sublime 等编辑器标准做法。
+        painter.setPen(m_theme.editorLineNumber);
+        painter.setFont(gutterFont);
+        const QString numStr = QString::number(line + 1);
+        qreal firstAscent = (tl && tl->lineCount() > 0)
+                            ? tl->lineAt(0).ascent()
+                            : gutterFm.ascent();
+        qreal numW = gutterFm.horizontalAdvance(numStr);
+        painter.drawText(QPointF(m_gutterWidth - 8 - numW, cy + firstAscent), numStr);
+
+        // 文本区（含当前行高亮 / 搜索高亮 / 选区 / 文本本身）
+        painter.save();
+        painter.setClipRect(m_gutterWidth, 0,
+                            viewWidth - m_gutterWidth, viewport()->height());
+        m_painter->paintLine(&painter, m_layout, m_doc,
+                             line, cy, m_layout->lineHeight(line),
+                             m_gutterWidth, viewWidth, scrollX(),
+                             cursorPos, hasSelection, selStartPos, selEndPos,
+                             m_searchMatches, m_currentMatchIndex);
+        painter.restore();
+
+        // 推进 cursor Y——精算 height，wrap 多行/普通行天然对齐
+        cy += m_layout->lineHeight(line);
+    }
+
+    // gutter 分隔线
+    painter.setPen(m_theme.editorGutterLine);
+    painter.drawLine(m_gutterWidth - 1, 0, m_gutterWidth - 1, viewport()->height());
+
+    // 光标 + IME 预编辑——基于 cursorRect（lineY 路径），在 per-line loop 之后画
+    painter.save();
+    painter.setClipRect(m_gutterWidth, 0,
+                        viewWidth - m_gutterWidth, viewport()->height());
+    m_painter->paintIme(&painter, m_layout, cursorPos, sy,
+                        m_gutterWidth, scrollX(), m_preeditString);
+    if (m_cursorVisible && hasFocus()) {
+        m_painter->paintCursor(&painter, m_layout, cursorPos, sy,
+                               m_gutterWidth, scrollX());
+    }
     painter.restore();
 }
 

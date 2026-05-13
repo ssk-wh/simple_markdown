@@ -36,6 +36,25 @@ EditorWidget
      └─ core::Document  ← 文本源
 ```
 
+## 关键不变量
+
+### [INV-EDITOR-PAINT-UNIFIED] 行号与文本绘制必须在同一 per-line loop 中推进（2026-05-13 A8）
+
+`EditorWidget::paintEvent` 的主绘制循环必须按行迭代，本地维护 cursorY 推进；每行**同时**画：
+
+1. 行号（gutter 区域，X=0..gutterWidth）—— 用 baseline 对齐到该行第一视觉行的
+   `tl->lineAt(0).ascent()`，避免字号差异引入视觉错位
+2. 文本（通过 `EditorPainter::paintLine`，X=gutterWidth..viewportWidth）—— 在同一 cursorY 处画
+3. 推进：`cursorY += layout->lineHeight(line)`（精算值，wrap 多行天然累加）
+
+**禁止**把行号和文本拆成两个独立 loop 共享 `lineY` —— 这种契约脆弱：yCache 在估算和
+精算之间漂移时（wrap 多行、新增行、视口边界），两个 loop 拿到的 lineY 不一致 → 行号与
+文本错位。历史 bug 见 `plans/归档/2026-05-13-编辑区新增内容时行号闪烁.md`（aborted）
+和 `plans/归档/2026-05-13-A8编辑器行号与文本绘制合一.md`（completed）。
+
+光标 / IME 预编辑可在 per-line loop **之后**画（基于 `cursorRect` → `lineY`）—— 它们
+单独依赖 yCache 不影响行间对齐。
+
 ## 性能预算
 
 | 操作 | 目标 |
