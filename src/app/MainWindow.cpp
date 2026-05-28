@@ -549,13 +549,13 @@ void MainWindow::setupMenuBar()
 
         m_displayBothAct = displayMenu->addAction(tr("Editor and Preview"));
         m_displayBothAct->setCheckable(true);
-        m_displayBothAct->setChecked(true);
-
-        m_displayEditorAct = displayMenu->addAction(tr("Editor Only"));
-        m_displayEditorAct->setCheckable(true);
 
         m_displayPreviewAct = displayMenu->addAction(tr("Preview Only"));
         m_displayPreviewAct->setCheckable(true);
+        m_displayPreviewAct->setChecked(true);
+
+        m_displayEditorAct = displayMenu->addAction(tr("Editor Only"));
+        m_displayEditorAct->setCheckable(true);
 
         m_displayGroup->addAction(m_displayBothAct);
         m_displayGroup->addAction(m_displayEditorAct);

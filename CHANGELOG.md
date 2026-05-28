@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.9] - 2026-05-28
+
+### Added
+- 预览区双击选词——双击选中当前单词（ASCII）或单个汉字（CJK），再次双击可复制
+
+### Changed
+- 启动时显示区域默认显示"仅预览"（可通过 视图 → 显示区域 切换回双栏或仅编辑器）
+
 ## [1.1.8] - 2026-05-13
 
 ### Removed

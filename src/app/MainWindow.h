@@ -201,7 +201,7 @@ private:
     void showToast(const QString& message, int durationMs = 3000);
 
     // 显示区域模式：0=双栏, 1=仅编辑器, 2=仅预览
-    int m_displayMode = 0;
+    int m_displayMode = 2;
     QActionGroup* m_displayGroup = nullptr;
     QAction* m_displayBothAct = nullptr;
     QAction* m_displayEditorAct = nullptr;

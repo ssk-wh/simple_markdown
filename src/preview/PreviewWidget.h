@@ -61,10 +61,20 @@ public:
     // 查询当前是否有搜索栏可见（供 MainWindow 决定 Ctrl+F 路由）
     bool isSearchBarVisible() const;
 
-    // [Spec 模块-preview/13 INV-3] 记录与当前 AST 对应的 raw markdown 源——
-    // copyAsMarkdown 从这里切对应行。MainWindow 桥接 ParseScheduler::astReady 时
-    // 在 updateAst 之前调用同步
+    // [Spec 模块-preview/13 INV-4] 记录与当前 AST 对应的 raw markdown 源。
+    // 修订三（2026-05-13）后 copySelection 改用 m_plainText 切片，m_sourceText
+    // 保留供未来扩展（如"导出选区 markdown"独立入口）；MainWindow 桥接
+    // ParseScheduler::astReady 时仍在 updateAst 之前同步赋值，不退化。
     void setSourceText(const QString& source);
+
+    // [Spec 模块-preview/12 INV-4] 双击选词的 Word 边界分词——testable seam。
+    // 给定 plain text 与点击字符 index，返回 [wordStart, wordEnd) 区间：
+    //   - 命中 Word 项：返回 QTextBoundaryFinder::Word 切出的词范围
+    //   - 命中非词项（空白 / 标点切出的边界段）：退化为 [idx, idx+1)
+    //   - idx 越界：返回 {-1, -1}
+    // 暴露为 public static 是为了让 PreviewDoubleClickWordTest 不依赖 paint 与
+    // textSegments 即可覆盖 INV-4 的 ASCII/CJK/标点分词行为
+    static QPair<int,int> findWordBoundaryFor(const QString& text, int idx);
 
 public slots:
     void updateAst(std::shared_ptr<AstNode> root);

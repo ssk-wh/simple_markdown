@@ -25,6 +25,7 @@
 #include <QDataStream>
 #include <QIODevice>
 #include <QThread>
+#include <QTextBoundaryFinder>  // [Spec 模块-preview/12 INV-4] 双击选词使用 Word 边界
 #include <functional>
 
 PreviewWidget::PreviewWidget(QWidget* parent)
@@ -574,45 +575,96 @@ void PreviewWidget::mouseReleaseEvent(QMouseEvent* event)
 
 void PreviewWidget::mouseDoubleClickEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton && !m_plainText.isEmpty()) {
-        // CRITICAL: DPI 改变检查（同 mousePressEvent）
-        // 双击事件中也需要检查 DPI 变化，否则跨屏移动后坐标不同步
-        qreal currentDpr = viewport()->devicePixelRatioF();
-        if (!qFuzzyCompare(currentDpr, m_lastDevicePixelRatio)) {
-            m_lastDevicePixelRatio = currentDpr;
-            m_layout->updateMetrics(viewport());
-            rebuildLayout();
-            viewport()->repaint();
-        }
+    if (event->button() != Qt::LeftButton || m_plainText.isEmpty()) {
+        QAbstractScrollArea::mouseDoubleClickEvent(event);
+        return;
+    }
 
-        // 同 mousePressEvent：坐标变换规则与 paintEvent 中的 translate 对应
-        qreal scrollXVal = m_wordWrap ? 0 : horizontalScrollBar()->value();
-        QPointF pt(event->pos().x() - 20 + scrollXVal, event->pos().y());
-        int idx = textIndexAtPoint(pt);
+    // CRITICAL: DPI 改变检查（同 mousePressEvent）
+    // 双击事件中也需要检查 DPI 变化，否则跨屏移动后坐标不同步
+    qreal currentDpr = viewport()->devicePixelRatioF();
+    if (!qFuzzyCompare(currentDpr, m_lastDevicePixelRatio)) {
+        m_lastDevicePixelRatio = currentDpr;
+        m_layout->updateMetrics(viewport());
+        rebuildLayout();
+        viewport()->repaint();
+    }
 
-        if (idx >= 0 && idx < m_plainText.length()) {
-            auto isWordChar = [](QChar c) {
-                return c.isLetterOrNumber() || c == QLatin1Char('_');
-            };
+    // 同 mousePressEvent：坐标变换规则与 paintEvent 中的 translate 对应
+    qreal scrollXVal = m_wordWrap ? 0 : horizontalScrollBar()->value();
+    QPointF pt(event->pos().x() - 20 + scrollXVal, event->pos().y());
 
-            if (isWordChar(m_plainText.at(idx))) {
-                int start = idx;
-                while (start > 0 && isWordChar(m_plainText.at(start - 1)))
-                    --start;
-                int end = idx + 1;
-                while (end < m_plainText.length() && isWordChar(m_plainText.at(end)))
-                    ++end;
-                m_selStart = start;
-                m_selEnd = end;
-            } else {
-                m_selStart = idx;
-                m_selEnd = idx + 1;
-            }
-
-            m_selecting = false;
-            viewport()->update();
+    // [Spec 模块-preview/12 INV-3] 严格命中：textIndexAtPoint 为拖动选区设计，
+    // 在 segment 外（行末空白、段间空白）仍返回最近字符 index（永不 -1），双击
+    // 直接消费其结果会把选区扩展到无关位置（反模式 C）。同 contextMenuEvent 处理：
+    // 先用 seg.rect.contains 做严格命中，未命中即 no-op，让 m_selStart/m_selEnd
+    // 保持 mousePressEvent 第二次按下时的 collapsed 状态（idx,idx）。
+    bool hit = false;
+    for (const auto& seg : m_painter->textSegments()) {
+        if (seg.rect.contains(pt)) {
+            hit = true;
+            break;
         }
     }
+    if (!hit) return;
+
+    const int idx = textIndexAtPoint(pt);
+    const QPair<int,int> range = findWordBoundaryFor(m_plainText, idx);
+    if (range.first < 0 || range.second <= range.first) return;
+
+    m_selStart = range.first;
+    m_selEnd = range.second;
+    m_selecting = false;
+    viewport()->update();
+}
+
+// [Spec 模块-preview/12 INV-4] testable seam：双击选词的 Word 边界分词
+QPair<int,int> PreviewWidget::findWordBoundaryFor(const QString& text, int idx)
+{
+    if (idx < 0 || idx >= text.length()) return {-1, -1};
+
+    // 用 QTextBoundaryFinder::Word 做 ICU 风格分词，与 QTextEdit / 浏览器一致。
+    // 旧实现用 QChar::isLetterOrNumber 向两侧扩展，但该谓词对 CJK（汉字/假名/谚文）
+    // 也返回 true——一整段中文会被当成一个"词"整段吞掉，用户感知"双击选不到
+    // 我点的那个词"（实际选了整段）。
+    QTextBoundaryFinder finder(QTextBoundaryFinder::Word, text);
+
+    // 向左找词首（StartOfItem）
+    finder.setPosition(idx);
+    if (!(finder.boundaryReasons() & QTextBoundaryFinder::StartOfItem)) {
+        while (finder.toPreviousBoundary() >= 0) {
+            if (finder.boundaryReasons() & QTextBoundaryFinder::StartOfItem) break;
+        }
+    }
+    int wordStart = qMax(0, finder.position());
+
+    // 从词首向右找词尾（EndOfItem）
+    finder.setPosition(wordStart);
+    while (finder.toNextBoundary() >= 0) {
+        if (finder.boundaryReasons() & QTextBoundaryFinder::EndOfItem) break;
+    }
+    int wordEnd = finder.position();
+    if (wordEnd < 0) wordEnd = text.length();
+
+    // 退化路径 A：boundary 落在非词字符串上（如词与词之间的空格 / 标点段），
+    // BoundaryFinder 仍会切出一段"非词项"——用户期望的是只选当前字符。
+    // 判定：点击位置不在 [wordStart, wordEnd) 内 → 区间不含点击 → 退化
+    if (wordStart < 0 || wordEnd <= wordStart || idx < wordStart || idx >= wordEnd) {
+        return {idx, qMin(idx + 1, text.length())};
+    }
+
+    // 退化路径 B：Qt 5.12 的 QTextBoundaryFinder::Word 不对纯 CJK 字符串切分
+    // 词边界，整段中文被当成一个"词"。若区间 = 全文且点击字符为 CJK 脚本，
+    // 回退到单字符选中，避免"双击选不到我点的那个词"。
+    if (wordEnd - wordStart == text.length() && text.length() > 1) {
+        const auto sc = text.at(idx).script();
+        if (sc == QChar::Script_Han || sc == QChar::Script_Hiragana ||
+            sc == QChar::Script_Katakana || sc == QChar::Script_Hangul) {
+            return {idx, idx + 1};
+        }
+    }
+
+    return {wordStart, wordEnd};
 }
 
 void PreviewWidget::keyPressEvent(QKeyEvent* event)

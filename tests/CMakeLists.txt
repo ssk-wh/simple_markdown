@@ -266,6 +266,34 @@ target_link_libraries(PreviewTableCellOverflowTest PRIVATE
 
 add_test(NAME PreviewTableCellOverflowTest COMMAND PreviewTableCellOverflowTest)
 
+# --- PreviewDoubleClickWordTest ---
+# Spec: specs/模块-preview/12-选区与拖动.md INV-4 / T-DC-1..T-DC-A
+# Bug: plans/归档/2026-05-13-预览区双击选词与复制粘贴异常.md
+# 验收：T-DC-1（ASCII 单词）/ T-DC-2（CJK 不吞整段）/ T-DC-3（标点单字符）/ T-DC-A（越界保护）
+add_executable(PreviewDoubleClickWordTest
+    preview/PreviewDoubleClickWordTest.cpp
+)
+
+target_include_directories(PreviewDoubleClickWordTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewDoubleClickWordTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME PreviewDoubleClickWordTest COMMAND PreviewDoubleClickWordTest)
+
 # --- SnapSplitterDragFinishedTest ---
 # Spec: specs/模块-app/13-分隔条吸附刻度.md
 # Plan: plans/2026-05-07-拖拽分割线两侧全文重排.md
