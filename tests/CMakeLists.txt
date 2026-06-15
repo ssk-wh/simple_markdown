@@ -294,6 +294,90 @@ target_link_libraries(PreviewDoubleClickWordTest PRIVATE
 
 add_test(NAME PreviewDoubleClickWordTest COMMAND PreviewDoubleClickWordTest)
 
+# --- PreviewSelectionHeightTest ---
+# Spec: specs/模块-preview/12-选区与拖动.md INV-SEL-HEIGHT
+# Bug: plans/2026-06-15-渲染区英文单词选区高度只覆盖上半.md
+# 验收：T-SEL-HEIGHT-1（选区矩形完整覆盖单词字形墨迹，离屏光栅化像素验证）
+add_executable(PreviewSelectionHeightTest
+    preview/PreviewSelectionHeightTest.cpp
+)
+
+target_include_directories(PreviewSelectionHeightTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewSelectionHeightTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME PreviewSelectionHeightTest COMMAND PreviewSelectionHeightTest)
+
+# --- PreviewCopyConsistencyTest ---
+# Spec: specs/模块-preview/13-复制语义.md
+# Bug: plans/2026-06-15-渲染区单元格复制粘贴内容不一致回归.md
+# 验收：T-COPY-CONSIST-1/2（选区索引↔复制源 m_plainText 字符流逐字节一致，含视口剪裁）
+add_executable(PreviewCopyConsistencyTest
+    preview/PreviewCopyConsistencyTest.cpp
+)
+
+target_include_directories(PreviewCopyConsistencyTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewCopyConsistencyTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME PreviewCopyConsistencyTest COMMAND PreviewCopyConsistencyTest)
+
+# --- PreviewTocJumpTest ---
+# Spec: specs/模块-preview/07-TOC面板.md INV-TOC-JUMP-CORRECT
+# Bug: plans/2026-06-15-渲染区目录点击章节跳转位置错误.md
+# 验收：T-TOC-JUMP-1/2（视口剪裁下 TOC 跳转自校正收敛到一致不动点 → 落位准确）
+add_executable(PreviewTocJumpTest
+    preview/PreviewTocJumpTest.cpp
+)
+
+target_include_directories(PreviewTocJumpTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(PreviewTocJumpTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+
+add_test(NAME PreviewTocJumpTest COMMAND PreviewTocJumpTest)
+
 # --- SnapSplitterDragFinishedTest ---
 # Spec: specs/模块-app/13-分隔条吸附刻度.md
 # Plan: plans/2026-05-07-拖拽分割线两侧全文重排.md

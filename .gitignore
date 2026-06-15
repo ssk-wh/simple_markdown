@@ -47,3 +47,6 @@ crash_report.txt
 crash.dmp
 easymarkdown*.log
 test_content.md
+
+# 性能 profiling 构建目录（构建产物，勿提交）
+build-prof/

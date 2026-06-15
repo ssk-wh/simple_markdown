@@ -135,6 +135,8 @@ private:
     int m_selStart = -1;
     int m_selEnd = -1;
     bool m_selecting = false;
+    // [Spec 模块-preview/09 INV-HOVER-TARGET] 当前悬停链接 URL，用于 tooltip 去抖
+    QString m_hoverLinkUrl;
     qreal m_lastDevicePixelRatio = 0;
     // [plan A1] 上次 applyLayoutViewportCrop 时的 scrollY，用于滚动节流判定
     // -1.0 表示尚未首次 crop（视口未就绪 / 首次 layout 前）

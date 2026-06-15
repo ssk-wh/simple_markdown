@@ -3,7 +3,7 @@ id: 模块-preview/07-TOC面板
 status: draft
 owners: [@pcfan]
 code: [src/preview/TocPanel.h, src/preview/TocPanel.cpp, src/app/MainWindow.cpp]
-tests: [tests/preview/TocPanelTest.cpp]
+tests: [tests/preview/TocPanelTest.cpp, tests/preview/PreviewTocJumpTest.cpp]
 depends:
   - specs/模块-preview/01-预览主控件.md
   - specs/横切关注点/30-主题系统.md
@@ -31,6 +31,21 @@ last_reviewed: 2026-04-27
   - `collapseStateChanged(QString fileKey, QSet<int> collapsed)`：折叠状态变更（持久化）
 
 ## 3. 行为契约
+
+### [INV-TOC-JUMP-CORRECT] 章节跳转后自校正到位（2026-06-15 新增）
+
+点击 TOC 章节跳转（`smoothScrollToSourceLine`）在**视口剪裁**（plan A1 按需渲染）下，
+动画开始时远处目标章节是 placeholder 粗估 Y；动画按估算 Y 落地后，目标块已进入视口被
+真实 layout。此时**必须**在 `onScrollAnimationFinished` 中执行自校正循环：重建 layout →
+重算 `sourceLineToY(targetLine)` → 若与当前滚动位置偏差 ≥ 3px 则滚到该值，最多迭代 4 次
+直到收敛到不动点（`scrollY == sourceLineToY(target)`）。
+
+收敛到不动点 ⇒ 目标标题落在视口顶部：因为绘制与滚动用**同一** layout 状态，far-above
+块的估算误差对 scroll 与 paint 等量作用、不影响相对落位。
+
+历史教训（2026-06-15 用户报告 / 提交 7b921fe 曾因此移除 Ctrl+数字跳转）：不做自校正时，
+远处章节首次跳转落位偏差可达上百像素（实测大文档 ~164px），用户需多次点击才逼近。
+测试 `PreviewTocJumpTest` 量化：无校正 164px → 自校正 0px。
 
 ### [INV-TOC-VALIGN] TOC 顶端垂直对齐编辑/预览区
 

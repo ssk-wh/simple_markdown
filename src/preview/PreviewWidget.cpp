@@ -20,6 +20,7 @@
 #include <QMenu>
 #include <QSet>
 #include <QMimeData>
+#include <QToolTip>
 #include <climits>
 #include <QPropertyAnimation>
 #include <QDataStream>
@@ -455,6 +456,27 @@ void PreviewWidget::onScrollAnimationValueChanged(const QVariant &value)
 
 void PreviewWidget::onScrollAnimationFinished()
 {
+    // [Spec 模块-preview/07 INV-TOC-JUMP-CORRECT] 跳转后自校正：
+    // 视口剪裁（plan A1）下，远处目标章节在动画开始时是 placeholder 粗估 Y，
+    // 动画按估算 Y 落地后，目标块已进入视口被真实 layout——此时重算其精确 Y 并校正
+    // 到位（估算→实测收敛），修复"离当前较远的章节跳转首次不到位"。
+    // 最多迭代几次：每次落点变化会让附近块升级为精算，Y 逐步收敛；偏差 < 3px 即停。
+    if (m_targetSourceLine >= 0 && m_currentAst && m_layout) {
+        for (int iter = 0; iter < 4; ++iter) {
+            applyLayoutViewportCrop();
+            m_layout->buildFromAst(m_currentAst);
+            updateScrollBars();
+            qreal correctedY = m_layout->sourceLineToY(m_targetSourceLine);
+            int target = qBound(verticalScrollBar()->minimum(),
+                                static_cast<int>(correctedY),
+                                verticalScrollBar()->maximum());
+            int curY = verticalScrollBar()->value();
+            if (qAbs(target - curY) < 3) break;
+            verticalScrollBar()->setValue(target);
+        }
+        viewport()->update();
+    }
+
     // 动画结束后，启动高亮动画
     if (m_targetSourceLine >= 0) {
         // 创建透明度动画
@@ -558,13 +580,25 @@ void PreviewWidget::mouseMoveEvent(QMouseEvent* event)
     qreal scrollXVal = m_wordWrap ? 0 : horizontalScrollBar()->value();
     QPointF pt(event->pos().x() - 20 + scrollXVal, event->pos().y());
     bool overLink = false;
+    QString hoverUrl;
     for (const auto& seg : m_painter->textSegments()) {
         if (!seg.linkUrl.isEmpty() && seg.rect.contains(pt)) {
             overLink = true;
+            hoverUrl = seg.linkUrl;
             break;
         }
     }
     viewport()->setCursor(overLink ? Qt::PointingHandCursor : Qt::IBeamCursor);
+
+    // [Spec 模块-preview/09 INV-HOVER-TARGET] 悬停可跳转内容时显示其目标地址（tooltip）。
+    // 仅在 hover 的 URL 变化时刷新，避免每次移动闪烁。URL 是数据非 UI 文案，不需 tr()。
+    if (hoverUrl != m_hoverLinkUrl) {
+        m_hoverLinkUrl = hoverUrl;
+        if (!hoverUrl.isEmpty())
+            QToolTip::showText(event->globalPos(), hoverUrl, viewport());
+        else
+            QToolTip::hideText();
+    }
 }
 
 void PreviewWidget::mouseReleaseEvent(QMouseEvent* event)

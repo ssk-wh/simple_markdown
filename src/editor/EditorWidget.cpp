@@ -146,8 +146,20 @@ EditorWidget::EditorWidget(QWidget* parent)
         int start = qMax(0, first - preloadRange);
         int end = qMin(last + preloadRange, maxLine);
         for (int i = qMax(start, m_lastPreloadLine + 1); i <= end; ++i) {
+            // [Spec 模块-editor/15 INV-EDIT-SCROLL-ANCHOR] 预加载视口上方行时其真实高度
+            // （wrap 模式可能 > 估算）会抬高 Y 缓存 → 视口内容下移跳动。锚定首个可见行：
+            // 精算前后比较其 Y，差值补偿到 scrollY，使可见内容保持原位。
+            qreal anchorYBefore = m_layout->lineY(first);
             m_layout->layoutForLine(i);
             m_lastPreloadLine = i;
+            qreal anchorYAfter = m_layout->lineY(first);
+            qreal delta = anchorYAfter - anchorYBefore;
+            if (qAbs(delta) > 0.01 && !m_typewriterMode) {
+                updateScrollBars();
+                verticalScrollBar()->blockSignals(true);
+                verticalScrollBar()->setValue(qMax(0, static_cast<int>(scrollY() + delta)));
+                verticalScrollBar()->blockSignals(false);
+            }
             return; // 每次只预加载一行，避免阻塞
         }
         // 预加载范围内所有行已 layout → 停止 timer，闲置 0 CPU 占用
@@ -586,11 +598,32 @@ void EditorWidget::onTextChanged(int offset, int removedLen, int addedLen)
     Q_UNUSED(removedLen);
     Q_UNUSED(addedLen);
 
+    // [Spec 模块-editor/15-编辑滚动稳定.md INV-EDIT-SCROLL-ANCHOR] 滚动锚定：
+    // 全量 rebuild 会把所有行重置为估算高度，若编辑前视口上方的行已精算（wrap 模式下
+    // 真实高度可能 > 估算），Y 缓存随之变化 → 同一 scrollY 映射到不同行 → 页面跳动。
+    // 编辑前记录首个可见行相对视口顶的屏幕偏移，rebuild 后恢复，使可见内容保持原位。
+    int anchorLine = firstVisibleLine();
+    qreal anchorScreenOffset = m_layout->lineY(anchorLine) - scrollY();
+
     // 简化策略：任何文本变化都重建整个布局
     // 增量更新在复杂场景下（删除换行、跨行替换）容易出 bug
     // 对于常规大小的文件（<10000行），rebuild 很快
     m_layout->rebuild();
     updateScrollBars();
+
+    // 恢复锚点：让 anchorLine 仍停在编辑前的屏幕位置（typewriter 模式由 ensureCursorVisible
+    // 居中接管，不在此锚定）
+    if (!m_typewriterMode) {
+        int lineCount = m_doc ? m_doc->lineCount() : 0;
+        if (anchorLine >= 0 && anchorLine < lineCount) {
+            qreal newAnchorY = m_layout->lineY(anchorLine);
+            int restored = qMax(0, static_cast<int>(newAnchorY - anchorScreenOffset));
+            verticalScrollBar()->blockSignals(true);
+            verticalScrollBar()->setValue(restored);
+            verticalScrollBar()->blockSignals(false);
+        }
+    }
+
     // [2026-05-13 CPU 修复] 文档变化 → 重启预加载 timer 覆盖新内容
     m_lastPreloadLine = -1;
     m_idlePreloadTimer.start();

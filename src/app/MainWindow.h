@@ -195,6 +195,9 @@ private:
     // Ctrl+B 切换左侧资源管理器显隐
     QAction* m_toggleSidebarAct = nullptr;
     bool m_sidebarHidden = false;    // 用户手动隐藏侧边栏
+    // [Spec 模块-app/20-左侧面板.md INV-LP-WIDTH-TOGGLE] Ctrl+B 隐藏前缓存的左面板像素宽度，
+    // 再次显示时优先恢复到该宽度（而非默认 screenW/8），保证显隐切换不改变宽度
+    int m_savedSidebarWidth = -1;
     void toggleSidebar();
 
     // 底部居中 toast 通知

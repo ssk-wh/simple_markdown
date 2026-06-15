@@ -1655,7 +1655,10 @@ void MainWindow::applyTheme(const Theme& theme)
             "QMenu::item { padding: 6px 24px 6px 32px; background: transparent; }"  // [Spec 模块-app/10-菜单栏样式 INV-1] padding-left = indicator 占位(24) + 约1字符宽(~8)，保证 ✓ 与文字留间距
             "QMenu::item:selected { background: %4; border-left: 2px solid %5; }"
             "QMenu::separator { background: %3; height: 1px; margin: 4px 8px; }"
-            "QMenu::indicator { width: 16px; height: 16px; margin-right: 8px; }"
+            // [Spec 模块-app/10-菜单栏样式 INV-MENU-ALIGN] 勾选标记列宽固定 16px、无 margin，
+            // 使 checkable 与非 checkable 项文字左缘对齐（margin-right 会额外推右 checkable 文字 →
+            // 与非 checkable 项错位）；同时勾选标记仍绘制在保留列内可见
+            "QMenu::indicator { width: 16px; height: 16px; }"
         ).arg(mainBg, chromeFg, border, hover, accent);
 
         css += QStringLiteral(
@@ -1741,7 +1744,10 @@ void MainWindow::applyTheme(const Theme& theme)
             "QMenu::item { padding: 6px 24px 6px 32px; background: transparent; }"
             "QMenu::item:selected { background: %4; border-left: 2px solid %5; }"
             "QMenu::separator { background: %3; height: 1px; margin: 4px 8px; }"
-            "QMenu::indicator { width: 16px; height: 16px; margin-right: 8px; }"
+            // [Spec 模块-app/10-菜单栏样式 INV-MENU-ALIGN] 勾选标记列宽固定 16px、无 margin，
+            // 使 checkable 与非 checkable 项文字左缘对齐（margin-right 会额外推右 checkable 文字 →
+            // 与非 checkable 项错位）；同时勾选标记仍绘制在保留列内可见
+            "QMenu::indicator { width: 16px; height: 16px; }"
         ).arg(mainBg, chromeFg, border, hover, accent);
 
         css += QStringLiteral(
@@ -3478,13 +3484,17 @@ void MainWindow::updateLeftPaneVisibility()
     if (shouldShow && wasHidden && m_splitterInitialized && m_mainSplitter) {
         auto sizes = m_mainSplitter->sizes();
         if (sizes.size() >= 3 && sizes[0] <= 0) {
+            // [Spec 模块-app/20 INV-LP-WIDTH-TOGGLE] 恢复宽度优先级：
+            // 本会话隐藏前缓存的宽度 > 持久化的 leftPanelWidth > 屏幕宽 1/8 默认
             QSettings s;
             int savedLeftW = s.value("view/leftPanelWidth", -1).toInt();
             QScreen* scr = nullptr;
             if (windowHandle()) scr = windowHandle()->screen();
             if (!scr) scr = QGuiApplication::primaryScreen();
             int screenW = (scr && scr->geometry().width() > 0) ? scr->geometry().width() : 1920;
-            int leftW = (savedLeftW > 0) ? savedLeftW : (screenW / 8);
+            int leftW = (m_savedSidebarWidth > 0) ? m_savedSidebarWidth
+                      : (savedLeftW > 0) ? savedLeftW
+                      : (screenW / 8);
 
             int totalW = m_mainSplitter->width();
             if (totalW <= 0) totalW = width();
@@ -3499,6 +3509,13 @@ void MainWindow::updateLeftPaneVisibility()
 
 void MainWindow::toggleSidebar()
 {
+    // [Spec 模块-app/20-左侧面板.md INV-LP-WIDTH-TOGGLE] 隐藏前先缓存当前左面板宽度，
+    // 否则 hide() 让 splitter 回收 sizes[0]→0，再显示时只能回退默认宽度 → 与隐藏前不一致。
+    if (!m_sidebarHidden && m_mainSplitter) {
+        auto sizes = m_mainSplitter->sizes();
+        if (!sizes.isEmpty() && sizes[0] > 0)
+            m_savedSidebarWidth = sizes[0];
+    }
     m_sidebarHidden = !m_sidebarHidden;
     m_toggleSidebarAct->setChecked(!m_sidebarHidden);
     updateLeftPaneVisibility();

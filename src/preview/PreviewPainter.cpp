@@ -619,6 +619,15 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
         QFont curFont = p->font();
         recordSegment(QRectF(sx, sy, sw, sh), charStart, charLen, segText, curFont, linkUrl);
 
+        // [Spec 模块-preview/12 INV-SEL-HEIGHT] 选区/标记/搜索高亮矩形高度统一用「行主字体
+        // 高度」defaultFm.height()（与基线同源：基线 = sy + lineAscent = sy + defaultFm.ascent()，
+        // 故内容带 = [sy, sy + defaultFm.height()]），而非当前 run 自身的 fm.height()。
+        // 原因：当行主字体与当前 run 字体度量不一致时（行首 inline code 字号更小拉低基线、
+        // 或中文字体回退比 ASCII 度量更高），用单 run 的 fm.height() 从 sy 起算会让高亮矩形
+        // 偏矮/偏移，导致单词只被盖住一部分（上半/下半）。改用行主字体高度后，同一行所有
+        // run 的高亮高度一致、与基线对齐，紧贴文字且完整覆盖（不含行距，避免下方大片空带）。
+        const qreal hlH = defaultFm.height();
+
         // 标记高亮（先绘制，作为底层）
         if (charLen > 0) {
             int segEnd = charStart + charLen;
@@ -629,7 +638,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
                     QFontMetricsF segFm(curFont);
                     qreal x1 = segFm.horizontalAdvance(segText.left(hlS - charStart));
                     qreal x2 = segFm.horizontalAdvance(segText.left(hlE - charStart));
-                    p->fillRect(QRectF(sx + x1, sy, x2 - x1, sh), m_theme.previewHighlight);
+                    p->fillRect(QRectF(sx + x1, sy, x2 - x1, hlH), m_theme.previewHighlight);
                 }
             }
 
@@ -646,7 +655,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
                     const QColor& bg = (i == m_currentSearchHitIndex)
                                        ? m_theme.editorSearchMatchCurrent
                                        : m_theme.editorSearchMatch;
-                    p->fillRect(QRectF(sx + x1, sy, x2 - x1, sh), bg);
+                    p->fillRect(QRectF(sx + x1, sy, x2 - x1, hlH), bg);
                 }
             }
         }
@@ -661,7 +670,7 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
                 QFontMetricsF segFm(curFont);
                 qreal x1 = segFm.horizontalAdvance(segText.left(hlStart - charStart));
                 qreal x2 = segFm.horizontalAdvance(segText.left(hlEnd - charStart));
-                p->fillRect(QRectF(sx + x1, sy, x2 - x1, sh), selColor);
+                p->fillRect(QRectF(sx + x1, sy, x2 - x1, hlH), selColor);
             }
         }
     };

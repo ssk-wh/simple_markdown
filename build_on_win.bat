@@ -168,6 +168,14 @@ if "%RUN_TESTS%"=="1" (
         echo.
         echo [+] Running unit tests...
         pushd %BUILD_DIR%
+        REM 测试运行环境：使用 Qt SDK 原版运行时(bin+plugins)，而非 build\tests 里镜像的
+        REM Qt 运行时——后者在独立/自动化上下文里平台插件初始化失败(QFactoryLoader 返回
+        REM nullptr → QApplication abort 0xC0000409，或 offscreen 挂起)，导致所有单测崩溃。
+        REM 实测：SDK bin 上 PATH + QT_PLUGIN_PATH 指向 SDK plugins 即可稳定通过。
+        if defined QT_DIR (
+            set "PATH=%QT_DIR%\bin;%PATH%"
+            set "QT_PLUGIN_PATH=%QT_DIR%\plugins"
+        )
         ctest -C %BUILD_TYPE% --output-on-failure -LE perf
         set CTEST_EXIT=!errorlevel!
         popd

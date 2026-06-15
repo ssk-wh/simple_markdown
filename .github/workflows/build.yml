@@ -119,7 +119,10 @@ jobs:
         shell: pwsh
         run: |
           $nsi = "installer/SimpleMarkdown.nsi"
-          (Get-Content $nsi) -replace '!define APP_VERSION ".*"', "!define APP_VERSION `"$env:VERSION`"" | Set-Content $nsi
+          # 必须保留 UTF-8 BOM：NSIS `Unicode True` 靠 BOM 识别 UTF-8 源文件；
+          # pwsh 的 Set-Content 默认 utf8NoBOM 会剥离 BOM，导致 makensis 按系统代码页
+          # 解析中文（如完成页"立即启动"）→ 安装包中文乱码。读写都强制 utf8BOM。
+          (Get-Content $nsi -Encoding utf8BOM) -replace '!define APP_VERSION ".*"', "!define APP_VERSION `"$env:VERSION`"" | Set-Content $nsi -Encoding utf8BOM
           $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
           if (-not (Test-Path $makensis)) { $makensis = "$env:ProgramFiles\NSIS\makensis.exe" }
           cd installer
