@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - 表格单元格或段落中的 `<br>`（含 `<br/>`、`<br />`）现在正确换行显示，不再既不换行又把 `<br>` 文字原样显示出来
+- 删除线只识别标准的双波浪线 `~~文字~~`，单个波浪线 `~文字~` 不再被误显示为删除线（与编辑器高亮一致）
 
 ## [1.1.14] - 2026-06-16
 

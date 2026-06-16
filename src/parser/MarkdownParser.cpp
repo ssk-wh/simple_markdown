@@ -128,7 +128,9 @@ AstNodePtr MarkdownParser::parse(const QString& markdown)
 
     QByteArray utf8 = body.toUtf8();
 
-    cmark_parser* parser = cmark_parser_new(CMARK_OPT_DEFAULT);
+    // [删除线仅双波浪线] CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE 关闭单波浪线 ~text~ 触发删除线，
+    // 只识别 GFM 标准的 ~~text~~，与编辑器高亮正则 ~~([^~]+)~~ 保持一致
+    cmark_parser* parser = cmark_parser_new(CMARK_OPT_DEFAULT | CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE);
 
     cmark_syntax_extension* tableExt = cmark_find_syntax_extension("table");
     if (tableExt)
@@ -229,7 +231,8 @@ QString MarkdownParser::renderHtml(const QString& markdown)
     ensureExtensions();
 
     QByteArray utf8 = markdown.toUtf8();
-    cmark_parser* parser = cmark_parser_new(CMARK_OPT_DEFAULT);
+    // [删除线仅双波浪线] 与 AST 解析路径一致，仅识别 ~~text~~（见上方说明）
+    cmark_parser* parser = cmark_parser_new(CMARK_OPT_DEFAULT | CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE);
 
     cmark_syntax_extension* tableExt = cmark_find_syntax_extension("table");
     if (tableExt)

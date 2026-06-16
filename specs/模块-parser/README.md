@@ -40,3 +40,17 @@ ParseScheduler（主线程 QObject）
 - AST 必须是不可变快照（immutable snapshot），主线程消费时不加锁
 - 用 `std::shared_ptr<const MarkdownAst>` 传递所有权
 - 解析失败返回空 AST，不抛异常
+
+## 行内语法约定
+
+### [INV-STRIKE-DOUBLE-TILDE] 删除线仅识别双波浪线 `~~`
+
+创建 cmark parser 时**必须**带 `CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE` 选项，使删除线
+**只**识别 GFM 标准的 `~~text~~`（双波浪线），单波浪线 `~text~` 不触发删除线。
+
+历史 bug（plans/归档/2026-06-16-删除线语法双波浪线确认.md / 用户报告）：cmark-gfm 的
+strikethrough 扩展**默认单/双波浪线都识别**，导致预览里 `~text~`（单）也被划线，而编辑器
+语法高亮只认 `~~([^~]+)~~`（双）—— 预览与编辑器、与 GFM 标准三者不一致。加该选项后对齐。
+
+源码：`MarkdownParser.cpp` 两处 `cmark_parser_new(CMARK_OPT_DEFAULT | CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE)`。
+验收：`tests/parser/MarkdownParserTest.cpp` T-P13（`~~x~~` 触发、`~x~` 不触发）。

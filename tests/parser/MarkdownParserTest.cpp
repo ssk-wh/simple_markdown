@@ -219,6 +219,24 @@ TEST(MarkdownParserTest, T_P12_HeadingSourceLineTracked)
     EXPECT_EQ(h->startLine, 2);
 }
 
+// T-P13：删除线仅识别双波浪线 ~~（GFM 标准），单波浪线 ~ 不触发
+// Spec: specs/模块-parser/README.md INV-STRIKE-DOUBLE-TILDE
+// Bug: plans/2026-06-16-删除线语法双波浪线确认.md
+//   （cmark-gfm strikethrough 扩展默认单/双波浪线都识别，单 ~ 在预览误显删除线，
+//    与编辑器高亮正则 ~~([^~]+)~~ 不一致；CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE 修正为仅双）
+TEST(MarkdownParserTest, T_P13_StrikethroughDoubleTildeOnly)
+{
+    MarkdownParser p;
+    // 双波浪线 → 删除线
+    EXPECT_GE(countOfType(p.parse("~~deleted~~\n").get(), AstNodeType::Strikethrough), 1);
+    EXPECT_GE(countOfType(p.parse("a ~~foo~~ b\n").get(), AstNodeType::Strikethrough), 1);
+    EXPECT_GE(countOfType(p.parse("~~\xE8\xB7\xA8\xE4\xB8\xAD\xE6\x96\x87~~\n").get(),
+                          AstNodeType::Strikethrough), 1);  // 跨中文
+    // 单波浪线 → 不触发删除线（与编辑器高亮及 GFM 双波浪线标准一致）
+    EXPECT_EQ(countOfType(p.parse("~single~\n").get(), AstNodeType::Strikethrough), 0);
+    EXPECT_EQ(countOfType(p.parse("x ~y~ z\n").get(), AstNodeType::Strikethrough), 0);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
