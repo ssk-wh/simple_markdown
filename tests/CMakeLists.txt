@@ -322,6 +322,17 @@ target_link_libraries(PreviewSelectionHeightTest PRIVATE
 
 add_test(NAME PreviewSelectionHeightTest COMMAND PreviewSelectionHeightTest)
 
+# --- PreviewDoubleClickCellTest ---
+# Spec: specs/模块-preview/12-选区与拖动.md INV-3/INV-4
+# Bug: plans/2026-05-13-预览区双击选词与复制粘贴异常.md（表格单元格双击只选一个字母/错位）
+add_executable(PreviewDoubleClickCellTest preview/PreviewDoubleClickCellTest.cpp)
+target_include_directories(PreviewDoubleClickCellTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser ${CMAKE_SOURCE_DIR}/src/preview)
+target_link_libraries(PreviewDoubleClickCellTest PRIVATE
+    sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets gtest gtest_main)
+add_test(NAME PreviewDoubleClickCellTest COMMAND PreviewDoubleClickCellTest)
+
 # --- PreviewCopyConsistencyTest ---
 # Spec: specs/模块-preview/13-复制语义.md
 # Bug: plans/2026-06-15-渲染区单元格复制粘贴内容不一致回归.md

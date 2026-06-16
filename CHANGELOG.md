@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.14] - 2026-06-16
+
+### Fixed
+- 预览区滚动到较远位置（如长文档中的表格）后，双击单元格内的英文单词只选中一个字母或选区错位、复制为空；现在双击前会同步复制源，双击稳定选中整个单词、复制内容正确
+
 ## [1.1.13] - 2026-06-16
 
 ### Fixed

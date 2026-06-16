@@ -633,6 +633,13 @@ void PreviewWidget::mouseDoubleClickEvent(QMouseEvent* event)
         viewport()->repaint();
     }
 
+    // [Spec 模块-preview/13 INV-COPY-PLAINTEXT-SYNC] 双击前**无条件重建 m_plainText**，
+    // 保证它与当前 textSegments（textIndexAtPoint 用其 charStart）处于同一 layout 剪裁
+    // 状态。否则若 m_plainText 因滚动/重剪裁滞后，findWordBoundaryFor 在错位的 idx 上
+    // 退化为单字符选中（2026-06-16 用户报告：双击单元格英文只选一个字母 / 错位，反复多次）。
+    // 双击是低频用户动作，extractPlainText 仅遍历视口内块，成本可忽略。
+    m_plainText = extractPlainText();
+
     // 同 mousePressEvent：坐标变换规则与 paintEvent 中的 translate 对应
     qreal scrollXVal = m_wordWrap ? 0 : horizontalScrollBar()->value();
     QPointF pt(event->pos().x() - 20 + scrollXVal, event->pos().y());
