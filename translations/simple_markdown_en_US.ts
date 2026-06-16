@@ -438,16 +438,16 @@ Please check that the folder is writable.</translation>
         <translation>Auto Save Delay</translation>
     </message>
     <message>
-        <source>1.5 seconds</source>
-        <translation>1.5 seconds</translation>
+        <source>30 seconds</source>
+        <translation>30 seconds</translation>
     </message>
     <message>
-        <source>3 seconds</source>
-        <translation>3 seconds</translation>
+        <source>5 minutes</source>
+        <translation>5 minutes</translation>
     </message>
     <message>
-        <source>5 seconds</source>
-        <translation>5 seconds</translation>
+        <source>10 minutes</source>
+        <translation>10 minutes</translation>
     </message>
     <message>
         <source>Auto save failed: %1</source>

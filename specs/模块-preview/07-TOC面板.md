@@ -36,16 +36,22 @@ last_reviewed: 2026-04-27
 
 点击 TOC 章节跳转（`smoothScrollToSourceLine`）在**视口剪裁**（plan A1 按需渲染）下，
 动画开始时远处目标章节是 placeholder 粗估 Y；动画按估算 Y 落地后，目标块已进入视口被
-真实 layout。此时**必须**在 `onScrollAnimationFinished` 中执行自校正循环：重建 layout →
-重算 `sourceLineToY(targetLine)` → 若与当前滚动位置偏差 ≥ 3px 则滚到该值，最多迭代 4 次
-直到收敛到不动点（`scrollY == sourceLineToY(target)`）。
+真实 layout。此时在 `onScrollAnimationFinished` 中执行**单次校正**：
+1. `applyLayoutViewportCrop()` + `buildFromAst()` 围绕落点重建一次（目标进入缓冲区→真实）；
+2. 取该 layout 下 `sourceLineToY(targetLine)` 作为校正位 `correctedY`；
+3. `blockSignals(true)` 包裹 `setValue(correctedY)`，设值后**不再重建**——绘制沿用同一 layout，
+   `scrollY == sourceLineToY(target)` ⇒ 目标精确落顶。
 
-收敛到不动点 ⇒ 目标标题落在视口顶部：因为绘制与滚动用**同一** layout 状态，far-above
-块的估算误差对 scroll 与 paint 等量作用、不影响相对落位。
+**⚠️ 禁止迭代重建**：每次 `buildFromAst` 会让 ±2 屏缓冲边界随 scrollY 移动，边界处块在
+"估算↔真实"间翻转，使 `sourceLineToY(target)` 抖动约一个块高（真实 windows 平台实测 ~28px）→
+迭代在两值间 ping-pong、永不收敛。绘制与滚动用**同一** layout 状态即可保证落顶，far-above
+块的估算误差对 scroll 与 paint 等量作用、不影响相对落位，无需迭代逼近真实绝对 Y。
 
-历史教训（2026-06-15 用户报告 / 提交 7b921fe 曾因此移除 Ctrl+数字跳转）：不做自校正时，
-远处章节首次跳转落位偏差可达上百像素（实测大文档 ~164px），用户需多次点击才逼近。
-测试 `PreviewTocJumpTest` 量化：无校正 164px → 自校正 0px。
+历史教训（2026-06-15 提交 7b921fe 曾因此移除 Ctrl+数字跳转 / 2026-06-16 复盘）：
+- 不做校正时远处章节首次跳转偏差可达上百像素（实测 ~130-164px）。
+- **曾误用 4 次迭代重建方案，offscreen 平台单测假通过（收敛到 0）但真实 windows 平台 residual=28px
+  不收敛、用户验证失败**——教训：ctest 必须用真实平台（已让 build_on_win.bat ctest 走 SDK 运行时 + windows 平台）。
+- 测试 `PreviewTocJumpTest`：T-TOC-JUMP-1 验单次校正落顶；T-TOC-JUMP-2 锁定"迭代重建不稳定不可取"。
 
 ### [INV-TOC-VALIGN] TOC 顶端垂直对齐编辑/预览区
 

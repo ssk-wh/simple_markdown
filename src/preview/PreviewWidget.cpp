@@ -456,24 +456,28 @@ void PreviewWidget::onScrollAnimationValueChanged(const QVariant &value)
 
 void PreviewWidget::onScrollAnimationFinished()
 {
-    // [Spec 模块-preview/07 INV-TOC-JUMP-CORRECT] 跳转后自校正：
-    // 视口剪裁（plan A1）下，远处目标章节在动画开始时是 placeholder 粗估 Y，
-    // 动画按估算 Y 落地后，目标块已进入视口被真实 layout——此时重算其精确 Y 并校正
-    // 到位（估算→实测收敛），修复"离当前较远的章节跳转首次不到位"。
-    // 最多迭代几次：每次落点变化会让附近块升级为精算，Y 逐步收敛；偏差 < 3px 即停。
+    // [Spec 模块-preview/07 INV-TOC-JUMP-CORRECT] 跳转后单次自校正（不迭代重建）：
+    // 视口剪裁（plan A1）下，远处目标章节在动画开始时是 placeholder 粗估 Y，动画按估算 Y
+    // 落地后，目标块已进入视口被真实 layout。此时：① 围绕落点重建一次让目标真实化；
+    // ② 取该 layout 下 sourceLineToY(target) 作为校正位；③ blockSignals 设 scrollY 到该位
+    // 且**之后不再重建**——绘制沿用同一 layout，目标精确落顶。
+    //
+    // ⚠️ 关键：禁止迭代重建。每次 buildFromAst 会让 ±2 屏缓冲边界随 scrollY 移动，边界处的块
+    // 在"估算↔真实"间翻转，使 sourceLineToY(target) 抖动约一个块高（实测真实平台 ~28px）→
+    // 迭代 ping-pong 永不收敛（2026-06-16 用户报告"跳转验证失败"的真因）。单次校正 + 不再重建
+    // 才稳定：scrollY 与绘制用同一 layout 状态，远处块估算误差对二者等量作用、不影响相对落位。
     if (m_targetSourceLine >= 0 && m_currentAst && m_layout) {
-        for (int iter = 0; iter < 4; ++iter) {
-            applyLayoutViewportCrop();
-            m_layout->buildFromAst(m_currentAst);
-            updateScrollBars();
-            qreal correctedY = m_layout->sourceLineToY(m_targetSourceLine);
-            int target = qBound(verticalScrollBar()->minimum(),
-                                static_cast<int>(correctedY),
-                                verticalScrollBar()->maximum());
-            int curY = verticalScrollBar()->value();
-            if (qAbs(target - curY) < 3) break;
-            verticalScrollBar()->setValue(target);
-        }
+        applyLayoutViewportCrop();          // 围绕动画落点裁剪（目标进入缓冲区→真实 layout）
+        m_layout->buildFromAst(m_currentAst);
+        updateScrollBars();
+        qreal correctedY = m_layout->sourceLineToY(m_targetSourceLine);
+        int target = qBound(verticalScrollBar()->minimum(),
+                            static_cast<int>(correctedY),
+                            verticalScrollBar()->maximum());
+        // blockSignals：不触发 scrollContentsBy 再次重建（否则边界移动又抖动）
+        verticalScrollBar()->blockSignals(true);
+        verticalScrollBar()->setValue(target);
+        verticalScrollBar()->blockSignals(false);
         viewport()->update();
     }
 

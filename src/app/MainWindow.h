@@ -286,8 +286,8 @@ private:
     // Spec: specs/模块-app/14-自动保存.md
     // 编辑停顿后静默保存（仅有磁盘路径的 Tab）
     QTimer m_autoSaveTimer;
-    bool m_autoSaveEnabled = true;
-    int m_autoSaveDelayMs = 1500;
+    bool m_autoSaveEnabled = false;       // 默认不开启自动保存
+    int m_autoSaveDelayMs = 300000;       // 默认延时 5 分钟
     QAction* m_autoSaveEnabledAct = nullptr;
     QVector<QAction*> m_autoSaveDelayActions;  // 1500 / 3000 / 5000 三档
     void scheduleAutoSave();

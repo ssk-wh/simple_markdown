@@ -71,6 +71,10 @@ tmp/                ← 临时文件（gitignored）
 
 Ralph Loop 的"待办扫描"改为扫 `plans/*.md` 的 frontmatter `status` 字段（draft / in_progress 优先取最早日期）。
 
+**状态固定为四态，禁止创造其他状态**：`draft → in_progress → completed → aborted`（详见 `plans/README.md`）。
+- 不要用全局模板的 `done` / `pending` / `blocked`——本项目用 `completed` / `draft`。
+- `completed` 且**用户确认后**立即 `git mv plans/xxx.md plans/归档/xxx.md`。
+
 | 维度 | `plans/`（统一入口） |
 |------|----------------------|
 | 定位 | 所有工作项的承载地 |

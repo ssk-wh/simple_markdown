@@ -709,8 +709,13 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
             p->drawText(QPointF(curX, curY + lineAscent), seg);
             if (!run.linkUrl.isEmpty())
                 p->drawLine(QPointF(curX, curY + lineAscent + 2), QPointF(curX + segW, curY + lineAscent + 2));
-            if (run.isStrikethrough)
-                p->drawLine(QPointF(curX, curY + lineAscent / 2), QPointF(curX + segW, curY + lineAscent / 2));
+            if (run.isStrikethrough) {
+                // [Spec 模块-preview/03 INV-STRIKE-CENTER] 删除线穿过文字视觉中线：
+                // 用字体度量的 strikeOutPos()（相对基线向上的设计位置，通常穿过 x 高度中部），
+                // 而非粗略的 lineAscent/2（偏上）。基线 = curY + lineAscent（行内共享）。
+                qreal strikeY = curY + lineAscent - fm.strikeOutPos();
+                p->drawLine(QPointF(curX, strikeY), QPointF(curX + segW, strikeY));
+            }
         };
 
         // 通过逐字测量查找在剩余宽度内能容纳多少字符

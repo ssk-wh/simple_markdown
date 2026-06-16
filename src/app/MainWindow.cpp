@@ -581,7 +581,7 @@ void MainWindow::setupMenuBar()
     QMenu* settingsMenu = menuBar()->addMenu(tr("Settings"));
 
     // Spec: specs/模块-app/14-自动保存.md
-    // 自动保存：开关 + 三档延迟（1.5s / 3s / 5s）
+    // 自动保存：开关（默认关闭）+ 三档延迟（30s / 5min / 10min，默认 5min）
     m_autoSaveEnabledAct = settingsMenu->addAction(tr("Auto Save"));
     m_autoSaveEnabledAct->setCheckable(true);
     m_autoSaveEnabledAct->setChecked(m_autoSaveEnabled);
@@ -596,9 +596,9 @@ void MainWindow::setupMenuBar()
     autoSaveDelayGroup->setExclusive(true);
     struct DelayChoice { int ms; const char* label; };
     static const DelayChoice kDelays[] = {
-        { 1500, QT_TR_NOOP("1.5 seconds") },
-        { 3000, QT_TR_NOOP("3 seconds") },
-        { 5000, QT_TR_NOOP("5 seconds") },
+        { 30000,  QT_TR_NOOP("30 seconds") },
+        { 300000, QT_TR_NOOP("5 minutes") },
+        { 600000, QT_TR_NOOP("10 minutes") },
     };
     m_autoSaveDelayActions.clear();
     for (const auto& dc : kDelays) {
@@ -2519,11 +2519,12 @@ void MainWindow::loadSettings()
     m_fontSizeDelta = s.value("view/fontSizeDelta", 0).toInt();
 
     // Spec: specs/模块-app/14-自动保存.md
-    m_autoSaveEnabled = s.value("autoSave/enabled", true).toBool();
-    m_autoSaveDelayMs = s.value("autoSave/delayMs", 1500).toInt();
-    // 兜底：只接受 1500/3000/5000 三档
-    if (m_autoSaveDelayMs != 1500 && m_autoSaveDelayMs != 3000 && m_autoSaveDelayMs != 5000)
-        m_autoSaveDelayMs = 1500;
+    // 默认不开启自动保存；延时默认 5 分钟（300000ms）
+    m_autoSaveEnabled = s.value("autoSave/enabled", false).toBool();
+    m_autoSaveDelayMs = s.value("autoSave/delayMs", 300000).toInt();
+    // 兜底：只接受 30s/5min/10min 三档；旧版本遗留的小延时值（1500/3000/5000）归一到 5min 默认
+    if (m_autoSaveDelayMs != 30000 && m_autoSaveDelayMs != 300000 && m_autoSaveDelayMs != 600000)
+        m_autoSaveDelayMs = 300000;
     if (m_autoSaveEnabledAct) m_autoSaveEnabledAct->setChecked(m_autoSaveEnabled);
     for (QAction* a : m_autoSaveDelayActions) {
         if (a->data().toInt() == m_autoSaveDelayMs) {

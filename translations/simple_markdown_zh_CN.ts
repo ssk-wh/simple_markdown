@@ -586,16 +586,16 @@ Please check that the folder is writable.</source>
         <translation>自动保存延迟</translation>
     </message>
     <message>
-        <source>1.5 seconds</source>
-        <translation>1.5 秒</translation>
+        <source>30 seconds</source>
+        <translation>30 秒</translation>
     </message>
     <message>
-        <source>3 seconds</source>
-        <translation>3 秒</translation>
+        <source>5 minutes</source>
+        <translation>5 分钟</translation>
     </message>
     <message>
-        <source>5 seconds</source>
-        <translation>5 秒</translation>
+        <source>10 minutes</source>
+        <translation>10 分钟</translation>
     </message>
     <message>
         <source>Auto save failed: %1</source>
