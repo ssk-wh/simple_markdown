@@ -352,6 +352,14 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         break;
     }
     case LayoutBlock::List: {
+        // [Spec 模块-preview/03 INV-LIST-BULLET-LEVEL] 无序列表项目符号按嵌套深度分级：
+        // L0 ● 实心圆 / L1 ○ 空心圆 / L2 ◆ 实心菱形 / L3 ◇ 空心菱形 / L4+ ▸ 三角
+        const int listDepth = m_unorderedListDepth;
+        static const char16_t kBullets[] = { 0x25CF, 0x25CB, 0x25C6, 0x25C7, 0x25B8 };
+        const int kMaxLevel = static_cast<int>(sizeof(kBullets) / sizeof(kBullets[0])) - 1;
+        const QString bulletGlyph =
+            QString(QChar(kBullets[listDepth < kMaxLevel ? listDepth : kMaxLevel]));
+
         int itemIndex = 0;
         for (const auto& child : block.children) {
             qreal itemAbsY = absY + child.bounds.y();
@@ -370,11 +378,15 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                 p->drawText(QPointF(bulletX, itemDrawY + fm.ascent()), num);
             } else {
                 p->drawText(QPointF(bulletX + 4, itemDrawY + fm.ascent()),
-                            QStringLiteral("\u2022"));
+                            bulletGlyph);
             }
 
+            // 进入子块前无序深度 +1（仅无序列表参与分级），让嵌套无序 List 取更深一级符号；
             // 传入父块绝对坐标，子块通过自身 bounds 定位（避免双倍偏移）
+            const int savedDepth = m_unorderedListDepth;
+            if (!block.ordered) m_unorderedListDepth = listDepth + 1;
             paintBlock(p, child, absX, absY, scrollY, viewportHeight, viewportWidth);
+            m_unorderedListDepth = savedDepth;
             itemIndex++;
         }
         break;

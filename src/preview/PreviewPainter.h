@@ -111,6 +111,9 @@ private:
     ImageCache* m_imageCache = nullptr;
     QVector<TextSegment> m_textSegments;
     int m_charCounter = 0;  // 绘制期间的字符计数器
+    // [Spec 模块-preview/03 INV-LIST-BULLET-LEVEL] 无序列表嵌套深度（绘制期间维护），
+    // 用于按层级选择项目符号样式（实心圆→空心圆→实心菱形→空心菱形→三角）
+    int m_unorderedListDepth = 0;
     int m_selStart = -1;
     int m_selEnd = -1;
     QVector<QPair<int,int>> m_highlights;  // 标记高亮范围 (start, end)

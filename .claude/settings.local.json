@@ -30,14 +30,14 @@
             "type": "command",
             "if": "Bash(git push:*)",
             "command": "python .claude/hooks/pre_push_check.py",
-            "timeout": 15,
+            "timeout": 120,
             "statusMessage": "自动打 Tag..."
           },
           {
             "type": "command",
             "if": "Bash(rtk git push:*)",
             "command": "python .claude/hooks/pre_push_check.py",
-            "timeout": 15,
+            "timeout": 120,
             "statusMessage": "自动打 Tag..."
           }
         ]

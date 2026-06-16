@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.12] - 2026-06-16
+
+### Added
+- 预览区无序列表的项目符号随缩进层级变化：实心圆 → 空心圆 → 实心菱形 → 空心菱形 → 三角，便于区分嵌套层级
+
 ## [1.1.11] - 2026-06-16
 
 ### Changed
