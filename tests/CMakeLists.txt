@@ -345,6 +345,17 @@ target_link_libraries(PreviewSelectionDragTest PRIVATE
     sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets gtest gtest_main)
 add_test(NAME PreviewSelectionDragTest COMMAND PreviewSelectionDragTest)
 
+# --- PreviewBrLineBreakTest ---
+# Spec: specs/模块-preview/02-布局引擎.md INV-BR-LINEBREAK
+# Bug: plans/2026-06-16-单元格内br换行未生效且显示原文.md
+add_executable(PreviewBrLineBreakTest preview/PreviewBrLineBreakTest.cpp)
+target_include_directories(PreviewBrLineBreakTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser ${CMAKE_SOURCE_DIR}/src/preview)
+target_link_libraries(PreviewBrLineBreakTest PRIVATE
+    sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets gtest gtest_main)
+add_test(NAME PreviewBrLineBreakTest COMMAND PreviewBrLineBreakTest)
+
 # --- PreviewCopyConsistencyTest ---
 # Spec: specs/模块-preview/13-复制语义.md
 # Bug: plans/2026-06-15-渲染区单元格复制粘贴内容不一致回归.md

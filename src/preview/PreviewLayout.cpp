@@ -741,7 +741,19 @@ void PreviewLayout::collectInlineRuns(const AstNode* node, std::vector<InlineRun
             break;
         }
         case AstNodeType::HtmlInline: {
-            // 按原始文本渲染
+            // GFM：行内 <br> / <br/> / <br /> 等价于硬换行（与 LineBreak 同走 "\n" run）。
+            // 归一化：去掉全部空白后转小写比较，覆盖 <br>、<br/>、<br />、<BR> 等变体。
+            QString tag = child->literal;
+            tag = tag.simplified().remove(QChar(' ')).toLower();
+            if (tag == QStringLiteral("<br>") || tag == QStringLiteral("<br/>")) {
+                InlineRun brk;
+                brk.text = QStringLiteral("\n");
+                brk.font = currentFont;
+                brk.color = currentColor;
+                runs.push_back(std::move(brk));
+                break;
+            }
+            // 其他行内 HTML：按原始文本渲染
             InlineRun run;
             run.text = child->literal;
             run.font = currentFont;

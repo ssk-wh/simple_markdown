@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.15] - 2026-06-16
+
+### Fixed
+- 表格单元格或段落中的 `<br>`（含 `<br/>`、`<br />`）现在正确换行显示，不再既不换行又把 `<br>` 文字原样显示出来
+
 ## [1.1.14] - 2026-06-16
 
 ### Fixed
