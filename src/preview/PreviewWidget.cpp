@@ -301,6 +301,11 @@ void PreviewWidget::scrollContentsBy(int /*dx*/, int /*dy*/)
         if (vpH > 0 && qAbs(scrollY - m_lastViewportCropTop) > vpH * 0.5) {
             applyLayoutViewportCrop();
             m_layout->buildFromAst(m_currentAst);
+            // [Spec 模块-preview/13-复制语义.md INV-COPY-PLAINTEXT-SYNC] 重剪裁会改变视口外
+            // placeholder 块集合 → 改变 paint 的字符索引空间；m_plainText（复制源）也由
+            // extractPlainText 遍历同一剪裁后 layout 构建，必须在每次重剪裁后同步重建，
+            // 否则选区索引（新剪裁空间）切到旧 m_plainText → 复制粘贴为空/错乱（2026-06-16 用户报告）。
+            m_plainText = extractPlainText();
         }
     }
     viewport()->update();

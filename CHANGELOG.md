@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.13] - 2026-06-16
+
+### Fixed
+- 预览区滚动到较远位置（如长文档中的表格）后，复制单元格/内容粘贴出来为空或错乱；现在滚动后复制源会同步更新，复制粘贴内容正确
+
 ## [1.1.12] - 2026-06-16
 
 ### Added

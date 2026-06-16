@@ -71,24 +71,10 @@ void extractBlockText(const LayoutBlock& block, QString& out)
     for (const auto& child : block.children) extractBlockText(child, out);
 }
 
-// 跑 paint，校验每个 TextSegment 的 (charStart,charLen) 切片 == 其 text
-int checkConsistency(const QString& doc, bool clip, QString* firstMismatch)
+// 在“当前 layout 状态”下校验：每个 TextSegment 的 (charStart,charLen) 切片 == 其 text。
+// plainText 用 extractBlockText 在同一 layout 状态构建（模拟 m_plainText = extractPlainText()）。
+int checkAtCurrentState(PreviewLayout& layout, qreal H, QString* firstMismatch)
 {
-    MarkdownParser parser;
-    auto astU = parser.parse(doc);
-    if (!astU) return -1;
-    std::shared_ptr<AstNode> ast(std::move(astU));
-
-    const int W = 600, H = 400;
-    QImage device(W, H, QImage::Format_ARGB32);
-    PreviewLayout layout;
-    layout.setFont(font_defaults::defaultPreviewFont());
-    layout.updateMetrics(&device);
-    layout.setViewportWidth(W);
-    if (clip) layout.setViewportYRange(0, 120);  // 只让顶部一小段在视口，触发占位块
-    layout.buildFromAst(ast);
-
-    // 复制源（与 paint 同一 layout 状态）
     QString plain;
     extractBlockText(layout.rootBlock(), plain);
 
@@ -97,7 +83,8 @@ int checkConsistency(const QString& doc, bool clip, QString* firstMismatch)
     painter.setTheme(theme);
     painter.setLayout(&layout);
 
-    QImage img(W, H, QImage::Format_ARGB32);
+    const int W = 600;
+    QImage img(W, (int)H, QImage::Format_ARGB32);
     img.fill(Qt::white);
     QPainter p(&img);
     painter.paint(&p, layout.rootBlock(), 0, H, W);
@@ -116,6 +103,26 @@ int checkConsistency(const QString& doc, bool clip, QString* firstMismatch)
         }
     }
     return mismatches;
+}
+
+// 跑 paint，校验每个 TextSegment 的 (charStart,charLen) 切片 == 其 text
+int checkConsistency(const QString& doc, bool clip, QString* firstMismatch)
+{
+    MarkdownParser parser;
+    auto astU = parser.parse(doc);
+    if (!astU) return -1;
+    std::shared_ptr<AstNode> ast(std::move(astU));
+
+    const int W = 600, H = 400;
+    QImage device(W, H, QImage::Format_ARGB32);
+    PreviewLayout layout;
+    layout.setFont(font_defaults::defaultPreviewFont());
+    layout.updateMetrics(&device);
+    layout.setViewportWidth(W);
+    if (clip) layout.setViewportYRange(0, 120);  // 只让顶部一小段在视口，触发占位块
+    layout.buildFromAst(ast);
+
+    return checkAtCurrentState(layout, H, firstMismatch);
 }
 
 }  // namespace
@@ -157,4 +164,49 @@ TEST(PreviewCopyConsistencyTest, T_COPY_CONSIST_2_ViewportClipped)
     int n = checkConsistency(doc, /*clip=*/true, &mm);
     ASSERT_GE(n, 0) << "解析失败";
     EXPECT_EQ(n, 0) << "剪裁下选区索引与复制源不一致，首个不匹配：" << mm.toStdString();
+}
+
+// ---------------------------------------------------------------------------
+// T-COPY-CONSIST-3：模拟滚动（重剪裁）后，复制源与选区索引仍一致
+// 复现 2026-06-16 用户报告：滚动到表格后复制粘贴为空/错乱——根因是 scrollContentsBy
+// 重剪裁 layout（改变 placeholder 集合→索引空间）却不重建 m_plainText。本测试验证：
+// 任一剪裁状态下 extractBlockText（= m_plainText）与 paint segments 必须逐字节一致；
+// 即只要 widget 在重剪裁后同步重建 m_plainText（已修复），复制就正确。
+// ---------------------------------------------------------------------------
+TEST(PreviewCopyConsistencyTest, T_COPY_CONSIST_3_ReclipStillConsistent)
+{
+    QString doc = QStringLiteral("# 顶部标题\n\n");
+    for (int i = 0; i < 40; ++i)
+        doc += QString("段落 %1 一些较长的中文与 english 混排内容用于撑高文档触发视口剪裁\n\n").arg(i);
+    doc += QStringLiteral(
+        "| 列A | 列B | 列C |\n"
+        "|-----|-----|-----|\n"
+        "| 苹果 apple | 香蕉 banana | 1 |\n\n");
+
+    MarkdownParser parser;
+    auto astU = parser.parse(doc);
+    ASSERT_TRUE(astU);
+    std::shared_ptr<AstNode> ast(std::move(astU));
+
+    const int W = 600, H = 400;
+    QImage device(W, H, QImage::Format_ARGB32);
+    PreviewLayout layout;
+    layout.setFont(font_defaults::defaultPreviewFont());
+    layout.updateMetrics(&device);
+    layout.setViewportWidth(W);
+
+    // 初始剪裁在顶部
+    layout.setViewportYRange(0, 240);
+    layout.buildFromAst(ast);
+
+    // 模拟向下滚动若干屏后的重剪裁（表格进入视口、顶部段落变 placeholder）
+    const qreal total = layout.totalHeight();
+    layout.setViewportYRange(total - 480, total);   // 视口移到文档底部（含表格）
+    layout.buildFromAst(ast);
+
+    // 重剪裁后：extractBlockText（= 重建的 m_plainText）与 paint segments 必须仍一致
+    QString mm;
+    int n = checkAtCurrentState(layout, H, &mm);
+    ASSERT_GE(n, 0);
+    EXPECT_EQ(n, 0) << "重剪裁（滚动）后复制源与选区索引不一致，首个不匹配：" << mm.toStdString();
 }
