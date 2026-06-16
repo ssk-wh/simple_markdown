@@ -799,19 +799,35 @@ Open the crash reports folder?</translation>
     </message>
     <message>
         <source>A new version %1 is available (current: %2).</source>
-        <translation>A new version %1 is available (current: %2).</translation>
+        <translation type="vanished">A new version %1 is available (current: %2).</translation>
     </message>
     <message>
         <source>Open Download Page</source>
-        <translation>Open Download Page</translation>
+        <translation type="vanished">Open Download Page</translation>
     </message>
     <message>
         <source>Later</source>
-        <translation>Later</translation>
+        <translation type="vanished">Later</translation>
     </message>
     <message>
         <source>OK</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You can visit the %1 manually.</source>
+        <translation>You can visit the %1 manually.</translation>
+    </message>
+    <message>
+        <source>releases page</source>
+        <translation>releases page</translation>
+    </message>
+    <message>
+        <source>A new version &lt;b&gt;%1&lt;/b&gt; is available (current: %2).</source>
+        <translation>A new version &lt;b&gt;%1&lt;/b&gt; is available (current: %2).</translation>
+    </message>
+    <message>
+        <source>Download page: %1</source>
+        <translation>Download page: %1</translation>
     </message>
 </context>
 <context>

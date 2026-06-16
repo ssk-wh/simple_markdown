@@ -3264,37 +3264,72 @@ void MainWindow::setupUpdateChecker()
     connect(m_updateChecker, &UpdateChecker::updateAvailable,
             this, &MainWindow::onUpdateAvailable);
     connect(m_updateChecker, &UpdateChecker::upToDate, this, [this]() {
-        QMessageBox::information(this, tr("Check for Updates"),
+        showUpdateDialog(tr("Check for Updates"),
             tr("You are already on the latest version (%1).")
-                .arg(QApplication::applicationVersion()));
+                .arg(QApplication::applicationVersion().toHtmlEscaped()));
     });
     connect(m_updateChecker, &UpdateChecker::checkFailed, this, [this](const QString& msg) {
-        QMessageBox::warning(this, tr("Check for Updates"),
-            tr("Failed to check for updates: %1").arg(msg));
+        // 失败时给出可点击的 releases 页链接，方便用户手动查看
+        const QString releasesUrl =
+            QStringLiteral("https://github.com/ssk-wh/simple_markdown/releases");
+        QString body = tr("Failed to check for updates: %1").arg(msg.toHtmlEscaped());
+        body += QStringLiteral("<br><br>")
+              + tr("You can visit the %1 manually.")
+                    .arg(QStringLiteral("<a href=\"%1\">%2</a>")
+                             .arg(releasesUrl, tr("releases page")));
+        showUpdateDialog(tr("Check for Updates"), body);
     });
 }
 
+// [Spec specs/模块-app/23-检查更新.md] 检查更新统一信息弹窗——自定义 QDialog，
+// 关闭按钮风格与「更新历史」对话框一致（不设样式，靠 applyTheme 的全局 QDialog QPushButton
+// cascade）；正文为富文本 QLabel，内含 <a href> 链接，setOpenExternalLinks 使点击用浏览器打开
+void MainWindow::showUpdateDialog(const QString& title, const QString& richBody)
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(title);
+    dlg.setMinimumWidth(440);
+
+    QVBoxLayout* layout = new QVBoxLayout(&dlg);
+    layout->setContentsMargins(20, 20, 20, 20);
+    layout->setSpacing(16);
+
+    QLabel* label = new QLabel(richBody, &dlg);
+    label->setTextFormat(Qt::RichText);
+    label->setWordWrap(true);
+    label->setOpenExternalLinks(true);  // 链接点击用系统浏览器打开
+    label->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    layout->addWidget(label);
+
+    // 关闭按钮：与 ChangelogDialog/onShowWelcome 完全一致的最简实现，颜色尺寸靠全局 cascade
+    QPushButton* closeBtn = new QPushButton(tr("Close"), &dlg);
+    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    layout->addWidget(closeBtn);
+
+    dlg.exec();
+}
+
 // [Spec specs/模块-app/23-检查更新.md INV-UPD-NO-AUTODOWNLOAD] 有新版本时提示，
-// 仅提供「打开下载页」让用户自行下载安装，不自动下载/静默安装
+// 用统一自定义弹窗显示版本号 + 更新说明 + 可点击的下载页链接（不自动下载/静默安装）
 void MainWindow::onUpdateAvailable(const QString& version, const QString& notes, const QString& url)
 {
-    QMessageBox box(this);
-    box.setWindowTitle(tr("Update Available"));
-    box.setIcon(QMessageBox::Information);
-    box.setText(tr("A new version %1 is available (current: %2).")
-                    .arg(version, QApplication::applicationVersion()));
-    if (!notes.trimmed().isEmpty()) {
-        // 更新说明可能很长，截断后放入「详情」折叠区
-        QString brief = notes.trimmed();
-        if (brief.size() > 1200)
-            brief = brief.left(1200) + QStringLiteral("\n…");
-        box.setDetailedText(brief);
+    QString body = tr("A new version <b>%1</b> is available (current: %2).")
+                       .arg(version.toHtmlEscaped(),
+                            QApplication::applicationVersion().toHtmlEscaped());
+    if (!url.isEmpty()) {
+        body += QStringLiteral("<br><br>")
+              + tr("Download page: %1")
+                    .arg(QStringLiteral("<a href=\"%1\">%1</a>").arg(url.toHtmlEscaped()));
     }
-    QPushButton* openBtn = box.addButton(tr("Open Download Page"), QMessageBox::AcceptRole);
-    box.addButton(tr("Later"), QMessageBox::RejectRole);
-    box.exec();
-    if (box.clickedButton() == openBtn && !url.isEmpty())
-        QDesktopServices::openUrl(QUrl(url));
+    if (!notes.trimmed().isEmpty()) {
+        // 更新说明转义后限长，换行转 <br>
+        QString brief = notes.trimmed().toHtmlEscaped();
+        if (brief.size() > 1000)
+            brief = brief.left(1000) + QStringLiteral("…");
+        brief.replace(QStringLiteral("\n"), QStringLiteral("<br>"));
+        body += QStringLiteral("<br><br>") + brief;
+    }
+    showUpdateDialog(tr("Update Available"), body);
 }
 
 #ifdef _WIN32

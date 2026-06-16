@@ -122,6 +122,9 @@ private:
     UpdateChecker* m_updateChecker = nullptr;
     void setupUpdateChecker();                 // 构造期创建 UpdateChecker + 连接信号
     void onUpdateAvailable(const QString& version, const QString& notes, const QString& url);
+    // 检查更新统一信息弹窗：自定义 QDialog（关闭按钮风格与「更新历史」一致，靠全局 QSS cascade），
+    // richBody 为富文本，内含 <a href> 链接可点击跳转浏览器
+    void showUpdateDialog(const QString& title, const QString& richBody);
 
     // 持久化的视图设置
     QAction* m_restoreSessionAct = nullptr;

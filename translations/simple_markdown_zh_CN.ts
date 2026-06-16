@@ -814,19 +814,35 @@ Open the crash reports folder?</source>
     </message>
     <message>
         <source>A new version %1 is available (current: %2).</source>
-        <translation>发现新版本 %1（当前：%2）。</translation>
+        <translation type="vanished">发现新版本 %1（当前：%2）。</translation>
     </message>
     <message>
         <source>Open Download Page</source>
-        <translation>打开下载页</translation>
+        <translation type="vanished">打开下载页</translation>
     </message>
     <message>
         <source>Later</source>
-        <translation>稍后</translation>
+        <translation type="vanished">稍后</translation>
     </message>
     <message>
         <source>OK</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>You can visit the %1 manually.</source>
+        <translation>你可以手动访问 %1。</translation>
+    </message>
+    <message>
+        <source>releases page</source>
+        <translation>发布页</translation>
+    </message>
+    <message>
+        <source>A new version &lt;b&gt;%1&lt;/b&gt; is available (current: %2).</source>
+        <translation>发现新版本 &lt;b&gt;%1&lt;/b&gt;（当前：%2）。</translation>
+    </message>
+    <message>
+        <source>Download page: %1</source>
+        <translation>下载页：%1</translation>
     </message>
 </context>
 <context>
