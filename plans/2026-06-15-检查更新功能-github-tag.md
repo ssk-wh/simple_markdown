@@ -74,6 +74,10 @@ related_plans:
   ② collect_dist.py 打包 OpenSSL 进安装包（覆盖 CI）；③ UpdateChecker 加 SSL 预检 +
   15s 超时，手动检查无论成功/失败/无更新都有弹窗反馈（INV-UPD-SSL-GUARD/TIMEOUT）。
   ✅ 已完成，待用户复验（本机版本 1.1.15 ≥ 远端 v1.1.14，手动检查应弹「已是最新」）
+- 2026-06-16 用户要求**去掉启动时自动检查**，仅保留手动「检查更新…」按钮：移除 checkable
+  「启动时自动检查」菜单项 + QSettings(update/autoCheck) + 启动 QTimer 自动触发；Spec 改
+  INV-UPD-AUTOCHECK-DEFAULT → INV-UPD-MANUAL-ONLY（仅手动，启动不联网）。诊断实证手动检查
+  emit upToDate（点击有反应）。lupdate 同步 .ts。20 测试全过。
 
 ## 待确认 / 设计
 

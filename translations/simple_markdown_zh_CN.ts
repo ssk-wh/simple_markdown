@@ -794,7 +794,7 @@ Open the crash reports folder?</source>
     </message>
     <message>
         <source>Auto-check for Updates at Startup</source>
-        <translation>启动时自动检查更新</translation>
+        <translation type="vanished">启动时自动检查更新</translation>
     </message>
     <message>
         <source>Check for Updates</source>
@@ -1155,6 +1155,10 @@ Open the crash reports folder?</source>
     <message>
         <source>Failed to parse the latest version information</source>
         <translation>解析最新版本信息失败</translation>
+    </message>
+    <message>
+        <source>Secure network (SSL/TLS) is unavailable. Please ensure the OpenSSL runtime is installed.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

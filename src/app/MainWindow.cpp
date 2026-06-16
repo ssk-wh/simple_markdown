@@ -652,21 +652,10 @@ void MainWindow::setupMenuBar()
         dialog.exec();
     });
 
-    // [Spec specs/模块-app/23-检查更新.md] 手动检查更新（即使关闭自动检查也能触发）
+    // [Spec specs/模块-app/23-检查更新.md] 仅手动检查更新（用户主动点击触发，不在启动时自动联网）
     helpMenu->addAction(tr("Check for Updates..."), this, [this]() {
         if (m_updateChecker)
             m_updateChecker->checkForUpdates(/*manual=*/true);
-    });
-    // 启动时自动检查更新开关（持久化），默认开启
-    m_autoCheckUpdateAct = helpMenu->addAction(tr("Auto-check for Updates at Startup"));
-    m_autoCheckUpdateAct->setCheckable(true);
-    {
-        QSettings settings;
-        m_autoCheckUpdateAct->setChecked(settings.value(QStringLiteral("update/autoCheck"), true).toBool());
-    }
-    connect(m_autoCheckUpdateAct, &QAction::toggled, this, [](bool on) {
-        QSettings settings;
-        settings.setValue(QStringLiteral("update/autoCheck"), on);
     });
     setupUpdateChecker();
 
@@ -3268,32 +3257,21 @@ void MainWindow::onShowShortcuts()
     dialog.exec();
 }
 
-// [Spec specs/模块-app/23-检查更新.md] 初始化检查更新器并视设置触发启动自动检查
+// [Spec specs/模块-app/23-检查更新.md] 初始化检查更新器（仅手动触发，不在启动时自动联网）
 void MainWindow::setupUpdateChecker()
 {
     m_updateChecker = new UpdateChecker(this);
     connect(m_updateChecker, &UpdateChecker::updateAvailable,
             this, &MainWindow::onUpdateAvailable);
     connect(m_updateChecker, &UpdateChecker::upToDate, this, [this]() {
-        // 仅手动检查会发出此信号
         QMessageBox::information(this, tr("Check for Updates"),
             tr("You are already on the latest version (%1).")
                 .arg(QApplication::applicationVersion()));
     });
     connect(m_updateChecker, &UpdateChecker::checkFailed, this, [this](const QString& msg) {
-        // 仅手动检查会发出此信号；自动检查失败静默（INV-UPD-SILENT-AUTO）
         QMessageBox::warning(this, tr("Check for Updates"),
             tr("Failed to check for updates: %1").arg(msg));
     });
-
-    // 启动时自动检查（异步延迟，不阻塞 UI；失败/已是最新均静默）
-    QSettings settings;
-    if (settings.value(QStringLiteral("update/autoCheck"), true).toBool()) {
-        QTimer::singleShot(3000, this, [this]() {
-            if (m_updateChecker)
-                m_updateChecker->checkForUpdates(/*manual=*/false);
-        });
-    }
 }
 
 // [Spec specs/模块-app/23-检查更新.md INV-UPD-NO-AUTODOWNLOAD] 有新版本时提示，

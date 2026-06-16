@@ -118,10 +118,9 @@ private:
     Theme m_currentTheme;
     QLocalServer* m_localServer = nullptr;
 
-    // 检查更新（Spec: specs/模块-app/23-检查更新.md）
+    // 检查更新（Spec: specs/模块-app/23-检查更新.md）——仅手动触发
     UpdateChecker* m_updateChecker = nullptr;
-    QAction* m_autoCheckUpdateAct = nullptr;   // checkable：启动时自动检查更新
-    void setupUpdateChecker();                 // 构造期初始化 + 视情况触发自动检查
+    void setupUpdateChecker();                 // 构造期创建 UpdateChecker + 连接信号
     void onUpdateAvailable(const QString& version, const QString& notes, const QString& url);
 
     // 持久化的视图设置

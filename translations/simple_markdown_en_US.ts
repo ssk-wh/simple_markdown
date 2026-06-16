@@ -767,7 +767,7 @@ Open the crash reports folder?</translation>
     </message>
     <message>
         <source>Auto-check for Updates at Startup</source>
-        <translation>Auto-check for Updates at Startup</translation>
+        <translation type="vanished">Auto-check for Updates at Startup</translation>
     </message>
     <message>
         <source>Light Mode</source>
@@ -1136,6 +1136,10 @@ Open the crash reports folder?</translation>
     <message>
         <source>Failed to parse the latest version information</source>
         <translation>Failed to parse the latest version information</translation>
+    </message>
+    <message>
+        <source>Secure network (SSL/TLS) is unavailable. Please ensure the OpenSSL runtime is installed.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
