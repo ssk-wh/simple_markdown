@@ -977,12 +977,15 @@ static int hitTestSegment(const TextSegment& seg, qreal relX, QPaintDevice* devi
 
 int PreviewWidget::textIndexAtPoint(const QPointF& point) const
 {
-    const auto& segments = m_painter->textSegments();
+    // 转发到 testable seam，传入当前 textSegments（与 m_plainText 同剪裁）与 viewport device
+    return textIndexForSegments(m_painter->textSegments(), point, viewport());
+}
+
+int PreviewWidget::textIndexForSegments(const QVector<TextSegment>& segments,
+                                        const QPointF& point, QPaintDevice* device)
+{
     if (segments.isEmpty())
         return 0;
-
-    // 获取 device 以确保高 DPI 下的度量一致性
-    QPaintDevice* device = viewport();
 
     // [Spec 模块-preview/12 INV-1] 双层 closest：
     //  - inRow: 鼠标 y 落在 segment rect 垂直范围内的候选（同一视觉行）——优先取

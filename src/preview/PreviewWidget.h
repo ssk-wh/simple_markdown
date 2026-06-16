@@ -14,6 +14,8 @@ class PreviewLayout;
 class PreviewPainter;
 class ImageCache;
 struct TocEntry;
+struct TextSegment;
+class QPaintDevice;
 class QPropertyAnimation;
 class SearchBar;
 class SearchWorker;
@@ -75,6 +77,14 @@ public:
     // 暴露为 public static 是为了让 PreviewDoubleClickWordTest 不依赖 paint 与
     // textSegments 即可覆盖 INV-4 的 ASCII/CJK/标点分词行为
     static QPair<int,int> findWordBoundaryFor(const QString& text, int idx);
+
+    // [Spec 模块-preview/12 INV-1] 选区终点 snap 算法——testable seam。
+    // 把鼠标 point 映射到 segments 中的字符索引：双层 closest（同视觉行 dx 优先 →
+    // 2D 距离 fallback）。暴露为 public static 是为了让 PreviewSelectionDragTest
+    // 直接覆盖真实算法（避免测试复刻导致两份代码走样——CLAUDE.md 反模式 B）。
+    // 成员函数 textIndexAtPoint 转发到此，传入 m_painter->textSegments() 与 viewport()。
+    static int textIndexForSegments(const QVector<TextSegment>& segments,
+                                    const QPointF& point, QPaintDevice* device);
 
 public slots:
     void updateAst(std::shared_ptr<AstNode> root);

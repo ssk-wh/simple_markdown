@@ -333,6 +333,18 @@ target_link_libraries(PreviewDoubleClickCellTest PRIVATE
     sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets gtest gtest_main)
 add_test(NAME PreviewDoubleClickCellTest COMMAND PreviewDoubleClickCellTest)
 
+# --- PreviewSelectionDragTest ---
+# Spec: specs/模块-preview/12-选区与拖动.md INV-1（选区终点 snap：同行 dx 优先 → 2D fallback）
+# Bug: 归档/表格行右侧空白拖选扩散整段（2026-05-09 报告 / 2026-05-11 修复）
+# 验收：T-1/T-2/T-3（直接调 PreviewWidget::textIndexForSegments 真实算法）
+add_executable(PreviewSelectionDragTest preview/PreviewSelectionDragTest.cpp)
+target_include_directories(PreviewSelectionDragTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser ${CMAKE_SOURCE_DIR}/src/preview)
+target_link_libraries(PreviewSelectionDragTest PRIVATE
+    sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets gtest gtest_main)
+add_test(NAME PreviewSelectionDragTest COMMAND PreviewSelectionDragTest)
+
 # --- PreviewCopyConsistencyTest ---
 # Spec: specs/模块-preview/13-复制语义.md
 # Bug: plans/2026-06-15-渲染区单元格复制粘贴内容不一致回归.md

@@ -3,7 +3,12 @@ id: 横切关注点/40-高DPI适配
 status: stable
 owners: [@pcfan]
 code: [src/preview/PreviewLayout.cpp, src/preview/PreviewPainter.cpp, src/preview/PreviewWidget.cpp, src/editor/EditorLayout.cpp, src/editor/EditorPainter.cpp]
-tests: [tests/preview/HighDpiTest.cpp]
+tests:
+  - tests/app/FontConsistencyTest.cpp                # 编辑/预览字号一致（QFontMetricsF 带 device）
+  - tests/preview/PreviewSelectionHeightTest.cpp     # 带 device 的字体度量驱动高亮高度
+  - tests/preview/PreviewTableCellOverflowTest.cpp   # 带 device 的换行估算不越界
+  # 原引用 HighDpiTest.cpp 从未落地；INV-DPI-METRICS（度量必带 device）由上述测试间接覆盖。
+  # 1.25x/1.5x/2x 多 DPI 矩阵：headless 难模拟物理 DPI，当前手动验证（截图对比），待补
 depends: [specs/20-约束与不变量.md]
 last_reviewed: 2026-04-13
 ---
