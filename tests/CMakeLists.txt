@@ -475,3 +475,48 @@ target_link_libraries(FontConsistencyTest PRIVATE
 )
 
 add_test(NAME FontConsistencyTest COMMAND FontConsistencyTest)
+
+# --- TabBarAddButtonVisibilityTest ---
+# Spec: specs/模块-app/04-窗口焦点管理.md INV-6（「+」按钮独立于 Tab 滚动，始终可见）
+# Bug: plans/2026-06-16-多标签时新建按钮被挤不可见.md
+# 验收：T-11（溢出时按钮可见）/ T-12（按钮与 tab 区不重叠）
+# 注意：TabBarWithAdd 在 app(executable)，直接把 .cpp 编进测试 exe（AUTOMOC 处理 Q_OBJECT）
+add_executable(TabBarAddButtonVisibilityTest
+    app/TabBarAddButtonVisibilityTest.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/TabBarWithAdd.cpp
+)
+target_include_directories(TabBarAddButtonVisibilityTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/app
+)
+target_link_libraries(TabBarAddButtonVisibilityTest PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Test
+    gtest
+    gtest_main
+)
+add_test(NAME TabBarAddButtonVisibilityTest COMMAND TabBarAddButtonVisibilityTest)
+
+# --- ReloadDialogI18nTest ---
+# Spec: specs/横切关注点/60-国际化.md INV-QMSGBOX-TR（标准按钮用自定义 tr 文案）
+# Bug: plans/2026-06-16-文件外部修改弹窗未国际化.md
+# 验收：T-7（中文 locale 下「文件外部修改」弹窗按钮显示中文）
+# 需把项目 qrc 编进测试 exe 才能访问 :/translations/simple_markdown_zh_CN.qm
+qt5_add_resources(RELOAD_I18N_TEST_RES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
+add_executable(ReloadDialogI18nTest
+    app/ReloadDialogI18nTest.cpp
+    ${RELOAD_I18N_TEST_RES}
+)
+target_include_directories(ReloadDialogI18nTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(ReloadDialogI18nTest PRIVATE
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    gtest
+    gtest_main
+)
+add_test(NAME ReloadDialogI18nTest COMMAND ReloadDialogI18nTest)

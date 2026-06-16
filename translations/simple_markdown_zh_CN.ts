@@ -589,6 +589,14 @@ Please ensure CHANGELOG.md is installed with the application.</source>
         <translation>文件已更改</translation>
     </message>
     <message>
+        <source>Reload</source>
+        <translation>重新加载</translation>
+    </message>
+    <message>
+        <source>Keep Current</source>
+        <translation>保留当前</translation>
+    </message>
+    <message>
         <source>&quot;%1&quot; has been modified by another program.
 
 Do you want to reload it?</source>

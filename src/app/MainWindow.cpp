@@ -116,9 +116,15 @@ MainWindow::MainWindow(QWidget* parent)
 
     // 加载翻译（必须在任何 tr() 调用和子控件创建之前）
     m_translator = new QTranslator(this);
+    m_qtTranslator = new QTranslator(this);
     {
         QSettings s;
         QString locale = s.value("language/locale", "zh_CN").toString();
+        // Spec INV-3：先加载 Qt 内置 widget 翻译（标准按钮 Yes/No/Save、对话框等），
+        // 否则中文界面下 QMessageBox 等标准按钮仍显示英文。qm 嵌入 qrc 以保证部署后
+        // 用户机也能加载（不依赖 Qt 安装路径）。英文 locale 无 qt_en_US.qm，load 失败即跳过。
+        if (m_qtTranslator->load(":/translations/qt_" + locale + ".qm"))
+            qApp->installTranslator(m_qtTranslator);
         if (m_translator->load(":/translations/simple_markdown_" + locale + ".qm"))
             qApp->installTranslator(m_translator);
     }
@@ -128,8 +134,12 @@ MainWindow::MainWindow(QWidget* parent)
     // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
     // 拆 QTabWidget 为 QTabBar + QStackedWidget，TOC 不再与 tabBar 顶齐
     // central widget = QVBoxLayout(tabBar + mainSplitter(contentStack|tocPanel))
-    m_tabBar = new TabBarWithAdd(this);
-    connect(m_tabBar, &TabBarWithAdd::addClicked, this, &MainWindow::onNewFile);
+    // Spec: specs/模块-app/04-窗口焦点管理.md INV-6
+    // m_tabBarBox 是「Tab 栏 + 「+」按钮」容器；m_tabBar 指向其内部 QTabBar，
+    // 后续所有 tab 操作仍用 m_tabBar，可见性 / 主题色用容器 m_tabBarBox。
+    m_tabBarBox = new TabBarWithAdd(this);
+    m_tabBar = m_tabBarBox->bar();
+    connect(m_tabBarBox, &TabBarWithAdd::addClicked, this, &MainWindow::onNewFile);
     m_tabBar->setTabsClosable(true);
     m_tabBar->setMovable(true);
     m_tabBar->setDocumentMode(true);
@@ -179,7 +189,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_centralLayout = new QVBoxLayout(contentContainer);
     m_centralLayout->setContentsMargins(0, 0, 0, 0);
     m_centralLayout->setSpacing(0);
-    m_centralLayout->addWidget(m_tabBar);
+    m_centralLayout->addWidget(m_tabBarBox);
     m_centralLayout->addWidget(m_contentStack, /*stretch=*/1);
     // Spec: specs/模块-app/22-空白引导页.md INV-EMPTY-WELCOME-MUTUAL
     // WelcomePanel 与 m_contentStack 互斥占用 stretch=1 的中央区域
@@ -532,7 +542,7 @@ void MainWindow::setupMenuBar()
         m_tabPosHideAllAct->setCheckable(true);
         connect(m_tabPosHideAllAct, &QAction::triggered, this, [this]() {
             setTabBarPosition(false);
-            m_tabBar->hide();
+            m_tabBarBox->hide();
             m_tabPosHideAllAct->setChecked(true);
         });
 
@@ -1618,7 +1628,7 @@ void MainWindow::applyTheme(const Theme& theme)
     m_sideTabBar->setTheme(theme);
     if (m_welcomePanel) m_welcomePanel->setTheme(theme);  // INV-EMPTY-THEME
     // "+" 按钮前景色和 hover 背景跟随主题
-    m_tabBar->setAddButtonColors(
+    m_tabBarBox->setAddButtonColors(
         theme.editorFg,
         theme.isDark ? QColor(255, 255, 255, 26) : QColor(0, 0, 0, 26));
 
@@ -2731,8 +2741,14 @@ void MainWindow::promptReloadTab(int tabIndex)
                                 tr("File Changed"),
                                 tr("\"%1\" has been modified by another program.\n\n"
                                    "Do you want to reload it?").arg(name),
-                                QMessageBox::Yes | QMessageBox::No,
+                                QMessageBox::NoButton,
                                 this);
+    // [i18n INV-QMSGBOX-TR] 标准按钮 Yes/No 文案来自 Qt 的 QPlatformTheme context，
+    // 而项目可用的 qt_zh_CN.qm 翻译在 QDialogButtonBox context，二者不匹配会导致中文
+    // 界面下按钮仍显示英文。故用自定义 tr() 按钮，文案完全受项目翻译控制。
+    QPushButton* reloadBtn = box->addButton(tr("Reload"), QMessageBox::AcceptRole);
+    box->addButton(tr("Keep Current"), QMessageBox::RejectRole);
+    box->setDefaultButton(reloadBtn);
     box->setAttribute(Qt::WA_DeleteOnClose);
     m_tabs[tabIndex].activeReloadDialog = box;
 
@@ -2740,10 +2756,10 @@ void MainWindow::promptReloadTab(int tabIndex)
     // 在响应阶段窗口期间收到的所有 fileChanged 都已被压制（见 onFileChangedExternally），
     // 但 pendingReload 可能因连续修改被反复置 true。响应"否"时保留 pendingReload，
     // 让下一次外部修改/切换 Tab 时再次提示；响应"是"则按最新磁盘加载，pendingReload 清零。
-    connect(box, &QMessageBox::finished, this, [this, tabIndex, box, path](int result) {
+    connect(box, &QMessageBox::finished, this, [this, tabIndex, box, reloadBtn, path](int) {
         if (tabIndex < 0 || tabIndex >= m_tabs.size())
             return;
-        if (result == QMessageBox::Yes) {
+        if (box->clickedButton() == reloadBtn) {
             m_tabs[tabIndex].pendingReload = false;
             // 重载前再确认文件仍存在；用户响应窗口期间可能被删除
             if (QFileInfo::exists(path)) {
@@ -2754,7 +2770,6 @@ void MainWindow::promptReloadTab(int tabIndex)
         }
         // QPointer 在 box 销毁后自动归零；显式清一次便于日志/断言时机明确
         m_tabs[tabIndex].activeReloadDialog.clear();
-        Q_UNUSED(box);
     });
 
     box->open();  // 非模态，避免阻塞主事件循环；用户必须响应一个按钮
@@ -3471,7 +3486,7 @@ void MainWindow::setTabBarPosition(bool onSide, bool hideTopBar)
         m_hideTopBarWhenSide = true;
         m_sideTabBar->hide();
         m_sideTabBar->setParent(this);
-        m_tabBar->setVisible(true);
+        m_tabBarBox->setVisible(true);
         updateLeftPaneVisibility();
         if (m_tabPosTopAct) m_tabPosTopAct->setChecked(true);
         saveSessionLater();
@@ -3515,7 +3530,7 @@ void MainWindow::setTabBarPosition(bool onSide, bool hideTopBar)
     }
 
     // 顶部 tab 栏：根据 hideTopBar 决定显隐
-    m_tabBar->setVisible(!hideTopBar);
+    m_tabBarBox->setVisible(!hideTopBar);
 
     updateLeftPaneVisibility();
     // 更新菜单勾选状态
@@ -3633,7 +3648,7 @@ void MainWindow::enterFocusMode()
     // 隐藏菜单栏、状态栏、tab 栏、左侧面板
     menuBar()->hide();
     statusBar()->hide();
-    m_tabBar->hide();
+    m_tabBarBox->hide();
     m_leftPaneSplitter->hide();
 
     // 隐藏 TOC 面板
@@ -3675,7 +3690,7 @@ void MainWindow::exitFocusMode()
     menuBar()->show();
     statusBar()->show();
     // 恢复 tab 栏（根据侧边模式决定显隐）
-    m_tabBar->setVisible(!m_tabBarOnSide || !m_hideTopBarWhenSide);
+    m_tabBarBox->setVisible(!m_tabBarOnSide || !m_hideTopBarWhenSide);
     // 恢复左侧面板
     updateLeftPaneVisibility();
 

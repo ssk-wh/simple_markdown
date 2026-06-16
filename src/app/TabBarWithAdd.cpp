@@ -1,134 +1,111 @@
-// Spec: specs/模块-app/04-窗口焦点管理.md
-// Spec: specs/模块-app/12-主题插件系统.md
-// Last synced: 2026-04-14
+// src/app/TabBarWithAdd.cpp
+//
+// Spec: specs/模块-app/04-窗口焦点管理.md — INV-6 「+」按钮独立于 Tab 滚动，始终可见可点
+// Spec: specs/模块-app/12-主题插件系统.md — 按钮视觉从 Theme 字段派生
 #include "TabBarWithAdd.h"
 
-#include <QMouseEvent>
+#include <QColor>
+#include <QEvent>
+#include <QHBoxLayout>
+#include <QPaintEvent>
 #include <QPainter>
-#include <QStyleOptionTab>
+#include <QPalette>
+#include <QSizePolicy>
+#include <QTabBar>
+#include <QToolButton>
 
 namespace {
 constexpr int kAddBtnWidth = 32;
-constexpr int kAddBtnIconSize = 12;      // + 图标的"臂长"
-constexpr int kAddBtnGap = 2;            // 紧贴最后 tab 后的小间距
-}
+constexpr int kAddBtnIconSize = 12;  // 「+」十字的臂长
+
+// 自绘「+」按钮：细十字线（1.4px RoundCap）+ hover 半透明圆角底，
+// 复刻早期 Chrome/Edge 风格，与 Tab 栏其他控件风格保持一致（贴合而非突兀）。
+// 仅重写绘制、不新增信号槽，故无需 Q_OBJECT；clicked 信号沿用 QToolButton 基类。
+class AddTabButton : public QToolButton {
+public:
+    explicit AddTabButton(QWidget* parent = nullptr) : QToolButton(parent) {}
+
+    void setColors(const QColor& fg, const QColor& hoverBg)
+    {
+        m_fg = fg;
+        m_hoverBg = hoverBg;
+        update();
+    }
+
+protected:
+    void enterEvent(QEvent*) override { update(); }   // hover 进入重绘底色
+    void leaveEvent(QEvent*) override { update(); }   // hover 离开清底色
+
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        const QRect r = rect();
+
+        // hover 态：填浅色 rounded rect（与早期自绘按钮一致）。
+        if (underMouse() && isEnabled()) {
+            QColor bg = m_hoverBg.isValid() ? m_hoverBg : QColor(0, 0, 0, 26);
+            p.setPen(Qt::NoPen);
+            p.setBrush(bg);
+            p.drawRoundedRect(r.adjusted(4, 4, -4, -4), 4, 4);
+        }
+
+        // 画「+」十字。
+        const QColor fg = m_fg.isValid() ? m_fg : palette().color(QPalette::WindowText);
+        QPen pen(fg);
+        pen.setWidthF(1.4);
+        pen.setCapStyle(Qt::RoundCap);
+        p.setPen(pen);
+
+        const QPoint c = r.center();
+        const int half = kAddBtnIconSize / 2;
+        p.drawLine(c.x() - half, c.y(), c.x() + half, c.y());
+        p.drawLine(c.x(), c.y() - half, c.x(), c.y() + half);
+    }
+
+private:
+    QColor m_fg;
+    QColor m_hoverBg;
+};
+}  // namespace
 
 TabBarWithAdd::TabBarWithAdd(QWidget* parent)
-    : QTabBar(parent)
+    : QWidget(parent)
+    , m_bar(new QTabBar(this))
+    , m_addBtn(new AddTabButton(this))
 {
-    setMouseTracking(true);
-    // Qt 默认 palette()，通常能在没显式 setAddButtonColors 时也给出合理默认
-    m_addFg = palette().color(QPalette::WindowText);
-    // hover 背景：深色主题用白色半透明，浅色主题用黑色半透明
-    bool isDark = palette().color(QPalette::Window).lightnessF() < 0.5;
-    m_addHoverBg = isDark ? QColor(255, 255, 255, 26) : QColor(0, 0, 0, 26);
+    m_bar->setObjectName(QStringLiteral("tabBar"));
+
+    // 「+」按钮：固定宽、扁平、不抢焦点、垂直填满与 Tab 等高。
+    m_addBtn->setObjectName(QStringLiteral("tabAddButton"));
+    m_addBtn->setFixedWidth(kAddBtnWidth);
+    m_addBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    m_addBtn->setCursor(Qt::PointingHandCursor);
+    m_addBtn->setFocusPolicy(Qt::NoFocus);
+    m_addBtn->setAutoRaise(true);
+
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    // INV-6：Tab 区可伸缩并保留原生横向滚动；「+」按钮固定在右端常驻可见，
+    // 不再绑定「最后一个 Tab 的右侧」这一会随滚动移动的锚点。
+    layout->addWidget(m_bar, /*stretch=*/1);
+    layout->addWidget(m_addBtn, /*stretch=*/0);
+
+    connect(m_addBtn, &QToolButton::clicked, this, &TabBarWithAdd::addClicked);
+
+    // 默认色跟随 palette；宿主切主题时再调 setAddButtonColors 覆盖。
+    setAddButtonColors(palette().color(QPalette::WindowText), QColor());
 }
 
 void TabBarWithAdd::setAddButtonColors(const QColor& fg, const QColor& hoverBg)
 {
-    m_addFg = fg;
-    m_addHoverBg = hoverBg;
-    update();
-}
-
-QRect TabBarWithAdd::addButtonRect() const
-{
-    if (count() == 0) {
-        // 没有 tab 时放在最左侧一点（其实 count==0 下 TabBar 不太可能出现，但防御）
-        return QRect(kAddBtnGap, 0, kAddBtnWidth, height());
+    const QColor f = fg.isValid() ? fg : palette().color(QPalette::WindowText);
+    QColor h = hoverBg;
+    if (!h.isValid()) {
+        // hover 底色：深色主题用白色半透明，浅色主题用黑色半透明。
+        const bool isDark = palette().color(QPalette::Window).lightnessF() < 0.5;
+        h = isDark ? QColor(255, 255, 255, 26) : QColor(0, 0, 0, 26);
     }
-    QRect lastTab = tabRect(count() - 1);
-    int x = lastTab.right() + kAddBtnGap;
-    int h = lastTab.height();
-    int y = lastTab.y();
-    return QRect(x, y, kAddBtnWidth, h);
-}
-
-QSize TabBarWithAdd::sizeHint() const
-{
-    QSize base = QTabBar::sizeHint();
-    // 给 + 按钮预留水平空间，避免 Tab 太多时按钮被截掉
-    return QSize(base.width() + kAddBtnWidth + kAddBtnGap, base.height());
-}
-
-QSize TabBarWithAdd::minimumTabSizeHint(int index) const
-{
-    return QTabBar::minimumTabSizeHint(index);
-}
-
-void TabBarWithAdd::paintEvent(QPaintEvent* e)
-{
-    // 先让 Qt 画所有 Tab
-    QTabBar::paintEvent(e);
-
-    if (count() == 0) return;
-
-    QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing, true);
-    const QRect r = addButtonRect();
-
-    // hover 态：填浅色 rounded rect
-    if (m_addHover) {
-        QColor bg = m_addHoverBg;
-        if (!bg.isValid()) bg = QColor(0, 0, 0, 26);
-        p.setPen(Qt::NoPen);
-        p.setBrush(bg);
-        // 缩小 2px 作为 hit-rect 内的 visual pad
-        QRect visRect = r.adjusted(4, 4, -4, -4);
-        p.drawRoundedRect(visRect, 4, 4);
-    }
-
-    // 画「+」十字
-    QColor fg = m_addFg.isValid() ? m_addFg : palette().color(QPalette::WindowText);
-    QPen pen(fg);
-    pen.setWidthF(1.4);
-    pen.setCapStyle(Qt::RoundCap);
-    p.setPen(pen);
-
-    const QPoint center = r.center();
-    const int half = kAddBtnIconSize / 2;
-    p.drawLine(center.x() - half, center.y(),
-               center.x() + half, center.y());
-    p.drawLine(center.x(), center.y() - half,
-               center.x(), center.y() + half);
-}
-
-void TabBarWithAdd::mouseMoveEvent(QMouseEvent* e)
-{
-    const bool hover = addButtonRect().contains(e->pos());
-    if (hover != m_addHover) {
-        m_addHover = hover;
-        // 悬停在 + 按钮时改手型光标；离开时交还 QTabBar 自己（它会按 tab 的 hit 决定）
-        setCursor(hover ? Qt::PointingHandCursor : Qt::ArrowCursor);
-        update();
-    }
-    QTabBar::mouseMoveEvent(e);
-}
-
-void TabBarWithAdd::mousePressEvent(QMouseEvent* e)
-{
-    if (e->button() == Qt::LeftButton && addButtonRect().contains(e->pos())) {
-        emit addClicked();
-        e->accept();
-        return;  // 不转给 QTabBar，避免误点到最后 Tab 空白触发
-    }
-    QTabBar::mousePressEvent(e);
-}
-
-void TabBarWithAdd::leaveEvent(QEvent* e)
-{
-    if (m_addHover) {
-        m_addHover = false;
-        setCursor(Qt::ArrowCursor);
-        update();
-    }
-    QTabBar::leaveEvent(e);
-}
-
-// ---- TabWidgetWithAdd ----
-TabWidgetWithAdd::TabWidgetWithAdd(QWidget* parent)
-    : QTabWidget(parent)
-    , m_bar(new TabBarWithAdd(this))
-{
-    setTabBar(m_bar);  // protected —— 子类中可用
+    static_cast<AddTabButton*>(m_addBtn)->setColors(f, h);
 }

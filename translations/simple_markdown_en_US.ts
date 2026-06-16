@@ -347,6 +347,14 @@ Please ensure CHANGELOG.md is installed with the application.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Reload</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep Current</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>&quot;%1&quot; has been modified by another program.
 
 Do you want to reload it?</source>

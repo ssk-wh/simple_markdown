@@ -13,7 +13,8 @@ class ScrollSync;
 class RecentFiles;
 class TocPanel;
 class FolderPanel;
-class TabBarWithAdd;  // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
+class TabBarWithAdd;  // Spec: specs/模块-app/04-窗口焦点管理.md INV-6（Tab 栏 + 「+」按钮容器）
+class QTabBar;
 class QSplitter;
 class QStackedWidget;
 class QMenu;
@@ -94,10 +95,14 @@ private:
     void maybeShowCrashReportPrompt();
 
     // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
-    // central widget = QVBoxLayout(m_tabBar + m_mainSplitter)
+    // central widget = QVBoxLayout(m_tabBarBox + m_mainSplitter)
     // m_mainSplitter 左：m_contentStack（每页一个 editor|preview splitter）
     //                 右：m_tocPanel
-    TabBarWithAdd* m_tabBar = nullptr;
+    // Spec: specs/模块-app/04-窗口焦点管理.md INV-6
+    // m_tabBarBox = Tab 栏 + 「+」按钮容器；m_tabBar 指向其内部 QTabBar（宿主用它做
+    // 所有 tab 操作）。可见性切换一律作用于容器 m_tabBarBox，避免按钮孤立残留。
+    TabBarWithAdd* m_tabBarBox = nullptr;
+    QTabBar* m_tabBar = nullptr;
     QStackedWidget* m_contentStack = nullptr;
     // Spec: specs/模块-app/22-空白引导页.md
     // m_tabs 为空时显示 m_welcomePanel，m_contentStack 隐藏（INV-EMPTY-WELCOME-MUTUAL）
@@ -143,6 +148,7 @@ private:
 
     // 语言切换
     QTranslator* m_translator = nullptr;
+    QTranslator* m_qtTranslator = nullptr;  // Qt 内置 widget 翻译（标准按钮等），见 i18n INV-3
     QAction* m_zhCNAct = nullptr;
     QAction* m_enUSAct = nullptr;
     void switchLanguage(const QString& locale);
