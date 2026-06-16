@@ -360,6 +360,21 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
         const QString bulletGlyph =
             QString(QChar(kBullets[listDepth < kMaxLevel ? listDepth : kMaxLevel]));
 
+        // [Spec 模块-preview/03 INV-LIST-BULLET-SIZE] bullet 墨迹大小归一化：
+        // ● ○ ◆ ◇ ▸ 各字符字形固有大小不一（Segoe UI 实测墨迹高度 ●=10 ○=14 ◆=15 ◇=16 ▸=11），
+        // 同字号直接绘制会让空心圆/菱形明显比实心圆大。按墨迹高度缩放字号到 ● 基准，使各级符号
+        // 视觉直径一致；基线仍用正文字体 ascent 对齐文字。
+        QFont bulletFont = m_layout ? m_layout->baseFont() : QFont("Segoe UI", 12);
+        if (bulletFont.pointSizeF() > 0) {
+            QFontMetricsF bfm(bulletFont, p->device());
+            const qreal targetInk = bfm.tightBoundingRect(QString(QChar(0x25CF))).height();
+            const qreal curInk = bfm.tightBoundingRect(bulletGlyph).height();
+            if (curInk > 0.5 && targetInk > 0.5) {
+                const qreal scale = qBound(0.5, targetInk / curInk, 1.5);
+                bulletFont.setPointSizeF(bulletFont.pointSizeF() * scale);
+            }
+        }
+
         int itemIndex = 0;
         for (const auto& child : block.children) {
             qreal itemAbsY = absY + child.bounds.y();
@@ -377,8 +392,11 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                 QString num = QString::number(block.listStart + itemIndex) + ".";
                 p->drawText(QPointF(bulletX, itemDrawY + fm.ascent()), num);
             } else {
+                // 用归一化字号绘制 bullet（基线仍用正文 fm.ascent() 对齐文字），画后恢复正文字体
+                p->setFont(bulletFont);
                 p->drawText(QPointF(bulletX + 4, itemDrawY + fm.ascent()),
                             bulletGlyph);
+                p->setFont(baseFont);
             }
 
             // 进入子块前无序深度 +1（仅无序列表参与分级），让嵌套无序 List 取更深一级符号；
