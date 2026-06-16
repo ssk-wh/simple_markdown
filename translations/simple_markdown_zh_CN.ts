@@ -2,29 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="zh_CN">
 <context>
-    <name>WelcomePanel</name>
-    <message>
-        <source>Get started by opening a file or folder</source>
-        <translation>从下面开始，打开文件或文件夹</translation>
-    </message>
-    <message>
-        <source>Open File...</source>
-        <translation>打开文件...</translation>
-    </message>
-    <message>
-        <source>Open Folder...</source>
-        <translation>打开文件夹...</translation>
-    </message>
-    <message>
-        <source>New File</source>
-        <translation>新建文件</translation>
-    </message>
-    <message>
-        <source>Shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+B Toggle Sidebar</source>
-        <translation>快捷键：Ctrl+N 新建，Ctrl+O 打开，Ctrl+B 显隐侧边栏</translation>
-    </message>
-</context>
-<context>
     <name>ChangelogDialog</name>
     <message>
         <source>Update History</source>
@@ -41,6 +18,144 @@ Please ensure CHANGELOG.md is installed with the application.</source>
         <translation>未找到更新历史文件。
 
 请确保 CHANGELOG.md 已随应用程序安装。</translation>
+    </message>
+</context>
+<context>
+    <name>EditorWidget</name>
+    <message>
+        <source>Cut</source>
+        <translation>剪切</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>复制</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>粘贴</translation>
+    </message>
+    <message>
+        <source>Insert</source>
+        <translation>插入</translation>
+    </message>
+    <message>
+        <source>Image...</source>
+        <translation>图片...</translation>
+    </message>
+    <message>
+        <source>Select Image</source>
+        <translation>选择图片</translation>
+    </message>
+    <message>
+        <source>Link</source>
+        <translation>链接</translation>
+    </message>
+    <message>
+        <source>Table</source>
+        <translation>表格</translation>
+    </message>
+    <message>
+        <source>Code Block</source>
+        <translation>代码块</translation>
+    </message>
+    <message>
+        <source>Horizontal Rule</source>
+        <translation>分隔线</translation>
+    </message>
+    <message>
+        <source>Images (*.png *.jpg *.jpeg *.gif *.bmp *.svg *.webp)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>FolderPanel</name>
+    <message>
+        <source>Explorer</source>
+        <translation>资源管理器</translation>
+    </message>
+    <message>
+        <source>Close Folder</source>
+        <translation>关闭文件夹</translation>
+    </message>
+    <message>
+        <source>New File...</source>
+        <translation>新建文件...</translation>
+    </message>
+    <message>
+        <source>New Folder...</source>
+        <translation>新建文件夹...</translation>
+    </message>
+    <message>
+        <source>Rename...</source>
+        <translation>重命名...</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <source>Reveal in Explorer</source>
+        <translation>在资源管理器中显示</translation>
+    </message>
+    <message>
+        <source>Reveal in File Manager</source>
+        <translation>在文件管理器中显示</translation>
+    </message>
+    <message>
+        <source>New File</source>
+        <translation>新建文件</translation>
+    </message>
+    <message>
+        <source>File name:</source>
+        <translation>文件名：</translation>
+    </message>
+    <message>
+        <source>New Folder</source>
+        <translation>新建文件夹</translation>
+    </message>
+    <message>
+        <source>Folder name:</source>
+        <translation>文件夹名：</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>错误</translation>
+    </message>
+    <message>
+        <source>File already exists: %1</source>
+        <translation>文件已存在：%1</translation>
+    </message>
+    <message>
+        <source>Failed to create folder: %1</source>
+        <translation>创建文件夹失败：%1</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重命名</translation>
+    </message>
+    <message>
+        <source>New name:</source>
+        <translation>新名称：</translation>
+    </message>
+    <message>
+        <source>A file with that name already exists.</source>
+        <translation>同名文件已存在。</translation>
+    </message>
+    <message>
+        <source>Failed to rename.</source>
+        <translation>重命名失败。</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;%1&quot; and all its contents?</source>
+        <translation>删除文件夹 &quot;%1&quot; 及其所有内容？</translation>
+    </message>
+    <message>
+        <source>Delete file &quot;%1&quot;?</source>
+        <translation>删除文件 &quot;%1&quot;？</translation>
+    </message>
+    <message>
+        <source>Confirm Delete</source>
+        <translation>确认删除</translation>
     </message>
 </context>
 <context>
@@ -375,7 +490,7 @@ Please ensure CHANGELOG.md is installed with the application.</source>
     </message>
     <message>
         <source>Tab Bar on Side</source>
-        <translation>侧边标签栏</translation>
+        <translation type="vanished">侧边标签栏</translation>
     </message>
     <message>
         <source>Tab Bar Position</source>
@@ -383,11 +498,11 @@ Please ensure CHANGELOG.md is installed with the application.</source>
     </message>
     <message>
         <source>Show on Side</source>
-        <translation>显示在左侧</translation>
+        <translation type="vanished">显示在左侧</translation>
     </message>
     <message>
         <source>Show on Side, Hide Top</source>
-        <translation>显示在左侧并隐藏顶部</translation>
+        <translation type="vanished">显示在左侧并隐藏顶部</translation>
     </message>
     <message>
         <source>Show All</source>
@@ -422,11 +537,11 @@ Please ensure CHANGELOG.md is installed with the application.</source>
         <translation>仅预览</translation>
     </message>
     <message>
-        <source>Preview hidden. Restore via View > Display Area.</source>
+        <source>Preview hidden. Restore via View &gt; Display Area.</source>
         <translation>预览区已隐藏，可通过 视图 → 显示区域 恢复</translation>
     </message>
     <message>
-        <source>Editor hidden. Restore via View > Display Area.</source>
+        <source>Editor hidden. Restore via View &gt; Display Area.</source>
         <translation>编辑器已隐藏，可通过 视图 → 显示区域 恢复</translation>
     </message>
     <message>
@@ -673,12 +788,52 @@ Open the crash reports folder?</source>
         <source>Chars: %1</source>
         <translation>字符: %1</translation>
     </message>
+    <message>
+        <source>Check for Updates...</source>
+        <translation>检查更新…</translation>
+    </message>
+    <message>
+        <source>Auto-check for Updates at Startup</source>
+        <translation>启动时自动检查更新</translation>
+    </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>检查更新</translation>
+    </message>
+    <message>
+        <source>You are already on the latest version (%1).</source>
+        <translation>您已是最新版本（%1）。</translation>
+    </message>
+    <message>
+        <source>Failed to check for updates: %1</source>
+        <translation>检查更新失败：%1</translation>
+    </message>
+    <message>
+        <source>Update Available</source>
+        <translation>发现新版本</translation>
+    </message>
+    <message>
+        <source>A new version %1 is available (current: %2).</source>
+        <translation>发现新版本 %1（当前：%2）。</translation>
+    </message>
+    <message>
+        <source>Open Download Page</source>
+        <translation>打开下载页</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>稍后</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>PreviewPainter</name>
     <message>
         <source>Network images not supported</source>
-        <translation>不支持网络图片</translation>
+        <translation type="vanished">不支持网络图片</translation>
     </message>
     <message>
         <source>Failed to load image</source>
@@ -687,6 +842,10 @@ Open the crash reports folder?</source>
     <message>
         <source>Image</source>
         <translation>图片</translation>
+    </message>
+    <message>
+        <source>Loading image...</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -756,6 +915,38 @@ Open the crash reports folder?</source>
     <message>
         <source>Replace...</source>
         <translation>替换...</translation>
+    </message>
+    <message>
+        <source>Previous Match (Shift+F3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Next Match (F3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close (Escape)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Match Case</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Match Whole Word</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use Regular Expression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace</source>
+        <translation type="unfinished">替换</translation>
+    </message>
+    <message>
+        <source>Replace All</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -898,6 +1089,13 @@ Open the crash reports folder?</source>
     </message>
 </context>
 <context>
+    <name>SideTabBar</name>
+    <message>
+        <source>Recent Documents</source>
+        <translation>最近使用文档</translation>
+    </message>
+</context>
+<context>
     <name>TocPanel</name>
     <message>
         <source>Contents</source>
@@ -953,144 +1151,33 @@ Open the crash reports folder?</source>
     </message>
 </context>
 <context>
-    <name>FolderPanel</name>
+    <name>UpdateChecker</name>
     <message>
-        <source>Explorer</source>
-        <translation>资源管理器</translation>
+        <source>Failed to parse the latest version information</source>
+        <translation>解析最新版本信息失败</translation>
+    </message>
+</context>
+<context>
+    <name>WelcomePanel</name>
+    <message>
+        <source>Get started by opening a file or folder</source>
+        <translation>从下面开始，打开文件或文件夹</translation>
     </message>
     <message>
-        <source>Close Folder</source>
-        <translation>关闭文件夹</translation>
+        <source>Open File...</source>
+        <translation>打开文件...</translation>
     </message>
     <message>
-        <source>New File...</source>
-        <translation>新建文件...</translation>
-    </message>
-    <message>
-        <source>New Folder...</source>
-        <translation>新建文件夹...</translation>
-    </message>
-    <message>
-        <source>Rename...</source>
-        <translation>重命名...</translation>
-    </message>
-    <message>
-        <source>Delete</source>
-        <translation>删除</translation>
-    </message>
-    <message>
-        <source>Reveal in Explorer</source>
-        <translation>在资源管理器中显示</translation>
-    </message>
-    <message>
-        <source>Reveal in File Manager</source>
-        <translation>在文件管理器中显示</translation>
+        <source>Open Folder...</source>
+        <translation>打开文件夹...</translation>
     </message>
     <message>
         <source>New File</source>
         <translation>新建文件</translation>
     </message>
     <message>
-        <source>File name:</source>
-        <translation>文件名：</translation>
-    </message>
-    <message>
-        <source>New Folder</source>
-        <translation>新建文件夹</translation>
-    </message>
-    <message>
-        <source>Folder name:</source>
-        <translation>文件夹名：</translation>
-    </message>
-    <message>
-        <source>Error</source>
-        <translation>错误</translation>
-    </message>
-    <message>
-        <source>File already exists: %1</source>
-        <translation>文件已存在：%1</translation>
-    </message>
-    <message>
-        <source>Failed to create folder: %1</source>
-        <translation>创建文件夹失败：%1</translation>
-    </message>
-    <message>
-        <source>Rename</source>
-        <translation>重命名</translation>
-    </message>
-    <message>
-        <source>New name:</source>
-        <translation>新名称：</translation>
-    </message>
-    <message>
-        <source>A file with that name already exists.</source>
-        <translation>同名文件已存在。</translation>
-    </message>
-    <message>
-        <source>Failed to rename.</source>
-        <translation>重命名失败。</translation>
-    </message>
-    <message>
-        <source>Delete folder &quot;%1&quot; and all its contents?</source>
-        <translation>删除文件夹 &quot;%1&quot; 及其所有内容？</translation>
-    </message>
-    <message>
-        <source>Delete file &quot;%1&quot;?</source>
-        <translation>删除文件 &quot;%1&quot;？</translation>
-    </message>
-    <message>
-        <source>Confirm Delete</source>
-        <translation>确认删除</translation>
-    </message>
-</context>
-<context>
-    <name>SideTabBar</name>
-    <message>
-        <source>Recent Documents</source>
-        <translation>最近使用文档</translation>
-    </message>
-</context>
-<context>
-    <name>EditorWidget</name>
-    <message>
-        <source>Cut</source>
-        <translation>剪切</translation>
-    </message>
-    <message>
-        <source>Copy</source>
-        <translation>复制</translation>
-    </message>
-    <message>
-        <source>Paste</source>
-        <translation>粘贴</translation>
-    </message>
-    <message>
-        <source>Insert</source>
-        <translation>插入</translation>
-    </message>
-    <message>
-        <source>Image...</source>
-        <translation>图片...</translation>
-    </message>
-    <message>
-        <source>Select Image</source>
-        <translation>选择图片</translation>
-    </message>
-    <message>
-        <source>Link</source>
-        <translation>链接</translation>
-    </message>
-    <message>
-        <source>Table</source>
-        <translation>表格</translation>
-    </message>
-    <message>
-        <source>Code Block</source>
-        <translation>代码块</translation>
-    </message>
-    <message>
-        <source>Horizontal Rule</source>
-        <translation>分隔线</translation>
+        <source>Shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+B Toggle Sidebar</source>
+        <translation>快捷键：Ctrl+N 新建，Ctrl+O 打开，Ctrl+B 显隐侧边栏</translation>
     </message>
 </context>
 </TS>

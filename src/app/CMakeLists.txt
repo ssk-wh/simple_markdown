@@ -1,4 +1,4 @@
-set(APP_SOURCES main.cpp MainWindow.h MainWindow.cpp ChangelogDialog.h ChangelogDialog.cpp ShortcutsDialog.h ShortcutsDialog.cpp WelcomePanel.h WelcomePanel.cpp TabBarWithAdd.h TabBarWithAdd.cpp SideTabBar.h SideTabBar.cpp SnapSplitter.h SnapSplitter.cpp FolderPanel.h FolderPanel.cpp)
+set(APP_SOURCES main.cpp MainWindow.h MainWindow.cpp ChangelogDialog.h ChangelogDialog.cpp ShortcutsDialog.h ShortcutsDialog.cpp WelcomePanel.h WelcomePanel.cpp TabBarWithAdd.h TabBarWithAdd.cpp SideTabBar.h SideTabBar.cpp SnapSplitter.h SnapSplitter.cpp FolderPanel.h FolderPanel.cpp UpdateChecker.h UpdateChecker.cpp)
 
 if(WIN32)
     # Spec: specs/模块-app/README.md 全局约束 [INV-WIN-VERSIONINFO]

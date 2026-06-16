@@ -26,6 +26,7 @@ class QTranslator;
 class SideTabBar;
 class QMessageBox;
 class WelcomePanel;  // Spec: specs/模块-app/22-空白引导页.md
+class UpdateChecker;  // Spec: specs/模块-app/23-检查更新.md
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -116,6 +117,12 @@ private:
 
     Theme m_currentTheme;
     QLocalServer* m_localServer = nullptr;
+
+    // 检查更新（Spec: specs/模块-app/23-检查更新.md）
+    UpdateChecker* m_updateChecker = nullptr;
+    QAction* m_autoCheckUpdateAct = nullptr;   // checkable：启动时自动检查更新
+    void setupUpdateChecker();                 // 构造期初始化 + 视情况触发自动检查
+    void onUpdateAvailable(const QString& version, const QString& notes, const QString& url);
 
     // 持久化的视图设置
     QAction* m_restoreSessionAct = nullptr;

@@ -9,6 +9,7 @@
 #include "ChangelogDialog.h"
 #include "ShortcutsDialog.h"
 #include "WelcomePanel.h"  // Spec: specs/模块-app/22-空白引导页.md
+#include "UpdateChecker.h"  // Spec: specs/模块-app/23-检查更新.md
 #include "EditorLayout.h"
 #include "PreviewLayout.h"
 #include "FontDefaults.h"
@@ -650,6 +651,24 @@ void MainWindow::setupMenuBar()
         ChangelogDialog dialog(m_currentTheme, this);
         dialog.exec();
     });
+
+    // [Spec specs/模块-app/23-检查更新.md] 手动检查更新（即使关闭自动检查也能触发）
+    helpMenu->addAction(tr("Check for Updates..."), this, [this]() {
+        if (m_updateChecker)
+            m_updateChecker->checkForUpdates(/*manual=*/true);
+    });
+    // 启动时自动检查更新开关（持久化），默认开启
+    m_autoCheckUpdateAct = helpMenu->addAction(tr("Auto-check for Updates at Startup"));
+    m_autoCheckUpdateAct->setCheckable(true);
+    {
+        QSettings settings;
+        m_autoCheckUpdateAct->setChecked(settings.value(QStringLiteral("update/autoCheck"), true).toBool());
+    }
+    connect(m_autoCheckUpdateAct, &QAction::toggled, this, [](bool on) {
+        QSettings settings;
+        settings.setValue(QStringLiteral("update/autoCheck"), on);
+    });
+    setupUpdateChecker();
 
     helpMenu->addSeparator();
 
@@ -3247,6 +3266,57 @@ void MainWindow::onShowShortcuts()
     // [Spec 模块-app/07-快捷键弹窗.md INV-1] 构造时直接注入当前主题。
     ShortcutsDialog dialog(m_currentTheme, this);
     dialog.exec();
+}
+
+// [Spec specs/模块-app/23-检查更新.md] 初始化检查更新器并视设置触发启动自动检查
+void MainWindow::setupUpdateChecker()
+{
+    m_updateChecker = new UpdateChecker(this);
+    connect(m_updateChecker, &UpdateChecker::updateAvailable,
+            this, &MainWindow::onUpdateAvailable);
+    connect(m_updateChecker, &UpdateChecker::upToDate, this, [this]() {
+        // 仅手动检查会发出此信号
+        QMessageBox::information(this, tr("Check for Updates"),
+            tr("You are already on the latest version (%1).")
+                .arg(QApplication::applicationVersion()));
+    });
+    connect(m_updateChecker, &UpdateChecker::checkFailed, this, [this](const QString& msg) {
+        // 仅手动检查会发出此信号；自动检查失败静默（INV-UPD-SILENT-AUTO）
+        QMessageBox::warning(this, tr("Check for Updates"),
+            tr("Failed to check for updates: %1").arg(msg));
+    });
+
+    // 启动时自动检查（异步延迟，不阻塞 UI；失败/已是最新均静默）
+    QSettings settings;
+    if (settings.value(QStringLiteral("update/autoCheck"), true).toBool()) {
+        QTimer::singleShot(3000, this, [this]() {
+            if (m_updateChecker)
+                m_updateChecker->checkForUpdates(/*manual=*/false);
+        });
+    }
+}
+
+// [Spec specs/模块-app/23-检查更新.md INV-UPD-NO-AUTODOWNLOAD] 有新版本时提示，
+// 仅提供「打开下载页」让用户自行下载安装，不自动下载/静默安装
+void MainWindow::onUpdateAvailable(const QString& version, const QString& notes, const QString& url)
+{
+    QMessageBox box(this);
+    box.setWindowTitle(tr("Update Available"));
+    box.setIcon(QMessageBox::Information);
+    box.setText(tr("A new version %1 is available (current: %2).")
+                    .arg(version, QApplication::applicationVersion()));
+    if (!notes.trimmed().isEmpty()) {
+        // 更新说明可能很长，截断后放入「详情」折叠区
+        QString brief = notes.trimmed();
+        if (brief.size() > 1200)
+            brief = brief.left(1200) + QStringLiteral("\n…");
+        box.setDetailedText(brief);
+    }
+    QPushButton* openBtn = box.addButton(tr("Open Download Page"), QMessageBox::AcceptRole);
+    box.addButton(tr("Later"), QMessageBox::RejectRole);
+    box.exec();
+    if (box.clickedButton() == openBtn && !url.isEmpty())
+        QDesktopServices::openUrl(QUrl(url));
 }
 
 #ifdef _WIN32

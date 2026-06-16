@@ -439,6 +439,20 @@ target_link_libraries(SnapSplitterDragFinishedTest PRIVATE
 
 add_test(NAME SnapSplitterDragFinishedTest COMMAND SnapSplitterDragFinishedTest)
 
+# --- UpdateCheckerVersionTest ---
+# Spec: specs/模块-app/23-检查更新.md INV-UPD-SEMVER
+# Plan: plans/2026-06-15-检查更新功能-github-tag.md
+# 注意：UpdateChecker 在 app(executable) 中，直接把 .cpp 编进测试 exe（AUTOMOC 处理 Q_OBJECT）
+add_executable(UpdateCheckerVersionTest
+    app/UpdateCheckerVersionTest.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/UpdateChecker.cpp
+)
+target_include_directories(UpdateCheckerVersionTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/app)
+target_link_libraries(UpdateCheckerVersionTest PRIVATE
+    Qt5::Core Qt5::Network gtest gtest_main)
+add_test(NAME UpdateCheckerVersionTest COMMAND UpdateCheckerVersionTest)
+
 # --- FontConsistencyTest ---
 # Spec: specs/横切关注点/80-字体系统.md（INV-2 / INV-9 / INV-10、§4 接口段声明）
 # 验收：T-FONT-XHEIGHT、T-FONT-MONO、T-FONT-BALANCE-NULL

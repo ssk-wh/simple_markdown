@@ -2,29 +2,6 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
-    <name>WelcomePanel</name>
-    <message>
-        <source>Get started by opening a file or folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open File...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open Folder...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>New File</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+B Toggle Sidebar</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>ChangelogDialog</name>
     <message>
         <source>Update History</source>
@@ -38,6 +15,144 @@
         <source>Update history file not found.
 
 Please ensure CHANGELOG.md is installed with the application.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>EditorWidget</name>
+    <message>
+        <source>Cut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation type="unfinished">Copy</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Insert</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Image...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select Image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Images (*.png *.jpg *.jpeg *.gif *.bmp *.svg *.webp)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Code Block</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Horizontal Rule</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>FolderPanel</name>
+    <message>
+        <source>Explorer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New File...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New Folder...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rename...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reveal in Explorer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reveal in File Manager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File already exists: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to create folder: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A file with that name already exists.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Failed to rename.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;%1&quot; and all its contents?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Delete file &quot;%1&quot;?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Confirm Delete</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -306,19 +421,7 @@ Do you want to reload it?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Tab Bar on Side</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Tab Bar Position</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show on Side</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Show on Side, Hide Top</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -354,11 +457,11 @@ Do you want to reload it?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Preview hidden. Restore via View > Display Area.</source>
+        <source>Preview hidden. Restore via View &gt; Display Area.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Editor hidden. Restore via View > Display Area.</source>
+        <source>Editor hidden. Restore via View &gt; Display Area.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -654,19 +757,75 @@ Open the crash reports folder?</translation>
         <source>Tip: press Ctrl+/ or open Help → Keyboard Shortcuts to see all shortcuts.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Open Folder...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Check for Updates...</source>
+        <translation>Check for Updates...</translation>
+    </message>
+    <message>
+        <source>Auto-check for Updates at Startup</source>
+        <translation>Auto-check for Updates at Startup</translation>
+    </message>
+    <message>
+        <source>Light Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dark Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation>Check for Updates</translation>
+    </message>
+    <message>
+        <source>You are already on the latest version (%1).</source>
+        <translation>You are already on the latest version (%1).</translation>
+    </message>
+    <message>
+        <source>Failed to check for updates: %1</source>
+        <translation>Failed to check for updates: %1</translation>
+    </message>
+    <message>
+        <source>Update Available</source>
+        <translation>Update Available</translation>
+    </message>
+    <message>
+        <source>A new version %1 is available (current: %2).</source>
+        <translation>A new version %1 is available (current: %2).</translation>
+    </message>
+    <message>
+        <source>Open Download Page</source>
+        <translation>Open Download Page</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Later</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>PreviewPainter</name>
-    <message>
-        <source>Network images not supported</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <source>Failed to load image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Image</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Loading image...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -736,6 +895,38 @@ Open the crash reports folder?</translation>
     </message>
     <message>
         <source>Replace...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Previous Match (Shift+F3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Next Match (F3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close (Escape)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Match Case</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Match Whole Word</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use Regular Expression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Replace All</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -879,6 +1070,13 @@ Open the crash reports folder?</translation>
     </message>
 </context>
 <context>
+    <name>SideTabBar</name>
+    <message>
+        <source>Recent Documents</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>TocPanel</name>
     <message>
         <source>Contents</source>
@@ -934,9 +1132,32 @@ Open the crash reports folder?</translation>
     </message>
 </context>
 <context>
-    <name>SideTabBar</name>
+    <name>UpdateChecker</name>
     <message>
-        <source>Recent Documents</source>
+        <source>Failed to parse the latest version information</source>
+        <translation>Failed to parse the latest version information</translation>
+    </message>
+</context>
+<context>
+    <name>WelcomePanel</name>
+    <message>
+        <source>Get started by opening a file or folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open File...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open Folder...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>New File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+B Toggle Sidebar</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

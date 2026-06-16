@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [1.1.15] - 2026-06-16
 
+### Added
+- 帮助菜单新增「检查更新」：对比 GitHub 最新版本，有新版时弹窗显示版本号与更新说明并可一键打开下载页；支持启动时自动检查（可在帮助菜单关闭，无网时静默不打扰）
+
 ### Fixed
 - 表格单元格或段落中的 `<br>`（含 `<br/>`、`<br />`）现在正确换行显示，不再既不换行又把 `<br>` 文字原样显示出来
 
