@@ -65,7 +65,15 @@ related_plans:
 
 - 2026-06-15 创建（待澄清默认行为 + 设计后实施）
 - 2026-06-16 自主定 MVP 方案（don't-ask 模式下取最稳妥选项）→ 实现 UpdateChecker + MainWindow 集成
-  + Spec 23 + UpdateCheckerVersionTest（5 例全过）+ i18n 同步。✅ 已完成，待用户在新版发布后视觉复验
+  + Spec 23 + UpdateCheckerVersionTest（5 例全过）+ i18n 同步。
+- 2026-06-16 用户反馈「点了没反应」+「成功失败都要提示」。systematic-debugging 定位根因：
+  **缺 x64 OpenSSL 运行时** → `QSslSocket::supportsSsl()==false` → HTTPS 请求失败/挂起且无反馈
+  （命令行 curl 自带 SSL 故误判网络无问题）。诊断程序实证：部署 Git mingw64 的
+  libssl/libcrypto-1_1-x64.dll 后 `supportsSsl=1`、`http=200`、拿到 tag v1.1.14。
+  修复：① build_on_win.bat 自动部署 OpenSSL 到 exe 同目录 + 镜像 build/tests；
+  ② collect_dist.py 打包 OpenSSL 进安装包（覆盖 CI）；③ UpdateChecker 加 SSL 预检 +
+  15s 超时，手动检查无论成功/失败/无更新都有弹窗反馈（INV-UPD-SSL-GUARD/TIMEOUT）。
+  ✅ 已完成，待用户复验（本机版本 1.1.15 ≥ 远端 v1.1.14，手动检查应弹「已是最新」）
 
 ## 待确认 / 设计
 

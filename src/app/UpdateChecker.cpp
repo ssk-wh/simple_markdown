@@ -13,6 +13,8 @@
 #include <QJsonArray>
 #include <QUrl>
 #include <QCoreApplication>
+#include <QSslSocket>
+#include <QTimer>
 
 namespace {
 // GitHub 仓库坐标（与 git remote / 发版流程一致）
@@ -119,6 +121,15 @@ void UpdateChecker::checkForUpdates(bool manual)
 
 void UpdateChecker::requestLatestRelease()
 {
+    // [INV-UPD-SSL-GUARD] HTTPS 依赖 OpenSSL 运行时，缺失时明确反馈（手动），
+    // 避免请求静默失败/挂起导致「点了没反应」
+    if (!QSslSocket::supportsSsl()) {
+        if (m_manual)
+            emit checkFailed(tr("Secure network (SSL/TLS) is unavailable. "
+                                "Please ensure the OpenSSL runtime is installed."));
+        return;
+    }
+
     const QString url = m_triedTagsFallback
         ? QStringLiteral("https://api.github.com/repos/%1/%2/tags").arg(kRepoOwner).arg(kRepoName)
         : QStringLiteral("https://api.github.com/repos/%1/%2/releases/latest").arg(kRepoOwner).arg(kRepoName);
@@ -127,7 +138,17 @@ void UpdateChecker::requestLatestRelease()
     // GitHub API 要求带 User-Agent，否则返回 403
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("SimpleMarkdown-UpdateChecker"));
     req.setRawHeader("Accept", "application/vnd.github+json");
-    m_nam->get(req);
+    QNetworkReply* reply = m_nam->get(req);
+
+    // [INV-UPD-TIMEOUT] Qt 5.12 无 setTransferTimeout，用 QTimer 15s 兜底：超时 abort
+    // → 触发 onReplyFinished 的 error 分支（手动检查时给「检查失败」反馈，不会无限等待）
+    QTimer* timeout = new QTimer(reply);  // 挂在 reply 上，reply 销毁时一并清理（RAII）
+    timeout->setSingleShot(true);
+    connect(timeout, &QTimer::timeout, reply, [reply]() {
+        if (reply->isRunning())
+            reply->abort();
+    });
+    timeout->start(15000);
 }
 
 void UpdateChecker::onReplyFinished(QNetworkReply* reply)

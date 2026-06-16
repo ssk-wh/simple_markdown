@@ -27,6 +27,25 @@ QT_PLUGINS = ["platforms", "imageformats", "styles"]
 
 VCRT_DLLS = ["MSVCP140.dll", "VCRUNTIME140.dll", "VCRUNTIME140_1.dll"]
 
+# Qt5 HTTPS（QSslSocket）需要 OpenSSL 1.1 x64 运行时；windeployqt 不部署，需单独收集。
+# 缺失则 supportsSsl()=false，「检查更新」等 HTTPS 功能静默失败。
+OPENSSL_DLLS = ["libssl-1_1-x64.dll", "libcrypto-1_1-x64.dll"]
+
+
+def find_openssl_dir():
+    """查找含 x64 OpenSSL 1.1 运行时的目录（Git 预装于 GitHub runner 与本机）。"""
+    candidates = [
+        r"C:\Program Files\Git\mingw64\bin",
+        r"C:\Qt\Tools\mingw1310_64\opt\bin",
+        r"C:\Program Files\OpenSSL-Win64\bin",
+        r"C:\Strawberry\c\bin",
+    ]
+    for c in candidates:
+        p = Path(c)
+        if all((p / d).exists() for d in OPENSSL_DLLS):
+            return p
+    return None
+
 
 def find_qt_dir_from_cmake():
     """Find Qt directory from CMake cache (most reliable)."""
@@ -173,6 +192,22 @@ def collect(build_dir):
         if not dst.exists():
             shutil.copy2(dll, dst)
             print(f"  + {dll.name} (from build dir)")
+
+    # Step 4.5: Collect OpenSSL (x64) for HTTPS（Check for Updates 等）
+    print("[4.5] Collecting OpenSSL runtime (HTTPS)...")
+    missing_ssl = [d for d in OPENSSL_DLLS if not (DIST_DIR / d).exists()]
+    if missing_ssl:
+        ssl_dir = find_openssl_dir()
+        if ssl_dir:
+            for d in OPENSSL_DLLS:
+                src = ssl_dir / d
+                if src.exists() and not (DIST_DIR / d).exists():
+                    shutil.copy2(src, DIST_DIR / d)
+                    print(f"  + {d} (from {ssl_dir})")
+        else:
+            print("  [WARN] OpenSSL x64 not found; HTTPS features (Check for Updates) will fail")
+    else:
+        print("  = OpenSSL already present (from build dir)")
 
     # Step 5: Collect MSVC runtime
     print("[5/5] Collecting MSVC runtime...")

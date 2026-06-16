@@ -137,6 +137,25 @@ if defined QT_DIR (
     )
 )
 
+REM ---- Deploy OpenSSL (x64) next to exe: Qt5 HTTPS needs OpenSSL 1.1 runtime ----
+REM windeployqt does NOT deploy OpenSSL. Without libssl/libcrypto, QSslSocket::supportsSsl()
+REM is false and HTTPS features (Check for Updates) silently fail. Probe common x64 locations.
+if exist %BUILD_DIR%\src\app\SimpleMarkdown.exe (
+    if not exist %BUILD_DIR%\src\app\libssl-1_1-x64.dll (
+        for %%P in (
+            "C:\Program Files\Git\mingw64\bin"
+            "C:\Qt\Tools\mingw1310_64\opt\bin"
+            "C:\Program Files\OpenSSL-Win64\bin"
+        ) do (
+            if exist "%%~P\libssl-1_1-x64.dll" if exist "%%~P\libcrypto-1_1-x64.dll" if not exist %BUILD_DIR%\src\app\libssl-1_1-x64.dll (
+                echo [+] Deploying OpenSSL from %%~P ...
+                copy /y "%%~P\libssl-1_1-x64.dll" %BUILD_DIR%\src\app\ >nul 2>&1
+                copy /y "%%~P\libcrypto-1_1-x64.dll" %BUILD_DIR%\src\app\ >nul 2>&1
+            )
+        )
+    )
+)
+
 REM ---- Mirror Qt runtime to build\tests for ctest ----
 REM 测试 exe 在 build\tests\ 下；它们也需要 Qt DLL 才能启动（否则 ctest 报 0xC000007B
 REM = STATUS_INVALID_IMAGE_FORMAT，本质是 DLL 缺失）。从 build\src\app\ 同步即可，
@@ -146,6 +165,10 @@ if exist %BUILD_DIR%\tests (
         echo [+] Mirroring Qt runtime to %BUILD_DIR%\tests...
         for %%F in (%BUILD_DIR%\src\app\Qt5*.dll) do (
             if not exist %BUILD_DIR%\tests\%%~nxF copy /y %%F %BUILD_DIR%\tests\ >nul 2>&1
+        )
+        REM OpenSSL runtime also needed by network tests/probes
+        for %%F in (%BUILD_DIR%\src\app\libssl-1_1-x64.dll %BUILD_DIR%\src\app\libcrypto-1_1-x64.dll) do (
+            if exist %%F if not exist %BUILD_DIR%\tests\%%~nxF copy /y %%F %BUILD_DIR%\tests\ >nul 2>&1
         )
         if exist %BUILD_DIR%\src\app\platforms (
             if not exist %BUILD_DIR%\tests\platforms xcopy /e /i /y %BUILD_DIR%\src\app\platforms %BUILD_DIR%\tests\platforms >nul 2>&1
