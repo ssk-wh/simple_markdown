@@ -852,6 +852,14 @@ Open the crash reports folder?</source>
         <source>Download page: %1</source>
         <translation>下载页：%1</translation>
     </message>
+    <message>
+        <source>Discard</source>
+        <translation>放弃</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPainter</name>

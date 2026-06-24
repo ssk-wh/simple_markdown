@@ -837,6 +837,14 @@ Open the crash reports folder?</translation>
         <source>Download page: %1</source>
         <translation>Download page: %1</translation>
     </message>
+    <message>
+        <source>Discard</source>
+        <translation>Discard</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPainter</name>

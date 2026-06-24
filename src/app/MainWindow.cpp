@@ -1876,12 +1876,17 @@ bool MainWindow::maybeSave(int index)
         return true;
 
     QString name = doc->filePath().isEmpty() ? tr("Untitled") : QFileInfo(doc->filePath()).fileName();
-    QMessageBox::StandardButton ret = QMessageBox::warning(
-        this, tr("Save Changes"),
-        tr("Do you want to save changes to \"%1\"?").arg(name),
-        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+    QMessageBox box(QMessageBox::Warning, tr("Save Changes"),
+                    tr("Do you want to save changes to \"%1\"?").arg(name),
+                    QMessageBox::NoButton, this);
+    QPushButton* saveBtn = box.addButton(tr("Save"), QMessageBox::AcceptRole);
+    QPushButton* discardBtn = box.addButton(tr("Discard"), QMessageBox::DestructiveRole);
+    box.addButton(tr("Cancel"), QMessageBox::RejectRole);
+    box.setDefaultButton(saveBtn);
+    box.exec();
 
-    if (ret == QMessageBox::Save) {
+    QAbstractButton* clicked = box.clickedButton();
+    if (clicked == saveBtn) {
         if (doc->filePath().isEmpty()) {
             QString path = QFileDialog::getSaveFileName(
                 this, tr("Save File"), QString(),
@@ -1895,7 +1900,7 @@ bool MainWindow::maybeSave(int index)
             // 关闭 tab 时不需要重新监控（tab 即将被移除）
         }
         return true;
-    } else if (ret == QMessageBox::Discard) {
+    } else if (clicked == discardBtn) {
         return true;
     }
     return false;  // Cancel
