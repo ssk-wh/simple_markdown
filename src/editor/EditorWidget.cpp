@@ -153,22 +153,28 @@ EditorWidget::EditorWidget(QWidget* parent)
         int start = qMax(0, first - preloadRange);
         int end = qMin(last + preloadRange, maxLine);
 
-        // [2026-06-24] 批量预加载：所有影响锚点的行（视口上方 + 首个可见行）在一个 tick
-        // 内精算，只做一次 scroll 补偿，避免逐行补偿导致连续微滚。
+        // [2026-06-24] 小批量预加载：每 tick 最多处理 kBatchSize 行，避免单 tick
+        // 处理大量行阻塞主线程导致卡顿。影响锚点的行（视口上方 + 首个可见行）一起处理
+        // 后做一次 scroll 补偿，其他行不做补偿。
+        static constexpr int kBatchSize = 5;
         int anchorEnd = qMin(first, end);
+        int batchEnd = qMin(m_lastPreloadLine + kBatchSize, anchorEnd);
         if (m_lastPreloadLine < anchorEnd) {
-            qreal anchorYBefore = m_layout->lineY(first);
-            for (int i = qMax(start, m_lastPreloadLine + 1); i <= anchorEnd; ++i) {
+            bool affectsAnchor = (batchEnd >= anchorEnd);
+            qreal anchorYBefore = affectsAnchor ? m_layout->lineY(first) : 0;
+            for (int i = qMax(start, m_lastPreloadLine + 1); i <= batchEnd; ++i) {
                 m_layout->layoutForLine(i);
             }
-            m_lastPreloadLine = anchorEnd;
-            qreal anchorYAfter = m_layout->lineY(first);
-            qreal delta = anchorYAfter - anchorYBefore;
-            if (qAbs(delta) > 0.5 && !m_typewriterMode) {
-                updateScrollBars();
-                verticalScrollBar()->blockSignals(true);
-                verticalScrollBar()->setValue(qMax(0, static_cast<int>(scrollY() + delta)));
-                verticalScrollBar()->blockSignals(false);
+            m_lastPreloadLine = batchEnd;
+            if (affectsAnchor) {
+                qreal anchorYAfter = m_layout->lineY(first);
+                qreal delta = anchorYAfter - anchorYBefore;
+                if (qAbs(delta) > 0.5 && !m_typewriterMode) {
+                    updateScrollBars();
+                    verticalScrollBar()->blockSignals(true);
+                    verticalScrollBar()->setValue(qMax(0, static_cast<int>(scrollY() + delta)));
+                    verticalScrollBar()->blockSignals(false);
+                }
             }
             if (m_lastPreloadLine >= end) {
                 m_idlePreloadTimer.stop();
@@ -177,11 +183,13 @@ EditorWidget::EditorWidget(QWidget* parent)
         }
 
         // 视口内及下方的行逐行预加载（不影响锚点，不做补偿）
-        int nextLine = m_lastPreloadLine + 1;
-        if (nextLine <= end) {
-            m_layout->layoutForLine(nextLine);
-            m_lastPreloadLine = nextLine;
-            if (nextLine >= end) {
+        batchEnd = qMin(m_lastPreloadLine + kBatchSize, end);
+        if (m_lastPreloadLine < end) {
+            for (int i = m_lastPreloadLine + 1; i <= batchEnd; ++i) {
+                m_layout->layoutForLine(i);
+            }
+            m_lastPreloadLine = batchEnd;
+            if (m_lastPreloadLine >= end) {
                 m_idlePreloadTimer.stop();
             }
             return;

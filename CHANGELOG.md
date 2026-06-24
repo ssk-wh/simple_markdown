@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - 编辑区内容在编辑完成后不再持续轻微滚动，编辑过程中视口也保持稳定不滚动
+- 编辑区修改内容时不再因预加载器批量处理行导致卡顿
 
 ## [1.1.16] - 2026-06-16
 
