@@ -637,3 +637,40 @@ target_link_libraries(DocumentTest PRIVATE
     gtest_main
 )
 add_test(NAME DocumentTest COMMAND DocumentTest)
+
+# --- MarkdownAstTest ---
+# Spec: specs/模块-parser/README.md
+# 验收：T-AST-1 ~ T-AST-7（AstNode 类型判定、树操作、默认状态）
+add_executable(MarkdownAstTest
+    parser/MarkdownAstTest.cpp
+)
+target_include_directories(MarkdownAstTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/parser
+)
+target_link_libraries(MarkdownAstTest PRIVATE
+    sm_parser
+    Qt5::Core
+    gtest
+    gtest_main
+)
+add_test(NAME MarkdownAstTest COMMAND MarkdownAstTest)
+
+# --- SearchWorkerTest ---
+# Spec: specs/模块-editor/README.md
+# 验收：T-SW-1 ~ T-SW-9（搜索结果正确性：普通/全词/正则/大小写/边界）
+add_executable(SearchWorkerTest
+    editor/SearchWorkerTest.cpp
+)
+target_include_directories(SearchWorkerTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/editor
+)
+target_link_libraries(SearchWorkerTest PRIVATE
+    sm_editor
+    Qt5::Core
+    Qt5::Test
+    gtest
+    gtest_main
+)
+add_test(NAME SearchWorkerTest COMMAND SearchWorkerTest)
