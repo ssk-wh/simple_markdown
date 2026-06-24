@@ -12,6 +12,36 @@
 #include <QByteArray>
 #include <QBuffer>
 #include <QImageReader>
+#include <QSvgRenderer>
+#include <QPainter>
+
+// 检测是否为 SVG 文件扩展名
+static bool isSvgExtension(const QString& path)
+{
+    return path.endsWith(".svg", Qt::CaseInsensitive);
+}
+
+// 将 SVG 数据渲染为 QPixmap
+static QPixmap renderSvgToPixmap(const QByteArray& data)
+{
+    QSvgRenderer renderer(data);
+    if (!renderer.isValid()) return QPixmap();
+
+    QSize sz = renderer.defaultSize();
+    if (!sz.isValid() || sz.isEmpty()) {
+        sz = QSize(800, 600);
+    }
+
+    QImage image(sz, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing);
+    renderer.render(&painter);
+    painter.end();
+
+    return QPixmap::fromImage(image);
+}
 
 ImageCache::ImageCache(QObject* parent)
     : QObject(parent)
@@ -77,6 +107,16 @@ bool ImageCache::loadDataUri(const QString& url, QPixmap& out)
     // 大小限制
     if (imageData.size() > kMaxImageSize) return false;
 
+    // SVG data URI
+    if (header.contains("image/svg+xml")) {
+        QPixmap svgPixmap = renderSvgToPixmap(imageData);
+        if (!svgPixmap.isNull()) {
+            out = svgPixmap;
+            return true;
+        }
+        return false;
+    }
+
     return out.loadFromData(imageData);
 }
 
@@ -129,7 +169,13 @@ void ImageCache::onNetworkReply(QNetworkReply* reply)
     }
 
     QPixmap pixmap;
-    if (pixmap.loadFromData(data)) {
+    if (contentType.contains("image/svg+xml")) {
+        pixmap = renderSvgToPixmap(data);
+    } else {
+        pixmap.loadFromData(data);
+    }
+
+    if (!pixmap.isNull()) {
         m_cache.insert(url, pixmap);
     } else {
         m_failedUrls.insert(url);
@@ -162,6 +208,21 @@ QSize ImageCache::getSize(const QString& url)
     // 本地文件：QImageReader 只读 header
     QString path = resolveLocalPath(url);
     if (path.isEmpty()) return QSize();
+
+    // SVG：用 QSvgRenderer 获取 defaultSize
+    if (isSvgExtension(path)) {
+        QSvgRenderer renderer(path);
+        if (renderer.isValid()) {
+            QSize sz = renderer.defaultSize();
+            if (!sz.isValid() || sz.isEmpty()) {
+                sz = QSize(800, 600);
+            }
+            m_sizeCache.insert(url, sz);
+            return sz;
+        }
+        return QSize();
+    }
+
     QImageReader reader(path);
     QSize size = reader.size();
     if (size.isValid()) {
@@ -221,7 +282,16 @@ QPixmap* ImageCache::get(const QString& url)
     }
 
     QPixmap pixmap;
-    if (pixmap.load(resolvedPath)) {
+    if (isSvgExtension(resolvedPath)) {
+        QFile file(resolvedPath);
+        if (file.open(QIODevice::ReadOnly)) {
+            pixmap = renderSvgToPixmap(file.readAll());
+        }
+    } else {
+        pixmap.load(resolvedPath);
+    }
+
+    if (!pixmap.isNull()) {
         auto inserted = m_cache.insert(url, pixmap);
         emit imageReady(url);
         return &inserted.value();

@@ -34,7 +34,7 @@ else()
     message(STATUS "Test mode disabled: Normal production build")
 endif()
 
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets Network PrintSupport LinguistTools Test)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets Network PrintSupport Svg LinguistTools Test)
 
 option(CMARK_TESTS "" OFF)
 option(CMARK_SHARED "" OFF)

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.17] - 2026-06-24
+
+### Added
+- 预览区现在支持显示 SVG 格式图片，本地 `.svg` 文件、网络 SVG 和 data URI 均可正常渲染
+
 ## [1.1.16] - 2026-06-16
 
 ### Fixed

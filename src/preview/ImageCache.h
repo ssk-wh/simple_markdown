@@ -1,6 +1,6 @@
 // Spec: specs/模块-preview/05-图片缓存.md
-// Invariants enforced here: INV-IMG-NET, INV-IMG-SIZE-LIMIT
-// Last synced: 2026-04-17
+// Invariants enforced here: INV-IMG-NET, INV-IMG-SIZE-LIMIT, INV-IMG-SVG-RENDER, INV-IMG-SVG-SIZE, INV-IMG-SVG-DETECT
+// Last synced: 2026-06-24
 #pragma once
 
 #include <QObject>
