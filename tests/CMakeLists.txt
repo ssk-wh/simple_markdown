@@ -692,3 +692,22 @@ target_link_libraries(MappedFileTest PRIVATE
     gtest_main
 )
 add_test(NAME MappedFileTest COMMAND MappedFileTest)
+
+# --- CodeBlockRendererTest ---
+# Spec: specs/模块-preview/02-布局引擎.md
+# 验收：T-CBR-1 ~ T-CBR-12（代码高亮核心逻辑：关键字/字符串/注释/数字/预处理/明暗主题/多语言）
+add_executable(CodeBlockRendererTest
+    preview/CodeBlockRendererTest.cpp
+)
+target_include_directories(CodeBlockRendererTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+target_link_libraries(CodeBlockRendererTest PRIVATE
+    sm_preview
+    Qt5::Core
+    Qt5::Gui
+    gtest
+    gtest_main
+)
+add_test(NAME CodeBlockRendererTest COMMAND CodeBlockRendererTest)
