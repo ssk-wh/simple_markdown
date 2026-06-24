@@ -2,10 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.1.18] - 2026-06-24
+## [1.1.20] - 2026-06-24
+
+### Fixed
+- CHANGELOG 版本号与 tag 保持同步规范，明确版本递增规则（写入 CLAUDE.md）
+
+## [1.1.19] - 2026-06-24
 
 ### Added
 - Tab 栏空白区域支持右键菜单，可快速「新建文件」和「关闭所有文档」
+
+## [1.1.18] - 2026-06-24
 
 ### Fixed
 - 关闭未保存文档 Tab 时的确认弹窗按钮在中文界面下不再显示英文，现正确显示「保存」「放弃」「取消」
