@@ -674,3 +674,21 @@ target_link_libraries(SearchWorkerTest PRIVATE
     gtest_main
 )
 add_test(NAME SearchWorkerTest COMMAND SearchWorkerTest)
+
+# --- MappedFileTest ---
+# Spec: specs/模块-core/README.md
+# 验收：T-MF-1 ~ T-MF-7（文件内存映射：打开/读取/移动/关闭/重复打开/边界）
+add_executable(MappedFileTest
+    core/MappedFileTest.cpp
+)
+target_include_directories(MappedFileTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+)
+target_link_libraries(MappedFileTest PRIVATE
+    sm_core
+    Qt5::Core
+    gtest
+    gtest_main
+)
+add_test(NAME MappedFileTest COMMAND MappedFileTest)
