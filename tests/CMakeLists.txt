@@ -546,3 +546,94 @@ target_link_libraries(ReloadDialogI18nTest PRIVATE
     gtest_main
 )
 add_test(NAME ReloadDialogI18nTest COMMAND ReloadDialogI18nTest)
+
+# --- UndoStackTest ---
+# Spec: specs/模块-core/README.md
+# 验收：T-US-1 ~ T-US-11（撤销栈核心契约 + 合并策略 + 保存点）
+add_executable(UndoStackTest
+    core/UndoStackTest.cpp
+)
+target_include_directories(UndoStackTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+)
+target_link_libraries(UndoStackTest PRIVATE
+    sm_core
+    Qt5::Core
+    gtest
+    gtest_main
+)
+add_test(NAME UndoStackTest COMMAND UndoStackTest)
+
+# --- PieceTableTest ---
+# Spec: specs/模块-core/README.md
+# 验收：T-PT-1 ~ T-PT-17（文本存储核心契约 + 边界 + 混合操作）
+add_executable(PieceTableTest
+    core/PieceTableTest.cpp
+)
+target_include_directories(PieceTableTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+)
+target_link_libraries(PieceTableTest PRIVATE
+    sm_core
+    Qt5::Core
+    gtest
+    gtest_main
+)
+add_test(NAME PieceTableTest COMMAND PieceTableTest)
+
+# --- LineIndexTest ---
+# Spec: specs/模块-core/README.md
+# 验收：T-LI-1 ~ T-LI-2（行索引骨架默认行为锁定）
+add_executable(LineIndexTest
+    core/LineIndexTest.cpp
+)
+target_include_directories(LineIndexTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+)
+target_link_libraries(LineIndexTest PRIVATE
+    sm_core
+    Qt5::Core
+    gtest
+    gtest_main
+)
+add_test(NAME LineIndexTest COMMAND LineIndexTest)
+
+# --- SelectionTest ---
+# Spec: specs/模块-core/README.md
+# 验收：T-SEL-1 ~ T-SEL-8（选区模型核心契约）
+add_executable(SelectionTest
+    core/SelectionTest.cpp
+)
+target_include_directories(SelectionTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+)
+target_link_libraries(SelectionTest PRIVATE
+    sm_core
+    Qt5::Core
+    gtest
+    gtest_main
+)
+add_test(NAME SelectionTest COMMAND SelectionTest)
+
+# --- DocumentTest ---
+# Spec: specs/模块-core/README.md
+# 验收：T-DOC-1 ~ T-DOC-12（文档模型核心契约，不含文件 I/O）
+add_executable(DocumentTest
+    core/DocumentTest.cpp
+)
+target_include_directories(DocumentTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+)
+target_link_libraries(DocumentTest PRIVATE
+    sm_core
+    Qt5::Core
+    Qt5::Test
+    gtest
+    gtest_main
+)
+add_test(NAME DocumentTest COMMAND DocumentTest)

@@ -40,6 +40,8 @@ bool UndoStack::shouldMerge(const EditOperation& existing, int offset,
 
 void UndoStack::push(int offset, const QString& removedText, const QString& addedText)
 {
+    if (removedText.isEmpty() && addedText.isEmpty())
+        return;
     // 清空重做栈 - 新的编辑分支
     if (!m_redoStack.empty()) {
         // 如果保存点位于重做的未来位置，则使其失效
