@@ -154,6 +154,32 @@ target_link_libraries(PreviewLayoutHeadingWrapTest PRIVATE
 
 add_test(NAME PreviewLayoutHeadingWrapTest COMMAND PreviewLayoutHeadingWrapTest)
 
+# --- ImageCacheTest ---
+# Spec: specs/模块-preview/05-图片缓存.md
+# 验收：T1-T6
+add_executable(ImageCacheTest
+    preview/ImageCacheTest.cpp
+)
+
+target_include_directories(ImageCacheTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+
+target_link_libraries(ImageCacheTest PRIVATE
+    sm_preview
+    sm_parser
+    sm_core
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Svg
+    gtest
+    gtest_main
+)
+
+add_test(NAME ImageCacheTest COMMAND ImageCacheTest)
+
 # --- PreviewLayoutListSpacingTest ---
 # Spec: specs/模块-preview/02-布局引擎.md INV-10
 # 验收：T-LIST-SPACING-1/2/3（连续列表项之间不出现多余空白）

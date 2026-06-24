@@ -129,6 +129,14 @@ EditorWidget::EditorWidget(QWidget* parent)
     // 空闲时预加载可见区域附近的行布局——预加载完毕后**停止 timer**，避免闲置空转
     // 占用 CPU（之前固定 50ms 周期 + 永不停止 = ~20Hz 闲置耗电）。
     // [2026-05-13 CPU 修复] 视口/文档变化时重启（由 scrollContentsBy / textChanged 触发）
+    // [2026-06-24] 预加载防抖：编辑停止 300ms 后才启动，避免编辑过程中逐行补偿导致微滚
+    m_preloadDebounce.setInterval(300);
+    m_preloadDebounce.setSingleShot(true);
+    connect(&m_preloadDebounce, &QTimer::timeout, this, [this]() {
+        m_lastPreloadLine = -1;
+        m_idlePreloadTimer.start();
+    });
+
     m_idlePreloadTimer.setInterval(50);
     m_idlePreloadTimer.setSingleShot(false);
     connect(&m_idlePreloadTimer, &QTimer::timeout, this, [this]() {
@@ -142,27 +150,44 @@ EditorWidget::EditorWidget(QWidget* parent)
         int preloadRange = 50;
         int maxLine = m_layout->lineCount() - 1;
 
-        // 从上次预加载位置继续
         int start = qMax(0, first - preloadRange);
         int end = qMin(last + preloadRange, maxLine);
-        for (int i = qMax(start, m_lastPreloadLine + 1); i <= end; ++i) {
-            // [Spec 模块-editor/15 INV-EDIT-SCROLL-ANCHOR] 预加载视口上方行时其真实高度
-            // （wrap 模式可能 > 估算）会抬高 Y 缓存 → 视口内容下移跳动。锚定首个可见行：
-            // 精算前后比较其 Y，差值补偿到 scrollY，使可见内容保持原位。
+
+        // [2026-06-24] 批量预加载：所有影响锚点的行（视口上方 + 首个可见行）在一个 tick
+        // 内精算，只做一次 scroll 补偿，避免逐行补偿导致连续微滚。
+        int anchorEnd = qMin(first, end);
+        if (m_lastPreloadLine < anchorEnd) {
             qreal anchorYBefore = m_layout->lineY(first);
-            m_layout->layoutForLine(i);
-            m_lastPreloadLine = i;
+            for (int i = qMax(start, m_lastPreloadLine + 1); i <= anchorEnd; ++i) {
+                m_layout->layoutForLine(i);
+            }
+            m_lastPreloadLine = anchorEnd;
             qreal anchorYAfter = m_layout->lineY(first);
             qreal delta = anchorYAfter - anchorYBefore;
-            if (qAbs(delta) > 0.01 && !m_typewriterMode) {
+            if (qAbs(delta) > 0.5 && !m_typewriterMode) {
                 updateScrollBars();
                 verticalScrollBar()->blockSignals(true);
                 verticalScrollBar()->setValue(qMax(0, static_cast<int>(scrollY() + delta)));
                 verticalScrollBar()->blockSignals(false);
             }
-            return; // 每次只预加载一行，避免阻塞
+            if (m_lastPreloadLine >= end) {
+                m_idlePreloadTimer.stop();
+            }
+            return;
         }
-        // 预加载范围内所有行已 layout → 停止 timer，闲置 0 CPU 占用
+
+        // 视口内及下方的行逐行预加载（不影响锚点，不做补偿）
+        int nextLine = m_lastPreloadLine + 1;
+        if (nextLine <= end) {
+            m_layout->layoutForLine(nextLine);
+            m_lastPreloadLine = nextLine;
+            if (nextLine >= end) {
+                m_idlePreloadTimer.stop();
+            }
+            return;
+        }
+
+        // 预加载范围内所有行已 layout → 停止 timer
         m_idlePreloadTimer.stop();
     });
     m_idlePreloadTimer.start();
@@ -624,9 +649,9 @@ void EditorWidget::onTextChanged(int offset, int removedLen, int addedLen)
         }
     }
 
-    // [2026-05-13 CPU 修复] 文档变化 → 重启预加载 timer 覆盖新内容
+    // [2026-06-24] 文档变化 → 防抖后启动预加载，避免编辑过程中逐行精算补偿导致微滚
     m_lastPreloadLine = -1;
-    m_idlePreloadTimer.start();
+    m_preloadDebounce.start();
     viewport()->update();
 
     auto pos = m_doc->selection().cursorPosition();

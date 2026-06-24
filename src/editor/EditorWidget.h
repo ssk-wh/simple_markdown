@@ -116,6 +116,7 @@ private:
 
     // 空闲时预加载布局
     QTimer m_idlePreloadTimer;
+    QTimer m_preloadDebounce;  // 预加载防抖，编辑停止 300ms 后才启动预加载
     int m_lastPreloadLine = -1;
 
     TextPosition pixelToTextPosition(const QPoint& pos) const;
