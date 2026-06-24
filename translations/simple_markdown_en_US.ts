@@ -845,6 +845,14 @@ Open the crash reports folder?</translation>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
+    <message>
+        <source>New File</source>
+        <translation>New File</translation>
+    </message>
+    <message>
+        <source>Close All Documents</source>
+        <translation>Close All Documents</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPainter</name>

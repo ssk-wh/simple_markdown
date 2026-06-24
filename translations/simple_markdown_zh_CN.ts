@@ -860,6 +860,14 @@ Open the crash reports folder?</source>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
+    <message>
+        <source>New File</source>
+        <translation>新建文件</translation>
+    </message>
+    <message>
+        <source>Close All Documents</source>
+        <translation>关闭所有文档</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPainter</name>

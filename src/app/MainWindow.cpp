@@ -286,7 +286,18 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_tabBar, &QWidget::customContextMenuRequested,
             this, [this](const QPoint& pos) {
         int idx = m_tabBar->tabAt(pos);
-        if (idx < 0) return;
+        if (idx < 0) {
+            // Tab 空白区右键菜单
+            QMenu menu(this);
+            menu.addAction(tr("New File"), this, &MainWindow::onNewFile);
+            QAction* closeAllAct = menu.addAction(tr("Close All Documents"), [this]() {
+                for (int i = m_tabs.size() - 1; i >= 0; --i)
+                    onCloseTab(i);
+            });
+            if (m_tabs.isEmpty()) closeAllAct->setEnabled(false);
+            menu.exec(m_tabBar->mapToGlobal(pos));
+            return;
+        }
         QMenu menu(this);
         menu.addAction(tr("Close"), [this, idx]() { onCloseTab(idx); });
         // [Spec specs/模块-app/04-窗口焦点管理.md INV-5] 按上下文禁用无可关闭对象的项

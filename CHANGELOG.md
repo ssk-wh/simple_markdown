@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [1.1.18] - 2026-06-24
 
+### Added
+- Tab 栏空白区域支持右键菜单，可快速「新建文件」和「关闭所有文档」
+
 ### Fixed
 - 关闭未保存文档 Tab 时的确认弹窗按钮在中文界面下不再显示英文，现正确显示「保存」「放弃」「取消」
 
