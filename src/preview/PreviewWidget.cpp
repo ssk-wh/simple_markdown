@@ -595,8 +595,6 @@ void PreviewWidget::mousePressEvent(QMouseEvent* event)
     // 让焦点转移而被掩盖）
     if (event->button() == Qt::LeftButton) {
         setFocus();
-        rebuildFullLayoutForSelection();
-        viewport()->repaint();
 
         // CRITICAL: DPI 改变检查
         // 问题场景：窗口从 A 屏（DPI=1.0）移到 B 屏（DPI=1.25）时：

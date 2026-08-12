@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.23] - 2026-08-12
+
+### Fixed
+- 修复预览区滚轮滚动一段距离后，单击内容会触发完整布局重建并导致可见内容突然变化的问题。
+
 ## [1.1.22] - 2026-08-12
 
 ### Fixed
