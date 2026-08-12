@@ -564,6 +564,7 @@ void PreviewWidget::onScrollAnimationFinished()
     if (m_targetSourceLine >= 0 && m_currentAst && m_layout) {
         applyLayoutViewportCrop();          // 围绕动画落点裁剪（目标进入缓冲区→真实 layout）
         m_layout->buildFromAst(m_currentAst);
+        m_plainText = extractPlainText();
         updateScrollBars();
         qreal correctedY = m_layout->sourceLineToY(m_targetSourceLine);
         int target = qBound(verticalScrollBar()->minimum(),
@@ -573,7 +574,7 @@ void PreviewWidget::onScrollAnimationFinished()
         verticalScrollBar()->blockSignals(true);
         verticalScrollBar()->setValue(target);
         verticalScrollBar()->blockSignals(false);
-        viewport()->update();
+        viewport()->repaint();
     }
 
     // 动画结束后，启动高亮动画

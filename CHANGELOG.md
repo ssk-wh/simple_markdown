@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.25] - 2026-08-12
+
+### Fixed
+- 修复通过目录跳转后立即选择复制时，第一次复制可能使用跳转前命中坐标导致粘贴内容不一致的问题。
+
 ## [1.1.24] - 2026-08-12
 
 ### Fixed
