@@ -281,7 +281,7 @@ void PreviewWidget::paintEvent(QPaintEvent* /*event*/)
     // 直接检测字体度量是否变化（比 DPR 比较更可靠，能捕获跨屏不同物理 DPI 的情况）
     if (m_layout->updateMetrics(painter.device())) {
         m_lastDevicePixelRatio = viewport()->devicePixelRatioF();
-        rebuildLayout();
+        rebuildLayoutPreservingScrollAnchor(false);
     }
 
     qreal scrollY = verticalScrollBar()->value();

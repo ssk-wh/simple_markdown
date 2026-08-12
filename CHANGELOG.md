@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.26] - 2026-08-12
+
+### Fixed
+- 修复选中预览内容后切换到其他应用再返回时，首次重绘可能因度量变化重建布局导致可见选区内容变化的问题。
+
 ## [1.1.25] - 2026-08-12
 
 ### Fixed
