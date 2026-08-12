@@ -14,11 +14,16 @@ void SearchWorker::search(const QString& text, const QString& fullText, int requ
 void SearchWorker::searchWithOptions(const QString& text, const QString& fullText, int requestId,
                                      bool caseSensitive, bool wholeWord, bool regex)
 {
+    emit searchFinished(findMatches(text, fullText, caseSensitive, wholeWord, regex), requestId);
+}
+
+QVector<QPair<int,int>> SearchWorker::findMatches(const QString& text, const QString& fullText,
+                                                  bool caseSensitive, bool wholeWord, bool regex)
+{
     QVector<QPair<int,int>> matches;
 
     if (text.isEmpty()) {
-        emit searchFinished(matches, requestId);
-        return;
+        return matches;
     }
 
     if (regex) {
@@ -29,8 +34,7 @@ void SearchWorker::searchWithOptions(const QString& text, const QString& fullTex
 
         QRegularExpression re(text, options);
         if (!re.isValid()) {
-            emit searchFinished(matches, requestId);
-            return;
+            return matches;
         }
 
         QRegularExpressionMatchIterator it = re.globalMatch(fullText);
@@ -67,5 +71,5 @@ void SearchWorker::searchWithOptions(const QString& text, const QString& fullTex
         }
     }
 
-    emit searchFinished(matches, requestId);
+    return matches;
 }

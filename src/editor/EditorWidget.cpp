@@ -93,14 +93,8 @@ EditorWidget::EditorWidget(QWidget* parent)
         viewport()->update();
     });
 
-    // 搜索线程
-    m_searchWorker = new SearchWorker();
-    m_searchWorker->moveToThread(&m_searchThread);
-    connect(&m_searchThread, &QThread::finished, m_searchWorker, &QObject::deleteLater);
+    // 搜索 worker 在首次异步搜索时创建，未使用搜索功能的 Tab 不占线程
     qRegisterMetaType<QVector<QPair<int,int>>>("QVector<QPair<int,int>>");
-    connect(m_searchWorker, &SearchWorker::searchFinished,
-            this, &EditorWidget::onSearchResultsReady);
-    m_searchThread.start();
 
     // 搜索防抖
     m_searchDebounce.setSingleShot(true);
@@ -114,6 +108,7 @@ EditorWidget::EditorWidget(QWidget* parent)
             m_searchBar->keepFocus();
             return;
         }
+        ensureSearchWorker();
         QString fullText = m_doc->text();
         int reqId = ++m_searchRequestId;
         QMetaObject::invokeMethod(m_searchWorker, "searchWithOptions",
@@ -206,10 +201,25 @@ EditorWidget::EditorWidget(QWidget* parent)
 
 EditorWidget::~EditorWidget()
 {
-    m_searchThread.quit();
-    m_searchThread.wait();
+    m_searchDebounce.stop();
+    if (m_searchWorker) {
+        m_searchThread.quit();
+        m_searchThread.wait();
+        m_searchWorker = nullptr;
+    }
     delete m_painter;
     delete m_input;
+}
+
+void EditorWidget::ensureSearchWorker()
+{
+    if (m_searchWorker) return;
+    m_searchWorker = new SearchWorker();
+    m_searchWorker->moveToThread(&m_searchThread);
+    connect(&m_searchThread, &QThread::finished, m_searchWorker, &QObject::deleteLater);
+    connect(m_searchWorker, &SearchWorker::searchFinished,
+            this, &EditorWidget::onSearchResultsReady);
+    m_searchThread.start();
 }
 
 void EditorWidget::setDocument(Document* doc)
@@ -775,7 +785,10 @@ TextPosition EditorWidget::offsetToTextPos(int offset) const
 void EditorWidget::onSearchTextChanged(const QString& text)
 {
     m_currentSearchText = text;
+    m_searchMatches.clear();
     m_currentMatchIndex = -1;
+    updateSearchBarMatchInfo();
+    viewport()->update();
     m_searchDebounce.start();
 }
 

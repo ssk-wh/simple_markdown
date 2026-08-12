@@ -71,6 +71,57 @@ void extractBlockText(const LayoutBlock& block, QString& out)
     for (const auto& child : block.children) extractBlockText(child, out);
 }
 
+TEST(PreviewCopyConsistencyTest, T_COPY_CONSIST_4_FullLayoutSelectionStaysStable)
+{
+    QString doc = QStringLiteral("# Top\n\n");
+    for (int i = 0; i < 80; ++i)
+        doc += QString("Paragraph %1 with filler text for viewport clipping.\n\n").arg(i);
+    doc += QStringLiteral("Target selection token: UNIQUE_COPY_TEXT\n\n");
+
+    MarkdownParser parser;
+    auto astU = parser.parse(doc);
+    ASSERT_TRUE(astU);
+    std::shared_ptr<AstNode> ast(std::move(astU));
+
+    const int W = 600;
+    const int H = 400;
+    QImage device(W, H, QImage::Format_ARGB32);
+    PreviewLayout layout;
+    layout.setFont(font_defaults::defaultPreviewFont());
+    layout.updateMetrics(&device);
+    layout.setViewportWidth(W);
+    layout.clearViewportYRange();
+    layout.buildFromAst(ast);
+
+    QString plain;
+    extractBlockText(layout.rootBlock(), plain);
+    const QString needle = QStringLiteral("UNIQUE_COPY_TEXT");
+    const int start = plain.indexOf(needle);
+    ASSERT_GE(start, 0);
+
+    PreviewPainter painter;
+    Theme theme;
+    painter.setTheme(theme);
+    painter.setLayout(&layout);
+    QImage img(W, H, QImage::Format_ARGB32);
+    img.fill(Qt::white);
+    QPainter p(&img);
+    qreal scrollY = layout.totalHeight() - H;
+    if (scrollY < 0) scrollY = 0;
+    painter.paint(&p, layout.rootBlock(), scrollY, H, W);
+    p.end();
+
+    bool segmentMatchesCopySource = false;
+    for (const auto& seg : painter.textSegments()) {
+        if (seg.charStart <= start && start + needle.length() <= seg.charStart + seg.charLen) {
+            segmentMatchesCopySource = (plain.mid(start, needle.length()) == needle);
+            break;
+        }
+    }
+
+    EXPECT_TRUE(segmentMatchesCopySource);
+}
+
 // 在“当前 layout 状态”下校验：每个 TextSegment 的 (charStart,charLen) 切片 == 其 text。
 // plainText 用 extractBlockText 在同一 layout 状态构建（模拟 m_plainText = extractPlainText()）。
 int checkAtCurrentState(PreviewLayout& layout, qreal H, QString* firstMismatch)

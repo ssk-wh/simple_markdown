@@ -54,6 +54,7 @@ public:
     void insertImageMarkdown(const QString& imagePath);
 
     const QVector<QPair<int,int>>& searchMatches() const { return m_searchMatches; }
+    bool isSearchWorkerRunning() const { return m_searchThread.isRunning(); }
 
     int firstVisibleLine() const;
 
@@ -129,5 +130,6 @@ private:
     qreal scrollX() const;
 
     void updateSearchBarMatchInfo();
+    void ensureSearchWorker();
     qreal m_lastDevicePixelRatio = 0;
 };

@@ -62,6 +62,7 @@ public:
     void hideSearchBar();
     // 查询当前是否有搜索栏可见（供 MainWindow 决定 Ctrl+F 路由）
     bool isSearchBarVisible() const;
+    bool isSearchWorkerRunning() const { return m_searchThread.isRunning(); }
 
     // [Spec 模块-preview/13 INV-4] 记录与当前 AST 对应的 raw markdown 源。
     // 修订三（2026-05-13）后 copySelection 改用 m_plainText 切片，m_sourceText
@@ -113,6 +114,9 @@ private:
     // [plan A1] 把当前 verticalScrollBar 位置 + viewport 高度 + ±2 屏 buffer 推给 layout
     // 在每次 buildFromAst 之前调用，让 layout 走视口剪裁路径
     void applyLayoutViewportCrop();
+    bool shouldUseViewportCrop() const;
+    void rebuildFullLayoutForSearch();
+    void rebuildFullLayoutForSelection();
     QString extractPlainText() const;
     void extractBlockText(const struct LayoutBlock& block, QString& out) const;
     int textIndexAtPoint(const QPointF& point) const;
@@ -177,9 +181,11 @@ private:
     QVector<QPair<int,int>> m_searchHits;  // (offset, length)
     int m_currentSearchIndex = -1;
     QString m_currentSearchText;
+    bool m_searchUsingFullLayout = false;
 
     void onSearchTextChanged(const QString& text);
     void onSearchResultsReady(QVector<QPair<int,int>> matches, int requestId);
+    void ensureSearchWorker();
     void findNextHit(const QString& text);
     void findPrevHit(const QString& text);
     void scrollToCharOffset(int offset);

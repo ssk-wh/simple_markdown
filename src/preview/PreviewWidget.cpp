@@ -80,17 +80,16 @@ PreviewWidget::PreviewWidget(QWidget* parent)
         m_searchHits.clear();
         m_currentSearchText.clear();
         m_currentSearchIndex = -1;
+        m_searchUsingFullLayout = false;
+        if (m_currentAst) {
+            rebuildLayout();
+            m_plainText = extractPlainText();
+        }
         viewport()->update();
     });
 
-    // 搜索线程（与 EditorWidget 一致的异步模型）
-    m_searchWorker = new SearchWorker();
-    m_searchWorker->moveToThread(&m_searchThread);
-    connect(&m_searchThread, &QThread::finished, m_searchWorker, &QObject::deleteLater);
+    // 搜索 worker 在首次异步搜索时创建，未使用搜索功能的 Tab 不占线程
     qRegisterMetaType<QVector<QPair<int,int>>>("QVector<QPair<int,int>>");
-    connect(m_searchWorker, &SearchWorker::searchFinished,
-            this, &PreviewWidget::onSearchResultsReady);
-    m_searchThread.start();
 
     // 防抖：参考编辑器侧 100ms
     m_searchDebounce.setSingleShot(true);
@@ -99,11 +98,18 @@ PreviewWidget::PreviewWidget(QWidget* parent)
         if (m_currentSearchText.isEmpty()) {
             m_searchHits.clear();
             m_currentSearchIndex = -1;
+            m_searchUsingFullLayout = false;
+            if (m_currentAst) {
+                rebuildLayout();
+                m_plainText = extractPlainText();
+            }
             if (m_searchBar) m_searchBar->updateMatchInfo(0, 0);
             viewport()->update();
             if (m_searchBar) m_searchBar->keepFocus();
             return;
         }
+        rebuildFullLayoutForSearch();
+        ensureSearchWorker();
         const int reqId = ++m_searchRequestId;
         QMetaObject::invokeMethod(m_searchWorker, "searchWithOptions",
                                   Qt::QueuedConnection,
@@ -122,13 +128,26 @@ PreviewWidget::~PreviewWidget()
         m_scrollAnimation->disconnect();
         m_scrollAnimation->stop();
     }
-    // [Spec 模块-preview/11] 关闭搜索线程，让 worker 在线程结束时被
-    // QThread::finished → deleteLater 回收
-    m_searchThread.quit();
-    m_searchThread.wait();
+    // [Spec 横切关注点/10 INV-5/INV-8] 仅关闭实际启动过的搜索线程
+    if (m_searchWorker) {
+        m_searchThread.quit();
+        m_searchThread.wait();
+        m_searchWorker = nullptr;
+    }
     delete m_layout;
     delete m_painter;
     // m_imageCache 由 QObject 父对象管理
+}
+
+void PreviewWidget::ensureSearchWorker()
+{
+    if (m_searchWorker) return;
+    m_searchWorker = new SearchWorker();
+    m_searchWorker->moveToThread(&m_searchThread);
+    connect(&m_searchThread, &QThread::finished, m_searchWorker, &QObject::deleteLater);
+    connect(m_searchWorker, &SearchWorker::searchFinished,
+            this, &PreviewWidget::onSearchResultsReady);
+    m_searchThread.start();
 }
 
 PreviewLayout* PreviewWidget::previewLayout() const
@@ -176,6 +195,14 @@ void PreviewWidget::updateAst(std::shared_ptr<AstNode> root)
     m_layout->buildFromAst(m_currentAst);
 
     m_plainText = extractPlainText();
+    if (m_searchBar && !m_currentSearchText.isEmpty()) {
+        m_searchHits = SearchWorker::findMatches(m_currentSearchText, m_plainText,
+                                                 m_searchBar->isCaseSensitive(),
+                                                 m_searchBar->isWholeWord(),
+                                                 m_searchBar->isRegex());
+        m_currentSearchIndex = -1;
+        m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
+    }
     m_selStart = m_selEnd = -1;
     // [Spec 模块-preview/08 INV-MARK-EDIT-PRESERVE]（2026-05-06 plan #8 Step 1）
     // **不清空** m_highlights——updateAst 由 ParseScheduler 在用户编辑时频繁触发，
@@ -295,7 +322,7 @@ void PreviewWidget::scrollContentsBy(int /*dx*/, int /*dy*/)
     // 节流：仅当滚动距离超过半屏才 rebuild，避免连续滚动每帧都 rebuild。
     // benchmark 数据显示 20k 行视口剪裁 rebuild 仅 ~4.5ms（远低于 16ms 单帧线），
     // 即便每半屏触发一次也只是 < 10% CPU。
-    if (m_currentAst && m_layout) {
+    if (m_currentAst && m_layout && shouldUseViewportCrop()) {
         qreal scrollY = verticalScrollBar()->value();
         qreal vpH = viewport()->height();
         if (vpH > 0 && qAbs(scrollY - m_lastViewportCropTop) > vpH * 0.5) {
@@ -315,6 +342,10 @@ void PreviewWidget::scrollContentsBy(int /*dx*/, int /*dy*/)
 void PreviewWidget::applyLayoutViewportCrop()
 {
     if (!m_layout) return;
+    if (!shouldUseViewportCrop()) {
+        m_layout->clearViewportYRange();
+        return;
+    }
     qreal scrollY = verticalScrollBar()->value();
     qreal vpH = viewport()->height();
     if (vpH <= 0) {
@@ -326,6 +357,45 @@ void PreviewWidget::applyLayoutViewportCrop()
     qreal buffer = vpH * 2.0;
     m_layout->setViewportYRange(scrollY - buffer, scrollY + vpH + buffer);
     m_lastViewportCropTop = scrollY;
+}
+
+bool PreviewWidget::shouldUseViewportCrop() const
+{
+    return !m_searchUsingFullLayout
+        && !m_selecting
+        && (m_selStart < 0 || m_selEnd < 0 || m_selStart == m_selEnd)
+        && m_searchHits.isEmpty()
+        && m_currentSearchText.isEmpty()
+        && !(m_searchBar && m_searchBar->isVisible() && !m_searchBar->searchText().isEmpty());
+}
+
+void PreviewWidget::rebuildFullLayoutForSearch()
+{
+    if (!m_currentAst || !m_layout) return;
+
+    qreal contentWidth = m_wordWrap ? (viewport()->width() - 40) : 10000;
+    if (contentWidth < 100) contentWidth = 100;
+
+    m_searchUsingFullLayout = true;
+    m_layout->setViewportWidth(contentWidth);
+    m_layout->clearViewportYRange();
+    m_layout->buildFromAst(m_currentAst);
+    m_plainText = extractPlainText();
+    updateScrollBars();
+}
+
+void PreviewWidget::rebuildFullLayoutForSelection()
+{
+    if (!m_currentAst || !m_layout) return;
+
+    qreal contentWidth = m_wordWrap ? (viewport()->width() - 40) : 10000;
+    if (contentWidth < 100) contentWidth = 100;
+
+    m_layout->setViewportWidth(contentWidth);
+    m_layout->clearViewportYRange();
+    m_layout->buildFromAst(m_currentAst);
+    m_plainText = extractPlainText();
+    updateScrollBars();
 }
 
 void PreviewWidget::updateScrollBars()
@@ -525,6 +595,8 @@ void PreviewWidget::mousePressEvent(QMouseEvent* event)
     // 让焦点转移而被掩盖）
     if (event->button() == Qt::LeftButton) {
         setFocus();
+        rebuildFullLayoutForSelection();
+        viewport()->repaint();
 
         // CRITICAL: DPI 改变检查
         // 问题场景：窗口从 A 屏（DPI=1.0）移到 B 屏（DPI=1.25）时：
@@ -573,8 +645,10 @@ void PreviewWidget::mouseMoveEvent(QMouseEvent* event)
         int vh = viewport()->height();
         if (y < 0) {
             verticalScrollBar()->setValue(verticalScrollBar()->value() + y / 2);
+            viewport()->repaint();
         } else if (y > vh) {
             verticalScrollBar()->setValue(verticalScrollBar()->value() + (y - vh) / 2);
+            viewport()->repaint();
         }
 
         // 同 mousePressEvent：坐标变换规则与 paintEvent 中的 translate 对应
@@ -724,6 +798,7 @@ void PreviewWidget::keyPressEvent(QKeyEvent* event)
         return;
     }
     if (event->matches(QKeySequence::SelectAll)) {
+        rebuildFullLayoutForSelection();
         m_selStart = 0;
         m_selEnd = m_plainText.length();
         viewport()->update();
@@ -765,6 +840,7 @@ void PreviewWidget::contextMenuEvent(QContextMenuEvent* event)
     copyHtmlAct->setEnabled(hasSelection);
 
     QAction* selectAllAct = menu.addAction(tr("Select All"), [this]() {
+        rebuildFullLayoutForSelection();
         m_selStart = 0;
         m_selEnd = m_plainText.length();
         viewport()->update();
@@ -824,8 +900,11 @@ void PreviewWidget::contextMenuEvent(QContextMenuEvent* event)
 void PreviewWidget::copySelection()
 {
     if (m_selStart < 0 || m_selEnd < 0) return;
+    rebuildFullLayoutForSelection();
     int start = qMin(m_selStart, m_selEnd);
     int end = qMax(m_selStart, m_selEnd);
+    start = qBound(0, start, m_plainText.length());
+    end = qBound(0, end, m_plainText.length());
     if (start == end) return;
 
     // [2026-05-13 用户决策] 预览区复制只输出纯文本（所见即所得）。
@@ -842,8 +921,11 @@ void PreviewWidget::copySelection()
 void PreviewWidget::copyAsHtml()
 {
     if (m_selStart < 0 || m_selEnd < 0) return;
+    rebuildFullLayoutForSelection();
     int start = qMin(m_selStart, m_selEnd);
     int end = qMax(m_selStart, m_selEnd);
+    start = qBound(0, start, m_plainText.length());
+    end = qBound(0, end, m_plainText.length());
     if (start == end) return;
 
     // 提取选中的纯文本作为 Markdown
@@ -1294,7 +1376,12 @@ void PreviewWidget::hideSearchBar()
 void PreviewWidget::onSearchTextChanged(const QString& text)
 {
     m_currentSearchText = text;
+    m_searchHits.clear();
     m_currentSearchIndex = -1;
+    if (m_searchBar) {
+        m_searchBar->updateMatchInfo(m_currentSearchIndex, m_searchHits.size());
+    }
+    viewport()->update();
     m_searchDebounce.start();
 }
 
@@ -1318,16 +1405,13 @@ void PreviewWidget::syncRecomputeSearchHits(const QString& text)
     m_currentSearchText = text;
     m_searchDebounce.stop();
     ++m_searchRequestId;  // 让正在飞或排队中的 worker 结果回填时 reqId 不匹配被丢弃
-    m_searchHits.clear();
     if (!m_searchBar) return;
-    const Qt::CaseSensitivity cs = m_searchBar->isCaseSensitive()
-                                    ? Qt::CaseSensitive : Qt::CaseInsensitive;
+    rebuildFullLayoutForSearch();
+    m_searchHits = SearchWorker::findMatches(text, m_plainText,
+                                             m_searchBar->isCaseSensitive(),
+                                             m_searchBar->isWholeWord(),
+                                             m_searchBar->isRegex());
     // 与异步 worker 的 plain indexOf 路径对齐（V1 不支持正则 / 整词，与 spec INV 一致）
-    int pos = 0;
-    while ((pos = m_plainText.indexOf(text, pos, cs)) != -1) {
-        m_searchHits.append({pos, text.length()});
-        pos += text.length();
-    }
 }
 
 // [Spec 模块-preview/11 INV-12] 基于视口顶部 scrollY 找下一个/上一个命中。
@@ -1447,6 +1531,70 @@ void PreviewWidget::scrollToCharOffset(int offset)
     // [Spec 模块-preview/11 INV-4] 块级精度跳转：找包含 offset 的最深 LayoutBlock，
     // 滚动到 block.bounds.y 让命中项尽量在视口中部
     if (!m_layout) return;
+    {
+        auto locateTargetY = [this, offset]() -> qreal {
+            qreal foundY = -1;
+            int charCounter = 0;
+            std::function<void(const LayoutBlock&, qreal)> walk =
+                [&](const LayoutBlock& blk, qreal parentY) {
+                    if (foundY >= 0) return;
+
+                    const qreal absY = parentY + blk.bounds.y();
+                    QString ownText;
+                    if (blk.type == LayoutBlock::Frontmatter) {
+                        ownText = blk.frontmatterRawText;
+                        if (!ownText.isEmpty()) ownText += '\n';
+                    } else {
+                        if (!blk.inlineRuns.empty()) {
+                            for (const auto& run : blk.inlineRuns)
+                                ownText += run.text;
+                            ownText += '\n';
+                        }
+                        if (!blk.codeText.isEmpty()) {
+                            const QStringList lines = blk.codeText.split('\n');
+                            for (int i = 0; i < lines.size(); ++i) {
+                                if (i == lines.size() - 1 && lines[i].isEmpty())
+                                    break;
+                                ownText += lines[i];
+                                ownText += '\n';
+                            }
+                        }
+                    }
+
+                    const int blkStart = charCounter;
+                    const int blkEnd = blkStart + ownText.length();
+                    if (offset >= blkStart && offset < blkEnd) {
+                        foundY = absY;
+                        return;
+                    }
+                    charCounter = blkEnd;
+
+                    for (const auto& child : blk.children) {
+                        walk(child, absY);
+                        if (foundY >= 0) return;
+                    }
+                };
+
+            for (const auto& child : m_layout->rootBlock().children) {
+                walk(child, 0);
+                if (foundY >= 0) break;
+            }
+            return foundY;
+        };
+
+        qreal targetY = locateTargetY();
+        if (targetY < 0 && m_currentAst) {
+            rebuildFullLayoutForSearch();
+            targetY = locateTargetY();
+        }
+        if (targetY < 0) return;
+
+        const qreal vpH = viewport()->height();
+        int target = static_cast<int>(targetY - vpH / 3);
+        if (target < 0) target = 0;
+        verticalScrollBar()->setValue(target);
+        return;
+    }
     qreal targetY = -1;
     int charCounter = 0;
 
