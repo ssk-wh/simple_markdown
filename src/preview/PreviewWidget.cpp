@@ -238,6 +238,37 @@ void PreviewWidget::rebuildLayout()
     updateScrollBars();
 }
 
+void PreviewWidget::rebuildLayoutPreservingScrollAnchor(bool forceFullLayout)
+{
+    if (!m_currentAst || !m_layout) return;
+
+    const qreal oldScrollY = verticalScrollBar()->value();
+    const int anchorLine = m_layout->yToSourceLine(oldScrollY);
+    const qreal anchorOffset = m_layout->sourceLineToY(anchorLine) - oldScrollY;
+
+    qreal contentWidth = m_wordWrap ? (viewport()->width() - 40) : 10000;
+    if (contentWidth < 100) contentWidth = 100;
+    m_layout->setViewportWidth(contentWidth);
+    if (forceFullLayout) {
+        m_layout->clearViewportYRange();
+    } else {
+        applyLayoutViewportCrop();
+    }
+    m_layout->buildFromAst(m_currentAst);
+    m_plainText = extractPlainText();
+    updateScrollBars();
+    if (forceFullLayout)
+        m_lastViewportCropTop = -1.0;
+
+    const qreal newAnchorY = m_layout->sourceLineToY(anchorLine);
+    const int restored = qBound(verticalScrollBar()->minimum(),
+                                static_cast<int>(newAnchorY - anchorOffset),
+                                verticalScrollBar()->maximum());
+    verticalScrollBar()->blockSignals(true);
+    verticalScrollBar()->setValue(restored);
+    verticalScrollBar()->blockSignals(false);
+}
+
 void PreviewWidget::paintEvent(QPaintEvent* /*event*/)
 {
     SM_PERF_SCOPE("preview.paintEvent");
@@ -326,13 +357,11 @@ void PreviewWidget::scrollContentsBy(int /*dx*/, int /*dy*/)
         qreal scrollY = verticalScrollBar()->value();
         qreal vpH = viewport()->height();
         if (vpH > 0 && qAbs(scrollY - m_lastViewportCropTop) > vpH * 0.5) {
-            applyLayoutViewportCrop();
-            m_layout->buildFromAst(m_currentAst);
             // [Spec 模块-preview/13-复制语义.md INV-COPY-PLAINTEXT-SYNC] 重剪裁会改变视口外
             // placeholder 块集合 → 改变 paint 的字符索引空间；m_plainText（复制源）也由
             // extractPlainText 遍历同一剪裁后 layout 构建，必须在每次重剪裁后同步重建，
             // 否则选区索引（新剪裁空间）切到旧 m_plainText → 复制粘贴为空/错乱（2026-06-16 用户报告）。
-            m_plainText = extractPlainText();
+            rebuildLayoutPreservingScrollAnchor(false);
         }
     }
     viewport()->update();
@@ -386,16 +415,7 @@ void PreviewWidget::rebuildFullLayoutForSearch()
 
 void PreviewWidget::rebuildFullLayoutForSelection()
 {
-    if (!m_currentAst || !m_layout) return;
-
-    qreal contentWidth = m_wordWrap ? (viewport()->width() - 40) : 10000;
-    if (contentWidth < 100) contentWidth = 100;
-
-    m_layout->setViewportWidth(contentWidth);
-    m_layout->clearViewportYRange();
-    m_layout->buildFromAst(m_currentAst);
-    m_plainText = extractPlainText();
-    updateScrollBars();
+    rebuildLayoutPreservingScrollAnchor(true);
 }
 
 void PreviewWidget::updateScrollBars()
@@ -1004,6 +1024,11 @@ QString PreviewWidget::extractPlainText() const
 
 void PreviewWidget::extractBlockText(const LayoutBlock& block, QString& out) const
 {
+    if (block.placeholderOnly) {
+        out += block.placeholderPlainText;
+        return;
+    }
+
     // Spec: specs/模块-preview/10-Frontmatter渲染.md INV-13
     // Frontmatter：导出原始 YAML（rawText），与 paintBlock 里 m_charCounter 累加规则
     // （+= rawLen；非空再 +1 分隔符）一一对应
@@ -1300,6 +1325,11 @@ void PreviewWidget::buildHeadingCharOffsets()
     // 的文档下所有章节 char offset 全部偏移 |rawText|+1，TOC 高亮章节归属错位。
     std::function<void(const LayoutBlock&, int&)> collectHeadings =
         [&](const LayoutBlock& block, int& charIdx) {
+            if (block.placeholderOnly) {
+                charIdx += block.placeholderPlainText.length();
+                return;
+            }
+
             // [子场景 3 修复] Frontmatter 必须按 extractBlockText 同款规则累加：rawText + \n
             if (block.type == LayoutBlock::Frontmatter) {
                 charIdx += block.frontmatterRawText.length();

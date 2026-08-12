@@ -924,6 +924,11 @@ void PreviewPainter::paintFrontmatter(QPainter* p, const LayoutBlock& block,
 
 void PreviewPainter::countBlockChars(const LayoutBlock& block)
 {
+    if (block.placeholderOnly) {
+        m_charCounter += block.placeholderPlainText.length();
+        return;
+    }
+
     // Spec: specs/模块-preview/10-Frontmatter渲染.md §8.10
     if (block.type == LayoutBlock::Frontmatter) {
         m_charCounter += block.frontmatterRawText.length();

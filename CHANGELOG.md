@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.24] - 2026-08-12
+
+### Fixed
+- 修复预览区滚动后选中文本，再单击文本区域时因裁剪布局和全文布局字符坐标不一致导致内容跳转的问题。
+
 ## [1.1.23] - 2026-08-12
 
 ### Fixed

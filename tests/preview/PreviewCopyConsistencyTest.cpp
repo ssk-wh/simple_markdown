@@ -51,6 +51,10 @@ private:
 //  若未来 extractBlockText 改规则，本函数须同步——INV 由两侧共同保证。）
 void extractBlockText(const LayoutBlock& block, QString& out)
 {
+    if (block.placeholderOnly) {
+        out += block.placeholderPlainText;
+        return;
+    }
     if (block.type == LayoutBlock::Frontmatter) {
         out += block.frontmatterRawText;
         if (!block.frontmatterRawText.isEmpty()) out += '\n';
@@ -120,6 +124,73 @@ TEST(PreviewCopyConsistencyTest, T_COPY_CONSIST_4_FullLayoutSelectionStaysStable
     }
 
     EXPECT_TRUE(segmentMatchesCopySource);
+}
+
+TEST(PreviewCopyConsistencyTest, T_COPY_CONSIST_5_ClippedAndFullLayoutShareCharOffsets)
+{
+    QString doc = QStringLiteral("# Top\n\n");
+    for (int i = 0; i < 80; ++i)
+        doc += QString("Paragraph %1 with filler text for viewport clipping.\n\n").arg(i);
+    doc += QStringLiteral("Target selection token: UNIQUE_COPY_TEXT\n\n");
+
+    MarkdownParser parser;
+    auto astU = parser.parse(doc);
+    ASSERT_TRUE(astU);
+    std::shared_ptr<AstNode> ast(std::move(astU));
+
+    const int W = 600;
+    const int H = 400;
+    QImage device(W, H, QImage::Format_ARGB32);
+
+    PreviewLayout fullLayout;
+    fullLayout.setFont(font_defaults::defaultPreviewFont());
+    fullLayout.updateMetrics(&device);
+    fullLayout.setViewportWidth(W);
+    fullLayout.clearViewportYRange();
+    fullLayout.buildFromAst(ast);
+
+    QString fullPlain;
+    extractBlockText(fullLayout.rootBlock(), fullPlain);
+    const QString needle = QStringLiteral("UNIQUE_COPY_TEXT");
+    const int expectedStart = fullPlain.indexOf(needle);
+    ASSERT_GE(expectedStart, 0);
+
+    PreviewLayout clippedLayout;
+    clippedLayout.setFont(font_defaults::defaultPreviewFont());
+    clippedLayout.updateMetrics(&device);
+    clippedLayout.setViewportWidth(W);
+    const qreal scrollY = qMax<qreal>(0.0, fullLayout.totalHeight() - H);
+    clippedLayout.setViewportYRange(scrollY - H * 2.0, scrollY + H * 3.0);
+    clippedLayout.buildFromAst(ast);
+    const qreal correctedScrollY = clippedLayout.sourceLineToY(162);
+
+    QString clippedPlain;
+    extractBlockText(clippedLayout.rootBlock(), clippedPlain);
+    ASSERT_EQ(clippedPlain, fullPlain)
+        << "裁剪布局的 placeholder 必须保留全文字符流，否则选择后切换布局会改变选区坐标";
+
+    PreviewPainter painter;
+    Theme theme;
+    painter.setTheme(theme);
+    painter.setLayout(&clippedLayout);
+
+    QImage img(W, H, QImage::Format_ARGB32);
+    img.fill(Qt::white);
+    QPainter p(&img);
+    painter.paint(&p, clippedLayout.rootBlock(), correctedScrollY, H, W);
+    p.end();
+
+    bool foundAtSameOffset = false;
+    for (const auto& seg : painter.textSegments()) {
+        const int local = seg.text.indexOf(needle);
+        if (local >= 0) {
+            foundAtSameOffset = (seg.charStart + local == expectedStart);
+            break;
+        }
+    }
+
+    EXPECT_TRUE(foundAtSameOffset)
+        << "裁剪布局下可见文本的 charStart 必须与全文布局一致";
 }
 
 // 在“当前 layout 状态”下校验：每个 TextSegment 的 (charStart,charLen) 切片 == 其 text。

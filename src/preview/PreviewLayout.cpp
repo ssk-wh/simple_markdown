@@ -276,6 +276,7 @@ LayoutBlock PreviewLayout::makePlaceholder(const AstNode* node, qreal maxWidth, 
     block.sourceStartLine = node->startLine;
     block.sourceEndLine = node->endLine;
     block.bounds = QRectF(0, 0, maxWidth, estimatedH);
+    extractPlainTextFromAst(node, block.placeholderPlainText);
 
     // 映射 AstNodeType → LayoutBlock::Type，便于上层判定（如 collectSourceMappings 走特定分支）
     switch (node->type) {
@@ -293,6 +294,64 @@ LayoutBlock PreviewLayout::makePlaceholder(const AstNode* node, qreal maxWidth, 
     default:                         block.type = LayoutBlock::Paragraph; break;
     }
     return block;
+}
+
+void PreviewLayout::extractPlainTextFromAst(const AstNode* node, QString& out) const
+{
+    if (!node) return;
+
+    switch (node->type) {
+    case AstNodeType::Frontmatter:
+        out += node->frontmatterRawText;
+        if (!node->frontmatterRawText.isEmpty())
+            out += '\n';
+        return;
+    case AstNodeType::Text:
+    case AstNodeType::Code:
+        out += node->literal;
+        return;
+    case AstNodeType::HtmlInline: {
+        QString tag = node->literal;
+        tag = tag.simplified().remove(QChar(' ')).toLower();
+        out += (tag == QStringLiteral("<br>") || tag == QStringLiteral("<br/>"))
+            ? QStringLiteral("\n")
+            : node->literal;
+        return;
+    }
+    case AstNodeType::Image:
+        out += node->title.isEmpty() ? QStringLiteral("[image]") : node->title;
+        return;
+    case AstNodeType::SoftBreak:
+        out += QLatin1Char(' ');
+        return;
+    case AstNodeType::LineBreak:
+        out += QLatin1Char('\n');
+        return;
+    case AstNodeType::CodeBlock:
+    case AstNodeType::HtmlBlock: {
+        const QStringList lines = node->literal.split('\n');
+        for (int i = 0; i < lines.size(); ++i) {
+            if (i == lines.size() - 1 && lines[i].isEmpty())
+                break;
+            out += lines[i];
+            out += '\n';
+        }
+        return;
+    }
+    default:
+        break;
+    }
+
+    const int before = out.length();
+    for (const auto& child : node->children) {
+        extractPlainTextFromAst(child.get(), out);
+    }
+    if (node->type == AstNodeType::Paragraph ||
+        node->type == AstNodeType::Heading ||
+        node->type == AstNodeType::TableCell) {
+        if (out.length() > before)
+            out += '\n';
+    }
 }
 
 qreal PreviewLayout::totalHeight() const

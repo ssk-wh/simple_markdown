@@ -63,6 +63,10 @@ int hitTestSegment(const TextSegment& seg, qreal relX, QPaintDevice* device)
 // 复刻 extractBlockText（m_plainText 构建）
 void extractBlockText(const LayoutBlock& block, QString& out)
 {
+    if (block.placeholderOnly) {
+        out += block.placeholderPlainText;
+        return;
+    }
     if (block.type == LayoutBlock::Frontmatter) {
         out += block.frontmatterRawText;
         if (!block.frontmatterRawText.isEmpty()) out += '\n';
@@ -204,6 +208,7 @@ TEST(PreviewDoubleClickCellTest, T_DC_CELL_2_StalePlainTextBreaksDoubleClick)
     const qreal scrollY = qMax(0.0, total - H);   // 滚到底部，表格在视口内
     layout.setViewportYRange(scrollY - 240, scrollY + H + 240);
     layout.buildFromAst(ast);
+    const qreal paintScrollY = layout.sourceLineToY(80);
 
     QString freshPlain;   // 修复后：双击前重建的 m_plainText（与当前 segments 同步）
     extractBlockText(layout.rootBlock(), freshPlain);
@@ -215,7 +220,7 @@ TEST(PreviewDoubleClickCellTest, T_DC_CELL_2_StalePlainTextBreaksDoubleClick)
     QImage img(W, H, QImage::Format_ARGB32);
     img.fill(Qt::white);
     QPainter p(&img);
-    painter.paint(&p, layout.rootBlock(), scrollY, H, W);   // paint scrollY 必须匹配剪裁位置
+    painter.paint(&p, layout.rootBlock(), paintScrollY, H, W);   // paint scrollY 必须匹配剪裁位置
     p.end();
 
     // 找单元格里 "apple" 的 segment，构造词中部点击点 → idx

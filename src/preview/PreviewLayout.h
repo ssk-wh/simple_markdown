@@ -41,6 +41,7 @@ struct LayoutBlock {
     // [plan A1] 视口剪裁占位标记：true 表示 bounds 是 quickEstimateHeight 粗估，
     // inlineRuns/children 为空，PreviewPainter 必须跳过具体绘制
     bool placeholderOnly = false;
+    QString placeholderPlainText;
 
     // 段落/标题：行内内容
     std::vector<InlineRun> inlineRuns;
@@ -116,6 +117,7 @@ private:
     qreal quickEstimateHeight(const AstNode* node, qreal maxWidth) const;
     // [plan A1] 构造视口外占位块（type + sourceLine + 粗估 bounds）
     LayoutBlock makePlaceholder(const AstNode* node, qreal maxWidth, qreal estimatedH) const;
+    void extractPlainTextFromAst(const AstNode* node, QString& out) const;
     void collectInlineRuns(const AstNode* node, std::vector<InlineRun>& runs,
                            QFont currentFont, QColor currentColor);
     qreal estimateParagraphHeight(const std::vector<InlineRun>& runs, qreal maxWidth) const;

@@ -111,6 +111,7 @@ protected:
 
 private:
     void updateScrollBars();
+    void rebuildLayoutPreservingScrollAnchor(bool forceFullLayout);
     // [plan A1] 把当前 verticalScrollBar 位置 + viewport 高度 + ±2 屏 buffer 推给 layout
     // 在每次 buildFromAst 之前调用，让 layout 走视口剪裁路径
     void applyLayoutViewportCrop();
