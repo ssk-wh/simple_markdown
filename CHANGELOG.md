@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.28] - 2026-08-13
+
+### Fixed
+- 修复预览区绘制本地或 data URI 图片时，图片缓存同步发出就绪信号导致绘制中重建布局，进而在 `Qt5Core.dll+0x81FC6` / `qHash(QString)` 访问违规崩溃的问题。
+
 ## [1.1.27] - 2026-08-13
 
 ### Fixed

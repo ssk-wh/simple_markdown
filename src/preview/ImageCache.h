@@ -47,6 +47,7 @@ private:
     void startNetworkDownload(const QString& url);
     // 网络请求完成回调
     void onNetworkReply(QNetworkReply* reply);
+    void scheduleImageReady(const QString& url);
 
     QHash<QString, QPixmap> m_cache;
     // [plan A5] 尺寸缓存（只读 header 不解码像素）：layout 阶段查询不触发全图加载

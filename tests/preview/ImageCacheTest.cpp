@@ -6,6 +6,7 @@
 #include <QTemporaryDir>
 #include <QFile>
 #include <QDir>
+#include <QElapsedTimer>
 
 #include "ImageCache.h"
 
@@ -147,4 +148,34 @@ TEST(ImageCacheTest, T6_NonSvgStillWorks)
     ASSERT_NE(pix, nullptr);
     EXPECT_EQ(pix->width(), 1);
     EXPECT_EQ(pix->height(), 1);
+}
+
+TEST(ImageCacheTest, T7_ImageReadyIsQueuedForSynchronousLoads)
+{
+    QTemporaryDir tmpDir;
+    ASSERT_TRUE(tmpDir.isValid());
+    createSvgFile(tmpDir.path(), "queued.svg", 16, 12, "purple");
+
+    ImageCache cache;
+    cache.setDocumentDir(tmpDir.path());
+    int signalCount = 0;
+    QString signaledUrl;
+    QObject::connect(&cache, &ImageCache::imageReady,
+                     [&signalCount, &signaledUrl](const QString& url) {
+        ++signalCount;
+        signaledUrl = url;
+    });
+
+    QPixmap* pix = cache.get("queued.svg");
+    ASSERT_NE(pix, nullptr);
+    EXPECT_EQ(signalCount, 0);
+
+    QElapsedTimer timer;
+    timer.start();
+    while (signalCount == 0 && timer.elapsed() < 1000) {
+        QApplication::processEvents();
+    }
+
+    EXPECT_EQ(signalCount, 1);
+    EXPECT_EQ(signaledUrl, QStringLiteral("queued.svg"));
 }

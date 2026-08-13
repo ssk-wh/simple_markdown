@@ -14,6 +14,7 @@
 #include <QImageReader>
 #include <QSvgRenderer>
 #include <QPainter>
+#include <QTimer>
 
 // 检测是否为 SVG 文件扩展名
 static bool isSvgExtension(const QString& path)
@@ -49,6 +50,17 @@ ImageCache::ImageCache(QObject* parent)
 }
 
 ImageCache::~ImageCache() = default;
+
+void ImageCache::scheduleImageReady(const QString& url)
+{
+    // get() is often called from PreviewPainter::paintBlock(). Emitting imageReady
+    // synchronously from that stack lets PreviewWidget rebuild the layout while the
+    // painter still holds LayoutBlock references. Queue the notification so the
+    // current paint traversal finishes before any rebuild happens.
+    QTimer::singleShot(0, this, [this, url]() {
+        emit imageReady(url);
+    });
+}
 
 void ImageCache::setDocumentDir(const QString& dir)
 {
@@ -147,7 +159,7 @@ void ImageCache::onNetworkReply(QNetworkReply* reply)
 
     if (reply->error() != QNetworkReply::NoError) {
         m_failedUrls.insert(url);
-        emit imageReady(url);
+        scheduleImageReady(url);
         return;
     }
 
@@ -155,7 +167,7 @@ void ImageCache::onNetworkReply(QNetworkReply* reply)
     QString contentType = reply->header(QNetworkRequest::ContentTypeHeader).toString();
     if (!contentType.isEmpty() && !contentType.startsWith("image/")) {
         m_failedUrls.insert(url);
-        emit imageReady(url);
+        scheduleImageReady(url);
         return;
     }
 
@@ -164,7 +176,7 @@ void ImageCache::onNetworkReply(QNetworkReply* reply)
     // 大小限制
     if (data.size() > kMaxImageSize) {
         m_failedUrls.insert(url);
-        emit imageReady(url);
+        scheduleImageReady(url);
         return;
     }
 
@@ -181,7 +193,7 @@ void ImageCache::onNetworkReply(QNetworkReply* reply)
         m_failedUrls.insert(url);
     }
 
-    emit imageReady(url);
+    scheduleImageReady(url);
 }
 
 // [plan A5 2026-05-12] 只读图片头拿尺寸——不解码像素，layout 阶段用。
@@ -251,7 +263,7 @@ QPixmap* ImageCache::get(const QString& url)
         QPixmap pixmap;
         if (loadDataUri(url, pixmap)) {
             auto inserted = m_cache.insert(url, pixmap);
-            emit imageReady(url);
+            scheduleImageReady(url);
             return &inserted.value();
         }
         m_failedUrls.insert(url);
@@ -293,7 +305,7 @@ QPixmap* ImageCache::get(const QString& url)
 
     if (!pixmap.isNull()) {
         auto inserted = m_cache.insert(url, pixmap);
-        emit imageReady(url);
+        scheduleImageReady(url);
         return &inserted.value();
     }
 
