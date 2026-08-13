@@ -251,34 +251,42 @@ int PieceTable::lineCount() const
 
 QString PieceTable::lineText(int line) const
 {
+    if (line == m_cacheLine && !m_cacheLineText.isNull())
+        return m_cacheLineText;
+
     int start = lineToOffset(line);
     int totalLen = length();
 
+    QString result;
     if (line + 1 < lineCount()) {
         int end = lineToOffset(line + 1);
-        // end 指向下一行首字符，end-1 是 '\n'
-        return textAt(start, end - 1 - start);
+        result = textAt(start, end - 1 - start);
     } else {
-        // 最后一行：从 start 到文本末尾
-        return textAt(start, totalLen - start);
+        result = textAt(start, totalLen - start);
     }
+
+    m_cacheLine = line;
+    m_cacheLineText = result;
+    return result;
 }
 
 int PieceTable::offsetToLine(int offset) const
 {
+    if (m_pieces.empty())
+        return 0;
+
     int currentOffset = 0;
     int lineNum = 0;
 
-    for (const auto& p : m_pieces) {
+    for (size_t i = 0; i < m_pieces.size(); ++i) {
+        const auto& p = m_pieces[i];
         int pieceEnd = currentOffset + static_cast<int>(p.length);
 
         if (offset < pieceEnd) {
-            // offset 落在当前 piece 内
             const QString& buf = bufferFor(p.source);
             int posInPiece = offset - currentOffset;
-            for (int i = 0; i < posInPiece; ++i) {
-                if (buf.at(p.start + i) == QChar('\n'))
-                    ++lineNum;
+            if (posInPiece > 0) {
+                lineNum += buf.midRef(p.start, posInPiece).count(QChar('\n'));
             }
             return lineNum;
         }
@@ -300,15 +308,15 @@ int PieceTable::lineToOffset(int line) const
 
     for (const auto& p : m_pieces) {
         if (currentLine + static_cast<int>(p.lineFeeds) >= line) {
-            // 目标行起始位置在当前 piece 内
             const QString& buf = bufferFor(p.source);
-            for (uint32_t i = 0; i < p.length; ++i) {
-                if (buf.at(p.start + i) == QChar('\n')) {
-                    ++currentLine;
-                    if (currentLine == line)
-                        return currentOffset + static_cast<int>(i) + 1;
-                }
+            int target = line - currentLine;
+            int pos = p.start;
+            for (int n = 0; n < target; ++n) {
+                int idx = buf.indexOf(QChar('\n'), pos);
+                if (idx < 0) break;
+                pos = idx + 1;
             }
+            return currentOffset + (pos - p.start);
         }
         currentLine += static_cast<int>(p.lineFeeds);
         currentOffset += static_cast<int>(p.length);
@@ -362,4 +370,6 @@ void PieceTable::updateLineFeedPrefix()
         sum += m_pieces[i].lineFeeds;
         m_lineFeedPrefix[i] = sum;
     }
+    m_cacheLine = -1;
+    m_cacheLineText.clear();
 }

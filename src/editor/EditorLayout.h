@@ -78,10 +78,12 @@ private:
     std::vector<LineInfo> m_lines;
     mutable std::vector<qreal> m_lineYCache;
     mutable bool m_yCacheDirty = true;
+    mutable int m_yCacheDirtyStart = -1;
 
     void ensureLayout(int line) const;
     void ensureYCache() const;
     void invalidateYCache();
+    void invalidateYCacheFrom(int line) const;
 
     mutable SyntaxHighlighter m_highlighter;
 };

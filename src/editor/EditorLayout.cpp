@@ -169,9 +169,8 @@ void EditorLayout::ensureLayout(int line) const
     // 重建时拿到精确值。否则 EditorPainter::paint 用本地 cursor Y 推进（精算），而
     // EditorLayout::hitTest 用 lineAtY → yCache（估算）→ 选区与视觉错位（CLAUDE.md
     // 反模式 B：同一语义两份独立代码）。
-    // 成本：每次 ensureLayout 后 m_yCacheDirty=true，下次 lineAtY 重建 N 行 O(N) 但
-    // 由于 lineHeight 现在 O(1)（不再触发 ensureLayout），整体 < 1ms。
-    m_yCacheDirty = true;
+    // 单行高度精算后，该行自身的起始 Y 不变，后续行起始 Y 需要从下一行增量重算。
+    invalidateYCacheFrom(line + 1);
 }
 
 void EditorLayout::ensureYCache() const
@@ -180,19 +179,42 @@ void EditorLayout::ensureYCache() const
         return;
 
     int count = static_cast<int>(m_lines.size());
+    if (count == 0) {
+        m_yCacheDirty = false;
+        return;
+    }
+
+    int dirtyStart = m_yCacheDirtyStart;
+    if (dirtyStart < 0) {
+        dirtyStart = 0;
+    }
+    if (dirtyStart >= count) {
+        dirtyStart = count - 1;
+    }
+
     m_lineYCache.resize(count);
-    if (count > 0) {
+    if (dirtyStart == 0) {
         m_lineYCache[0] = 0;
-        for (int i = 1; i < count; ++i) {
-            m_lineYCache[i] = m_lineYCache[i - 1] + lineHeight(i - 1);
-        }
+        dirtyStart = 1;
+    }
+    for (int i = dirtyStart; i < count; ++i) {
+        m_lineYCache[i] = m_lineYCache[i - 1] + lineHeight(i - 1);
     }
     m_yCacheDirty = false;
+    m_yCacheDirtyStart = -1;
 }
 
 void EditorLayout::invalidateYCache()
 {
     m_yCacheDirty = true;
+    m_yCacheDirtyStart = 0;
+}
+
+void EditorLayout::invalidateYCacheFrom(int line) const
+{
+    m_yCacheDirty = true;
+    if (m_yCacheDirtyStart < 0 || line < m_yCacheDirtyStart)
+        m_yCacheDirtyStart = line;
 }
 
 TextPosition EditorLayout::hitTest(const QPointF& point) const
@@ -370,4 +392,3 @@ qreal EditorLayout::maxLineWidth() const
     }
     return maxW;
 }
-

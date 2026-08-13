@@ -36,6 +36,9 @@ private:
     std::vector<Piece> m_pieces;
     std::vector<uint32_t> m_lineFeedPrefix;
 
+    mutable int m_cacheLine = -1;
+    mutable QString m_cacheLineText;
+
     const QString& bufferFor(Piece::Source source) const;
     int findPieceAtOffset(int offset, int& offsetInPiece) const;
     static uint32_t countLineFeeds(const QString& buf, int start, int length);
