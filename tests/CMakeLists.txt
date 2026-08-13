@@ -525,6 +525,42 @@ target_link_libraries(TabBarAddButtonVisibilityTest PRIVATE
 )
 add_test(NAME TabBarAddButtonVisibilityTest COMMAND TabBarAddButtonVisibilityTest)
 
+# --- FolderPanelResourceTest ---
+# Spec: specs/模块-app/20-左侧面板.md INV-LP-TREE-LAZY / INV-LP-WATCH-BOUNDED
+# 验收：T-11 ~ T-16
+add_executable(FolderPanelResourceTest
+    app/FolderPanelResourceTest.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/FolderPanel.h
+    ${CMAKE_SOURCE_DIR}/src/app/FolderPanel.cpp
+)
+target_include_directories(FolderPanelResourceTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/app
+    ${CMAKE_SOURCE_DIR}/src/core
+)
+target_link_libraries(FolderPanelResourceTest PRIVATE
+    sm_core Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Test gtest gtest_main)
+add_test(NAME FolderPanelResourceTest COMMAND FolderPanelResourceTest)
+
+# --- LazyWorkerThreadTest ---
+# Spec: specs/横切关注点/10-线程模型.md INV-8
+# 验收：T-5/T-6
+add_executable(LazyWorkerThreadTest
+    app/LazyWorkerThreadTest.cpp
+)
+target_include_directories(LazyWorkerThreadTest PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/app
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/editor
+    ${CMAKE_SOURCE_DIR}/src/parser
+    ${CMAKE_SOURCE_DIR}/src/preview
+)
+target_link_libraries(LazyWorkerThreadTest PRIVATE
+    sm_editor sm_preview sm_parser sm_core
+    Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Test gtest gtest_main)
+add_test(NAME LazyWorkerThreadTest COMMAND LazyWorkerThreadTest)
+
 # --- ReloadDialogI18nTest ---
 # Spec: specs/横切关注点/60-国际化.md INV-QMSGBOX-TR（标准按钮用自定义 tr 文案）
 # Bug: plans/2026-06-16-文件外部修改弹窗未国际化.md

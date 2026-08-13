@@ -31,6 +31,7 @@ public:
 
     // 手动触发一次解析（用于初始加载）
     void parseNow();
+    bool isWorkerRunning() const { return m_parseThread.isRunning(); }
 
 signals:
     void astReady(std::shared_ptr<AstNode> root);
@@ -46,5 +47,6 @@ private:
     QThread m_parseThread;
     ParseWorker* m_worker = nullptr;
 
+    void ensureWorker();
     void requestParse();
 };

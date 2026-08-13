@@ -38,8 +38,17 @@ protected:
 
 private:
     void populateFolder(QStandardItem* folderItem, const QString& dirPath);
+    void markFolderUnloaded(QStandardItem* folderItem);
+    void watchDirectory(const QString& path);
+    void removeWatchSubtree(const QString& path, bool keepRoot);
+    void restoreExpandedDirectories(QStandardItem* parent, const QStringList& expandedPaths);
+    QStringList expandedDirectoryPaths(QStandardItem* parent) const;
+    QStandardItem* findDirectoryItem(const QString& path) const;
+    QStandardItem* findDirectChild(QStandardItem* parent, const QString& path) const;
     void onItemClicked(const QModelIndex& index);
     void onItemDoubleClicked(const QModelIndex& index);
+    void onItemExpanded(const QModelIndex& index);
+    void onItemCollapsed(const QModelIndex& index);
     void onDirectoryChanged(const QString& path);
     void applyThemeStyles();
 

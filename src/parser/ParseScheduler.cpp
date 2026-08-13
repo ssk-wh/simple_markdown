@@ -31,17 +31,27 @@ ParseScheduler::ParseScheduler(QObject* parent)
     m_debounceTimer.setInterval(30);
     connect(&m_debounceTimer, &QTimer::timeout, this, &ParseScheduler::requestParse);
 
+    // 解析 worker 在首次解析请求时创建，懒加载 Tab 不占线程
+}
+
+ParseScheduler::~ParseScheduler()
+{
+    m_debounceTimer.stop();
+    if (m_worker) {
+        m_parseThread.quit();
+        m_parseThread.wait();
+        m_worker = nullptr;
+    }
+}
+
+void ParseScheduler::ensureWorker()
+{
+    if (m_worker) return;
     m_worker = new ParseWorker();
     m_worker->moveToThread(&m_parseThread);
     connect(&m_parseThread, &QThread::finished, m_worker, &QObject::deleteLater);
     connect(m_worker, &ParseWorker::parseFinished, this, &ParseScheduler::onParseFinished);
     m_parseThread.start();
-}
-
-ParseScheduler::~ParseScheduler()
-{
-    m_parseThread.quit();
-    m_parseThread.wait();
 }
 
 void ParseScheduler::setDocument(Document* doc)
@@ -75,6 +85,7 @@ void ParseScheduler::requestParse()
 {
     if (!m_doc)
         return;
+    ensureWorker();
     QString text = m_doc->text();
     quint64 seq = m_editSeq;
     QMetaObject::invokeMethod(m_worker, "doParse",

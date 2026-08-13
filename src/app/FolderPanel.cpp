@@ -2,6 +2,7 @@
 //
 // 单 QTreeView + QStandardItemModel，多文件夹作为顶层节点
 #include "FolderPanel.h"
+#include "../core/PerfProbe.h"
 
 #include <QVBoxLayout>
 #include <QTreeView>
@@ -74,6 +75,34 @@ static QIcon makeProjectIcon(const Theme& theme)
 static constexpr int PathRole = Qt::UserRole + 1;
 static constexpr int IsFolderRole = Qt::UserRole + 2;
 static constexpr int IsRootRole = Qt::UserRole + 3;
+static constexpr int ChildrenLoadedRole = Qt::UserRole + 4;
+static constexpr int IsPlaceholderRole = Qt::UserRole + 5;
+
+static Qt::CaseSensitivity pathCaseSensitivity()
+{
+#ifdef Q_OS_WIN
+    return Qt::CaseInsensitive;
+#else
+    return Qt::CaseSensitive;
+#endif
+}
+
+static QString normalizedPath(const QString& path)
+{
+    return QDir::cleanPath(QDir::fromNativeSeparators(QFileInfo(path).absoluteFilePath()));
+}
+
+static bool isSameOrDescendantPath(const QString& candidate, const QString& parent)
+{
+    const QString normalizedCandidate = normalizedPath(candidate);
+    QString normalizedParent = normalizedPath(parent);
+    const Qt::CaseSensitivity cs = pathCaseSensitivity();
+    if (normalizedCandidate.compare(normalizedParent, cs) == 0)
+        return true;
+    if (!normalizedParent.endsWith('/'))
+        normalizedParent += '/';
+    return normalizedCandidate.startsWith(normalizedParent, cs);
+}
 
 // 缩写路径：父级目录只显示首字母，最后一级完整显示
 // C:/aaa/bbb/ccc → C/a/b/ccc,  /home/user/projects → /h/u/projects
@@ -134,6 +163,8 @@ FolderPanel::FolderPanel(QWidget* parent)
 
     connect(m_treeView, &QTreeView::clicked, this, &FolderPanel::onItemClicked);
     connect(m_treeView, &QTreeView::doubleClicked, this, &FolderPanel::onItemDoubleClicked);
+    connect(m_treeView, &QTreeView::expanded, this, &FolderPanel::onItemExpanded);
+    connect(m_treeView, &QTreeView::collapsed, this, &FolderPanel::onItemCollapsed);
 
     layout->addWidget(m_treeView, 1);
 
@@ -155,8 +186,8 @@ void FolderPanel::setRootPath(const QString& path)
 void FolderPanel::addFolder(const QString& path)
 {
     if (path.isEmpty()) return;
-    QString absPath = QFileInfo(path).absoluteFilePath();
-    if (m_rootPaths.contains(absPath)) return;
+    const QString absPath = normalizedPath(path);
+    if (m_rootPaths.contains(absPath, pathCaseSensitivity())) return;
 
     m_rootPaths.append(absPath);
 
@@ -180,7 +211,7 @@ void FolderPanel::addFolder(const QString& path)
     m_treeView->expand(folderItem->index());
 
     // 监听目录变化
-    m_watcher->addPath(absPath);
+    watchDirectory(absPath);
 
     show();
     applyThemeStyles();
@@ -188,17 +219,23 @@ void FolderPanel::addFolder(const QString& path)
 
 void FolderPanel::removeFolder(const QString& path)
 {
-    QString absPath = QFileInfo(path).absoluteFilePath();
-    int idx = m_rootPaths.indexOf(absPath);
+    const QString absPath = normalizedPath(path);
+    int idx = -1;
+    for (int i = 0; i < m_rootPaths.size(); ++i) {
+        if (m_rootPaths[i].compare(absPath, pathCaseSensitivity()) == 0) {
+            idx = i;
+            break;
+        }
+    }
     if (idx < 0) return;
 
     m_rootPaths.removeAt(idx);
-    m_watcher->removePath(absPath);
+    removeWatchSubtree(absPath, false);
 
     // 从 model 中删除对应顶层节点
     for (int i = 0; i < m_model->rowCount(); ++i) {
         auto* item = m_model->item(i);
-        if (item && item->data(PathRole).toString() == absPath) {
+        if (item && item->data(PathRole).toString().compare(absPath, pathCaseSensitivity()) == 0) {
             m_model->removeRow(i);
             break;
         }
@@ -220,8 +257,9 @@ QStringList FolderPanel::rootPaths() const
 void FolderPanel::clearRoot()
 {
     m_model->clear();
-    if (!m_rootPaths.isEmpty())
-        m_watcher->removePaths(m_rootPaths);
+    const QStringList watched = m_watcher->directories();
+    if (!watched.isEmpty())
+        m_watcher->removePaths(watched);
     m_rootPaths.clear();
     hide();
 }
@@ -229,55 +267,75 @@ void FolderPanel::clearRoot()
 void FolderPanel::selectFile(const QString& filePath)
 {
     if (m_rootPaths.isEmpty() || !isVisible()) return;
-    QString absPath = QFileInfo(filePath).absoluteFilePath();
+    const QString absPath = normalizedPath(filePath);
 
-    // 递归搜索 model 中匹配的 item
-    std::function<QModelIndex(QStandardItem*)> findItem = [&](QStandardItem* parent) -> QModelIndex {
-        for (int i = 0; i < parent->rowCount(); ++i) {
-            auto* child = parent->child(i);
-            if (child->data(PathRole).toString() == absPath)
-                return child->index();
-            QModelIndex found = findItem(child);
-            if (found.isValid()) return found;
-        }
-        return {};
-    };
-
+    QStandardItem* rootItem = nullptr;
+    QString rootPath;
     for (int i = 0; i < m_model->rowCount(); ++i) {
-        QModelIndex found = findItem(m_model->item(i));
-        if (found.isValid()) {
-            m_treeView->setCurrentIndex(found);
-            m_treeView->scrollTo(found);
+        auto* candidate = m_model->item(i);
+        const QString candidatePath = candidate->data(PathRole).toString();
+        if (isSameOrDescendantPath(absPath, candidatePath)
+            && candidatePath.length() > rootPath.length()) {
+            rootItem = candidate;
+            rootPath = candidatePath;
+        }
+    }
+    if (!rootItem) return;
+
+    if (!rootItem->data(ChildrenLoadedRole).toBool())
+        populateFolder(rootItem, rootPath);
+    watchDirectory(rootPath);
+    m_treeView->expand(rootItem->index());
+
+    const QString relativePath = QDir(rootPath).relativeFilePath(absPath);
+    if (relativePath == "." || relativePath.startsWith("../")) return;
+
+    QStandardItem* parent = rootItem;
+    QString currentPath = rootPath;
+    const QStringList parts = QDir::fromNativeSeparators(relativePath)
+                                  .split('/', QString::SkipEmptyParts);
+    for (int i = 0; i < parts.size(); ++i) {
+        currentPath = normalizedPath(QDir(currentPath).filePath(parts[i]));
+        QStandardItem* child = findDirectChild(parent, currentPath);
+        if (!child) return;
+
+        if (i == parts.size() - 1) {
+            m_treeView->setCurrentIndex(child->index());
+            m_treeView->scrollTo(child->index());
             return;
         }
+        if (!child->data(IsFolderRole).toBool()) return;
+        if (!child->data(ChildrenLoadedRole).toBool())
+            populateFolder(child, currentPath);
+        watchDirectory(currentPath);
+        m_treeView->expand(child->index());
+        parent = child;
     }
 }
 
 void FolderPanel::populateFolder(QStandardItem* folderItem, const QString& dirPath)
 {
+    SM_PERF_SCOPE("folderPanel.populateFolder");
     folderItem->removeRows(0, folderItem->rowCount());
 
     QDir dir(dirPath);
     dir.setFilter(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot);
     dir.setSorting(QDir::DirsFirst | QDir::Name | QDir::IgnoreCase);
     QStringList nameFilters = {"*.md", "*.markdown", "*.txt"};
+    QFileIconProvider iconProvider;
 
     QFileInfoList entries = dir.entryInfoList();
     for (const auto& fi : entries) {
         if (fi.isDir()) {
             auto* dirItem = new QStandardItem();
             dirItem->setText(fi.fileName());
-            QFileIconProvider iconProvider;
             dirItem->setIcon(iconProvider.icon(fi));
-            dirItem->setData(fi.absoluteFilePath(), PathRole);
+            dirItem->setData(normalizedPath(fi.absoluteFilePath()), PathRole);
             dirItem->setData(true, IsFolderRole);
             dirItem->setData(false, IsRootRole);
             dirItem->setEditable(false);
             folderItem->appendRow(dirItem);
-            // 递归填充子目录
-            populateFolder(dirItem, fi.absoluteFilePath());
-            // 监听子目录
-            m_watcher->addPath(fi.absoluteFilePath());
+            markFolderUnloaded(dirItem);
         } else {
             // 只显示匹配的文件
             bool match = false;
@@ -288,15 +346,116 @@ void FolderPanel::populateFolder(QStandardItem* folderItem, const QString& dirPa
 
             auto* fileItem = new QStandardItem();
             fileItem->setText(fi.fileName());
-            QFileIconProvider iconProvider;
             fileItem->setIcon(iconProvider.icon(fi));
-            fileItem->setData(fi.absoluteFilePath(), PathRole);
+            fileItem->setData(normalizedPath(fi.absoluteFilePath()), PathRole);
             fileItem->setData(false, IsFolderRole);
             fileItem->setData(false, IsRootRole);
             fileItem->setEditable(false);
             folderItem->appendRow(fileItem);
         }
     }
+    folderItem->setData(true, ChildrenLoadedRole);
+}
+
+void FolderPanel::markFolderUnloaded(QStandardItem* folderItem)
+{
+    folderItem->removeRows(0, folderItem->rowCount());
+    auto* placeholder = new QStandardItem();
+    placeholder->setData(true, IsPlaceholderRole);
+    placeholder->setFlags(Qt::NoItemFlags);
+    folderItem->appendRow(placeholder);
+    folderItem->setData(false, ChildrenLoadedRole);
+}
+
+void FolderPanel::watchDirectory(const QString& path)
+{
+    const QString normalized = normalizedPath(path);
+    if (!QDir(normalized).exists() || m_watcher->directories().contains(normalized, pathCaseSensitivity()))
+        return;
+    m_watcher->addPath(normalized);
+}
+
+void FolderPanel::removeWatchSubtree(const QString& path, bool keepRoot)
+{
+    QStringList remove;
+    const QString normalized = normalizedPath(path);
+    for (const QString& watched : m_watcher->directories()) {
+        if (!isSameOrDescendantPath(watched, normalized))
+            continue;
+        if (keepRoot && normalizedPath(watched).compare(normalized, pathCaseSensitivity()) == 0)
+            continue;
+        remove.append(watched);
+    }
+    if (!remove.isEmpty())
+        m_watcher->removePaths(remove);
+}
+
+QStringList FolderPanel::expandedDirectoryPaths(QStandardItem* parent) const
+{
+    QStringList result;
+    std::function<void(QStandardItem*)> collect = [&](QStandardItem* item) {
+        for (int i = 0; i < item->rowCount(); ++i) {
+            auto* child = item->child(i);
+            if (!child || !child->data(IsFolderRole).toBool())
+                continue;
+            if (m_treeView->isExpanded(child->index())) {
+                result.append(child->data(PathRole).toString());
+                collect(child);
+            }
+        }
+    };
+    collect(parent);
+    return result;
+}
+
+void FolderPanel::restoreExpandedDirectories(QStandardItem* parent,
+                                              const QStringList& expandedPaths)
+{
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        auto* child = parent->child(i);
+        if (!child || !child->data(IsFolderRole).toBool())
+            continue;
+        const QString path = child->data(PathRole).toString();
+        if (!expandedPaths.contains(path, pathCaseSensitivity()))
+            continue;
+        populateFolder(child, path);
+        watchDirectory(path);
+        m_treeView->expand(child->index());
+        restoreExpandedDirectories(child, expandedPaths);
+    }
+}
+
+QStandardItem* FolderPanel::findDirectoryItem(const QString& path) const
+{
+    const QString normalized = normalizedPath(path);
+    std::function<QStandardItem*(QStandardItem*)> find = [&](QStandardItem* parent) -> QStandardItem* {
+        if (parent->data(IsFolderRole).toBool()
+            && parent->data(PathRole).toString().compare(normalized, pathCaseSensitivity()) == 0)
+            return parent;
+        for (int i = 0; i < parent->rowCount(); ++i) {
+            auto* child = parent->child(i);
+            if (child && child->data(IsFolderRole).toBool()) {
+                if (auto* found = find(child)) return found;
+            }
+        }
+        return nullptr;
+    };
+
+    for (int i = 0; i < m_model->rowCount(); ++i) {
+        if (auto* found = find(m_model->item(i))) return found;
+    }
+    return nullptr;
+}
+
+QStandardItem* FolderPanel::findDirectChild(QStandardItem* parent, const QString& path) const
+{
+    const QString normalized = normalizedPath(path);
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        auto* child = parent->child(i);
+        if (child && child->data(PathRole).toString().compare(normalized, pathCaseSensitivity()) == 0)
+            return child;
+    }
+    return nullptr;
 }
 
 void FolderPanel::onItemClicked(const QModelIndex& index)
@@ -321,32 +480,41 @@ void FolderPanel::onItemDoubleClicked(const QModelIndex& index)
     }
 }
 
+void FolderPanel::onItemExpanded(const QModelIndex& index)
+{
+    auto* item = m_model->itemFromIndex(index);
+    if (!item || !item->data(IsFolderRole).toBool()) return;
+    const QString path = item->data(PathRole).toString();
+    if (!item->data(ChildrenLoadedRole).toBool())
+        populateFolder(item, path);
+    watchDirectory(path);
+}
+
+void FolderPanel::onItemCollapsed(const QModelIndex& index)
+{
+    auto* item = m_model->itemFromIndex(index);
+    if (!item || !item->data(IsFolderRole).toBool()) return;
+    const QString path = item->data(PathRole).toString();
+    const bool isRoot = item->data(IsRootRole).toBool();
+    removeWatchSubtree(path, isRoot);
+    markFolderUnloaded(item);
+}
+
 void FolderPanel::onDirectoryChanged(const QString& path)
 {
-    // 找到对应的 model item 并重新填充
-    std::function<QStandardItem*(QStandardItem*)> findDirItem = [&](QStandardItem* parent) -> QStandardItem* {
-        if (parent->data(PathRole).toString() == path)
-            return parent;
-        for (int i = 0; i < parent->rowCount(); ++i) {
-            auto* child = parent->child(i);
-            if (child->data(IsFolderRole).toBool()) {
-                auto* found = findDirItem(child);
-                if (found) return found;
-            }
-        }
-        return nullptr;
-    };
+    SM_PERF_SCOPE("folderPanel.directoryChanged");
+    auto* item = findDirectoryItem(path);
+    if (!item) return;
 
-    for (int i = 0; i < m_model->rowCount(); ++i) {
-        auto* found = findDirItem(m_model->item(i));
-        if (found) {
-            bool wasExpanded = m_treeView->isExpanded(found->index());
-            populateFolder(found, path);
-            if (wasExpanded)
-                m_treeView->expand(found->index());
-            return;
-        }
+    if (!m_treeView->isExpanded(item->index())) {
+        markFolderUnloaded(item);
+        return;
     }
+
+    const QStringList expandedPaths = expandedDirectoryPaths(item);
+    removeWatchSubtree(path, true);
+    populateFolder(item, path);
+    restoreExpandedDirectories(item, expandedPaths);
 }
 
 void FolderPanel::retranslateUi()
