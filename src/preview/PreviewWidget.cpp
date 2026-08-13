@@ -23,6 +23,7 @@
 #include <QToolTip>
 #include <climits>
 #include <QPropertyAnimation>
+#include <QScopedValueRollback>
 #include <QDataStream>
 #include <QIODevice>
 #include <QThread>
@@ -272,17 +273,20 @@ void PreviewWidget::rebuildLayoutPreservingScrollAnchor(bool forceFullLayout)
 void PreviewWidget::paintEvent(QPaintEvent* /*event*/)
 {
     SM_PERF_SCOPE("preview.paintEvent");
+
+    // 每次 paintEvent 都用 viewport() 同步度量
+    // 直接检测字体度量是否变化（比 DPR 比较更可靠，能捕获跨屏不同物理 DPI 的情况）
+    // 必须在创建 QPainter 之前重建 layout，避免绘制过程中更新滚动条/布局导致重入和失效引用。
+    if (m_currentAst && m_layout->updateMetrics(viewport())) {
+        m_lastDevicePixelRatio = viewport()->devicePixelRatioF();
+        rebuildLayoutPreservingScrollAnchor(false);
+    }
+
+    QScopedValueRollback<bool> painting(m_inPaintEvent, true);
     QPainter painter(viewport());
     painter.fillRect(viewport()->rect(), m_theme.previewBg);
 
     if (!m_currentAst) return;
-
-    // 每次 paintEvent 都用 painter.device() 同步度量
-    // 直接检测字体度量是否变化（比 DPR 比较更可靠，能捕获跨屏不同物理 DPI 的情况）
-    if (m_layout->updateMetrics(painter.device())) {
-        m_lastDevicePixelRatio = viewport()->devicePixelRatioF();
-        rebuildLayoutPreservingScrollAnchor(false);
-    }
 
     qreal scrollY = verticalScrollBar()->value();
     qreal vpHeight = viewport()->height();
@@ -574,7 +578,10 @@ void PreviewWidget::onScrollAnimationFinished()
         verticalScrollBar()->blockSignals(true);
         verticalScrollBar()->setValue(target);
         verticalScrollBar()->blockSignals(false);
-        viewport()->repaint();
+        if (m_inPaintEvent)
+            viewport()->update();
+        else
+            viewport()->repaint();
     }
 
     // 动画结束后，启动高亮动画

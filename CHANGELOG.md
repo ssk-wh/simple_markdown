@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.27] - 2026-08-13
+
+### Fixed
+- 修复预览区重绘时同步重建布局可能与正在进行的绘制重入，导致 `SimpleMarkdown.exe+0x5B767` 访问违规崩溃的问题。
+
 ## [1.1.26] - 2026-08-12
 
 ### Fixed
