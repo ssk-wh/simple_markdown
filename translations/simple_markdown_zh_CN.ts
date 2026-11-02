@@ -868,6 +868,66 @@ Open the crash reports folder?</source>
         <source>Close All Documents</source>
         <translation>关闭所有文档</translation>
     </message>
+    <message>
+        <source>Open with Default Application</source>
+        <translation>用默认程序打开</translation>
+    </message>
+    <message>
+        <source>Show in File Explorer</source>
+        <translation>在文件资源管理器中显示</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>全选</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>复制</translation>
+    </message>
+    <message>
+        <source>Size: %1</source>
+        <translation>大小: %1</translation>
+    </message>
+    <message>
+        <source>Indexing…</source>
+        <translation>正在索引…</translation>
+    </message>
+    <message>
+        <source>Ln %1 / %2</source>
+        <translation>第 %1 行 / 共 %2 行</translation>
+    </message>
+    <message>
+        <source>File not found: %1</source>
+        <translation>找不到文件: %1</translation>
+    </message>
+    <message>
+        <source>Headings: %1</source>
+        <translation>标题数: %1</translation>
+    </message>
+    <message>
+        <source>Size: %1 bytes</source>
+        <translation>大小: %1 字节</translation>
+    </message>
+    <message>
+        <source>%1 has been deleted by another program.</source>
+        <translation>%1 已被其他程序删除。</translation>
+    </message>
+    <message>
+        <source>File is too large to export or print (limit 8 MB).</source>
+        <translation>文件过大，无法导出或打印（上限 8 MB）。</translation>
+    </message>
+    <message>
+        <source>Read-only viewer: opens huge files instantly and scrolls smoothly</source>
+        <translation>只读查看器：超大文件秒开，滚动顺滑</translation>
+    </message>
+    <message>
+        <source>Auto-refresh when the file changes on disk, keeping your reading position</source>
+        <translation>文件在磁盘上被修改时自动刷新，并保持当前阅读位置</translation>
+    </message>
+    <message>
+        <source>Shortcuts: Ctrl+O Open, Ctrl+B Toggle Sidebar, Ctrl+F Find</source>
+        <translation>快捷键：Ctrl+O 打开，Ctrl+B 切换侧边栏，Ctrl+F 查找</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPainter</name>
@@ -1222,6 +1282,25 @@ Open the crash reports folder?</source>
     <message>
         <source>Shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+B Toggle Sidebar</source>
         <translation>快捷键：Ctrl+N 新建，Ctrl+O 打开，Ctrl+B 显隐侧边栏</translation>
+    </message>
+    <message>
+        <source>Shortcuts: Ctrl+O Open, Ctrl+B Toggle Sidebar, Ctrl+F Find</source>
+        <translation>快捷键：Ctrl+O 打开，Ctrl+B 切换侧边栏，Ctrl+F 查找</translation>
+    </message>
+</context>
+<context>
+    <name>viewer::ViewerWidget</name>
+    <message>
+        <source>Copy</source>
+        <translation>复制</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>全选</translation>
+    </message>
+    <message>
+        <source>Loading…</source>
+        <translation>正在加载…</translation>
     </message>
 </context>
 </TS>

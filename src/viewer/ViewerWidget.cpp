@@ -899,6 +899,11 @@ void ViewerWidget::keyPressEvent(QKeyEvent* e)
     const double line = lineHeightPx();
     auto go = [this](double dy) { m_wheelRemaining = 0; m_model.scrollBy(dy); prepare(); m_positionTimer.start(); };
     if (e->key() == Qt::Key_Escape && isSearchBarVisible()) { hideSearchBar(); return; }
+    if (e->key() == Qt::Key_F3 && !m_searchHits.empty()) {
+        gotoSearchHit(m_searchCur + ((e->modifiers() & Qt::ShiftModifier) ? -1 : 1),
+                      (e->modifiers() & Qt::ShiftModifier) ? -1 : 1);
+        return;
+    }
     if (e->matches(QKeySequence::Copy)) { copySelection(); return; }
     if (e->matches(QKeySequence::Find)) { showSearchBar(); return; }
     if (e->matches(QKeySequence::SelectAll)) { selectAll(); return; }

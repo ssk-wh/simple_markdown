@@ -2096,7 +2096,8 @@ void MainWindow::setupStatusBar()
     };
     // 只读查看器状态栏：阅读位置 / 行数 / 大小 / 索引进度；右侧编码
     m_statusCursorPos = makeLeftLabel(QString());
-    m_statusLineCount = makeLeftLabel(tr("Lines: %1").arg(0));
+    m_statusLineCount = makeLeftLabel(QString());
+    m_statusLineCount->hide();   // 总行数已并入阅读位置 "Ln x / y"，不再单独显示
     m_statusWordCount = makeLeftLabel(QString());   // 复用：文件大小
     m_statusCharCount = makeLeftLabel(QString());   // 复用：索引进度 / 错误信息
     m_statusEncoding = makeRightLabel(QStringLiteral("UTF-8"));
@@ -2106,13 +2107,11 @@ void MainWindow::updateStatusBarStats()
 {
     auto* tab = currentTab();
     if (!tab || !tab->viewer) {
-        m_statusLineCount->setText(tr("Lines: %1").arg(0));
         m_statusWordCount->setText(QString());
         m_statusCharCount->setText(QString());
         return;
     }
     auto* v = tab->viewer;
-    m_statusLineCount->setText(tr("Lines: %1").arg(v->lineCount()));
 
     const qint64 bytes = static_cast<qint64>(v->sourceBytes());
     QString sizeText;
@@ -2628,7 +2627,6 @@ void MainWindow::updateEmptyState()
             m_tocPanel->setDocumentInfo(DocInfo());
         }
         if (m_folderPanel) m_folderPanel->selectFile(QString());
-        if (m_statusLineCount) m_statusLineCount->setText(tr("Lines: %1").arg(0));
         if (m_statusWordCount) m_statusWordCount->setText(QString());
         if (m_statusCharCount) m_statusCharCount->setText(QString());
         if (m_statusCursorPos) m_statusCursorPos->setText(QString());
