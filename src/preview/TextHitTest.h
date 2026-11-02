@@ -1,7 +1,7 @@
 // src/preview/TextHitTest.h
 //
 // Spec: specs/模块-preview/12-选区与拖动.md（INV-1 选区终点 snap、INV-4 双击选词）
-// 由旧 PreviewWidget 的两个 testable seam 抽出（PreviewWidget 已随 2.0.0 移除），
+// 由旧 ViewerWidget 的两个 testable seam 抽出（ViewerWidget 已随 2.0.0 移除），
 // 现供 ViewerWidget 与单元测试直接使用。
 // Last synced: 2026-11-02
 #pragma once
