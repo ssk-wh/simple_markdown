@@ -6,6 +6,7 @@ add_library(sm_preview STATIC
     ImageCache.h ImageCache.cpp
     CodeBlockRenderer.h CodeBlockRenderer.cpp
     TocPanel.h TocPanel.cpp
+    TocListView.h TocListView.cpp
 )
 target_include_directories(sm_preview PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # [Spec 模块-preview/11-预览区查找] 复用 src/editor/SearchBar + SearchWorker
