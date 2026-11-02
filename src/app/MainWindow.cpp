@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "../core/PerfProbe.h"
 #include "EditorWidget.h"
 #include "PreviewWidget.h"
 #include "ParseScheduler.h"
@@ -104,9 +105,10 @@ hr { border: none; border-top: 1px solid #eee; margin: 2em 0; }
 %2
 </body></html>)";
 
+static QElapsedTimer g_lap; static void TMP_LAP(const char* n){ if(!g_lap.isValid()) g_lap.start(); qint64 ms=g_lap.restart(); fprintf(stderr,"[lap] %s %lld\n", n, (long long)ms); fflush(stderr);}
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
-{
+{TMP_LAP("start");
     setWindowTitle("SimpleMarkdown");
     // Spec: specs/模块-app/21-启动窗口几何.md
     // INV-LAUNCH-NORMAL-FALLBACK: 普通状态的还原尺寸
@@ -129,6 +131,7 @@ MainWindow::MainWindow(QWidget* parent)
             qApp->installTranslator(m_translator);
     }
 
+    TMP_LAP("translator");
     m_recentFiles = new RecentFiles(this);
 
     // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
@@ -146,6 +149,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_tabBar->setDrawBase(false);
     m_tabBar->setExpanding(false);
 
+    TMP_LAP("tabbar");
     m_contentStack = new QStackedWidget(this);
 
     // Spec: specs/模块-app/22-空白引导页.md
@@ -156,13 +160,16 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_welcomePanel, &WelcomePanel::openFolderClicked, this, &MainWindow::onOpenFolder);
     connect(m_welcomePanel, &WelcomePanel::newFileClicked, this, &MainWindow::onNewFile);
 
+    TMP_LAP("welcome");
     m_tocPanel = new TocPanel(this);
     m_tocPanel->setMinimumWidth(160);
 
+    TMP_LAP("toc");
     m_folderPanel = new FolderPanel(this);
     m_folderPanel->installEventFilter(this);  // 监听 Show/Hide 以联动左侧面板
 
     // 侧边 Tab 栏（默认隐藏，切换到左侧模式时显示）
+    TMP_LAP("folder");
     m_sideTabBar = new SideTabBar(this);
     connect(m_sideTabBar, &SideTabBar::currentChanged, this, [this](int index) {
         m_tabBar->setCurrentIndex(index);
@@ -214,6 +221,7 @@ MainWindow::MainWindow(QWidget* parent)
         openFile(path);
     });
 
+    TMP_LAP("splitters");
     setCentralWidget(m_mainSplitter);
 
     // TocPanel 点击 → 跳转到当前 tab 的 preview 对应位置
@@ -347,12 +355,12 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged,
             this, &MainWindow::onFileChangedExternally);
 
-    setupMenuBar();
+    {SM_PERF_SCOPE("TMP.ctor.setupMenuBar"); setupMenuBar();}
     // 强制 menuBar 使用样式表绘制，避免原生样式画底部分隔线
     menuBar()->setAttribute(Qt::WA_StyledBackground, true);
-    setupStatusBar();
-    setupDragDrop();
-    loadSettings();
+    {SM_PERF_SCOPE("TMP.ctor.setupStatusBar"); setupStatusBar();}
+    {SM_PERF_SCOPE("TMP.ctor.setupDragDrop"); setupDragDrop();}
+    {SM_PERF_SCOPE("TMP.ctor.loadSettings"); loadSettings();}
 
     // 安装全局事件过滤器，用于为弹窗设置深色标题栏
     qApp->installEventFilter(this);
