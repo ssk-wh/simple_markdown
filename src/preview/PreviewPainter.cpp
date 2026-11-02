@@ -964,6 +964,35 @@ void PreviewPainter::extractBlockText(const LayoutBlock& block, QString& out)
         extractBlockText(child, out);
 }
 
+bool PreviewPainter::locateCharY(const LayoutBlock& block, int target, int& counter, qreal parentY, qreal& outY)
+{
+    const qreal absY = parentY + block.bounds.y();
+    if (block.type == LayoutBlock::Frontmatter) {
+        const int len = block.frontmatterRawText.length() + (block.frontmatterRawText.isEmpty() ? 0 : 1);
+        if (target < counter + len) { outY = absY; return true; }
+        counter += len;
+        return false;
+    }
+    if (!block.inlineRuns.empty()) {
+        int own = 1;
+        for (const auto& run : block.inlineRuns) own += run.text.length();
+        if (target < counter + own) { outY = absY; return true; }
+        counter += own;
+    }
+    if (!block.codeText.isEmpty()) {
+        const QStringList lines = block.codeText.split('\n');
+        for (int i = 0; i < lines.size(); ++i) {
+            if (i == lines.size() - 1 && lines[i].isEmpty()) break;
+            const int len = lines[i].length() + 1;
+            if (target < counter + len) { outY = absY + i * 18.0; return true; }
+            counter += len;
+        }
+    }
+    for (const auto& child : block.children)
+        if (locateCharY(child, target, counter, absY, outY)) return true;
+    return false;
+}
+
 void PreviewPainter::countBlockChars(const LayoutBlock& block)
 {
     if (block.placeholderOnly) {

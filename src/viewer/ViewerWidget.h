@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "BufferSearch.h"
 #include "ChunkScanner.h"
 #include "DocumentLoader.h"
 #include "MarkdownParser.h"
@@ -91,6 +92,20 @@ public:
     // 强制同步完成一次 prepare（测试用）
     void prepareForTest() { prepare(); }
     const QVector<TextSegment>& segmentsForTest() const;
+    // 测试用：指定扫描参数（如极小的 targetLines，逼出大量 chunk）；须在 loadFile 之前调用
+    void setScanOptionsForTest(const ScanOptions& opt) { m_scanOptions = opt; }
+    // 测试用：布局全部 chunk 并拼接渲染文本（与整篇布局的文本做一致性对比）
+    QString allChunkTextForTest();
+    // 测试用：立即执行一次查找并同步等待结果
+    void searchForTest(const QString& text, bool caseSensitive = false);
+    int searchHitCountForTest() const { return static_cast<int>(m_searchHits.size()); }
+    int searchCurrentChunkForTest() const { return m_searchCurChunk; }
+    void searchNextForTest() { gotoSearchHit(m_searchCur + 1, +1); }
+    // 当前缓存里某 chunk 的布局根（无则 nullptr）
+    const LayoutBlock* layoutForTest(size_t chunk) const {
+        auto it = m_cache.find(chunk);
+        return it == m_cache.end() ? nullptr : &it->second.layout.root;
+    }
 
 signals:
     void tocEntriesChanged(const QVector<TocEntry>& entries);
@@ -154,6 +169,9 @@ private:
 
     // 数据
     DocumentLoader* m_loader = nullptr;
+    ScanOptions m_scanOptions;
+    bool m_searchCaseForTest = false;
+    bool m_searchCaseOverride = false;
     std::shared_ptr<QByteArray> m_buffer;
     uint64_t m_watermark = 0;
     std::vector<Chunk> m_chunks;
@@ -211,8 +229,24 @@ private:
     QPoint m_lastMousePos;
     QString m_hoverLink;
 
-    // 查找
+    // 查找（Spec 模块-viewer/05）
     SearchBar* m_searchBar = nullptr;
+    BufferSearchTask* m_searchTask = nullptr;
+    QTimer m_searchDebounce;
+    QString m_searchText;
+    std::vector<uint64_t> m_searchHits;                  // 源缓冲中的命中字节偏移（候选）
+    int m_searchCur = -1;                                // 当前命中（候选序号）
+    std::unordered_map<size_t, std::vector<std::pair<int, int>>> m_searchRendered;  // chunk → 渲染文本内命中 (起点,长度)
+    int m_searchCurChunk = -1;                           // 当前命中所在 chunk
+    int m_searchCurInChunk = -1;                         // 当前命中在该 chunk 渲染命中中的序号
+
+    void onSearchTextChanged(const QString& text);
+    void startSearch();
+    void onSearchFinished();
+    void gotoSearchHit(int hitIndex, int direction);
+    const std::vector<std::pair<int, int>>& renderedHitsFor(size_t chunk);
+    void clearSearchState();
+    bool searchCaseSensitive() const;
 };
 
 }  // namespace viewer

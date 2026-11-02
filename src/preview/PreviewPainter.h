@@ -82,6 +82,8 @@ public:
     int lastChunkCharCount() const { return m_charCounter; }
     // 与 countBlockChars 同一套计数规则的纯文本抽取（反模式 B：两份代码必须成对修改）
     static void extractBlockText(const LayoutBlock& block, QString& out);
+    // 返回字符序号 target 所在块顶部的 Y（chunk 内坐标）；counter 须从 0 开始。未找到返回 false。
+    static bool locateCharY(const LayoutBlock& block, int target, int& counter, qreal parentY, qreal& outY);
 
     // 选区绘制
     void setSelection(int selStart, int selEnd);

@@ -26,6 +26,7 @@
 #include "PerfProbe.h"
 #include "PreviewPainter.h"
 #include "PreviewWidget.h"  // 复用 textIndexForSegments / findWordBoundaryFor 两个纯函数
+#include "SearchBar.h"
 
 namespace viewer {
 
@@ -93,6 +94,10 @@ ViewerWidget::ViewerWidget(QWidget* parent)
     m_autoScrollTimer.setInterval(30);
     connect(&m_autoScrollTimer, &QTimer::timeout, this, &ViewerWidget::autoScrollTick);
 
+    m_searchDebounce.setSingleShot(true);
+    m_searchDebounce.setInterval(120);
+    connect(&m_searchDebounce, &QTimer::timeout, this, &ViewerWidget::startSearch);
+
     m_highlightAnim = new QVariantAnimation(this);
     m_highlightAnim->setDuration(1400);
     m_highlightAnim->setStartValue(1.0);
@@ -139,11 +144,12 @@ void ViewerWidget::loadFile(const QString& path)
     m_model.reset();
     m_selA = m_selB = SelPos();
     m_segments.clear();
+    clearSearchState();
     m_pendingJumpLine = -1;
     m_loadTimer.start();
     emit tocEntriesChanged(m_tocEntries);
     emit loadStateChanged();
-    m_loader->start(path);
+    m_loader->start(path, m_scanOptions);
     viewport()->update();
 }
 
@@ -228,6 +234,7 @@ QString ViewerWidget::readAllText() const
 void ViewerWidget::setTheme(const Theme& theme)
 {
     m_theme = theme;
+    if (m_searchBar) m_searchBar->setTheme(theme);
     m_layout->setTheme(theme);
     m_painter->setTheme(theme);
     invalidateAllLayouts();
@@ -616,6 +623,18 @@ void ViewerWidget::paintEvent(QPaintEvent*)
             e = (static_cast<int>(v.index) == hi.chunk) ? hi.ch : kWholeChunk;
         }
         m_painter->setSelection(s, e);
+        if (!m_searchText.isEmpty() && !m_searchHits.empty()) {
+            // 当前 chunk 的渲染文本命中（按需计算并缓存；只对可视 chunk 计算）
+            QVector<QPair<int, int>> ranges;
+            const auto& rh = renderedHitsFor(v.index);
+            ranges.reserve(static_cast<int>(rh.size()));
+            for (const auto& r : rh) ranges.append(qMakePair(r.first, r.second));
+            m_painter->setSearchHighlights(ranges);
+            m_painter->setCurrentSearchHit(static_cast<int>(v.index) == m_searchCurChunk ? m_searchCurInChunk : -1);
+        } else {
+            m_painter->setSearchHighlights({});
+            m_painter->setCurrentSearchHit(-1);
+        }
         m_painter->paintChunk(&p, it->second.layout.root, static_cast<int>(v.index), v.screenY, vh, cw);
     }
     m_segments = m_painter->textSegments();
@@ -628,6 +647,8 @@ void ViewerWidget::paintEvent(QPaintEvent*)
 void ViewerWidget::resizeEvent(QResizeEvent* e)
 {
     QAbstractScrollArea::resizeEvent(e);
+    if (m_searchBar && m_searchBar->isVisible())
+        m_searchBar->move(width() - m_searchBar->width() - 20, 10);
     if (e->oldSize().isValid() && e->oldSize() == e->size()) return;
     if (m_layoutWidth < 0) {
         prepare();   // 首次：立即布局，不去抖
@@ -823,7 +844,9 @@ void ViewerWidget::keyPressEvent(QKeyEvent* e)
     const double page = std::max(40.0, viewport()->height() * 0.9);
     const double line = lineHeightPx();
     auto go = [this](double dy) { m_wheelRemaining = 0; m_model.scrollBy(dy); prepare(); m_positionTimer.start(); };
+    if (e->key() == Qt::Key_Escape && isSearchBarVisible()) { hideSearchBar(); return; }
     if (e->matches(QKeySequence::Copy)) { copySelection(); return; }
+    if (e->matches(QKeySequence::Find)) { showSearchBar(); return; }
     if (e->matches(QKeySequence::SelectAll)) { selectAll(); return; }
     switch (e->key()) {
     case Qt::Key_Down:     go(line * 2); return;
@@ -849,10 +872,189 @@ void ViewerWidget::contextMenuEvent(QContextMenuEvent* e)
     menu.exec(e->globalPos());
 }
 
-// ---------------------------------------------------------------- 查找（占位，后续步骤实现）
+// ---------------------------------------------------------------- 查找
 
-void ViewerWidget::showSearchBar() {}
-void ViewerWidget::hideSearchBar() {}
-bool ViewerWidget::isSearchBarVisible() const { return false; }
+bool ViewerWidget::searchCaseSensitive() const
+{
+    if (m_searchCaseOverride) return m_searchCaseForTest;
+    return m_searchBar && m_searchBar->isCaseSensitive();
+}
+
+QString ViewerWidget::allChunkTextForTest()
+{
+    ensureMetrics();
+    QString all;
+    for (size_t i = 0; i < m_chunks.size(); ++i) {
+        all += chunkText(i);
+        if (m_cache.size() > 64) m_cache.clear();   // 控制内存；测试只关心文本
+    }
+    return all;
+}
+
+void ViewerWidget::searchForTest(const QString& text, bool caseSensitive)
+{
+    m_searchCaseOverride = true;
+    m_searchCaseForTest = caseSensitive;
+    m_searchText = text;
+    startSearch();
+    // 同步等待后台线程完成（最多 10s）
+    QElapsedTimer t;
+    t.start();
+    while (m_searchTask && t.elapsed() < 10000) QApplication::processEvents(QEventLoop::AllEvents, 10);
+}
+
+void ViewerWidget::showSearchBar()
+{
+    if (!m_searchBar) {
+        m_searchBar = new SearchBar(this);
+        m_searchBar->setTheme(m_theme);
+        m_searchBar->hide();
+        connect(m_searchBar, &SearchBar::searchTextChanged, this, &ViewerWidget::onSearchTextChanged);
+        connect(m_searchBar, &SearchBar::findNext, this, [this](const QString&) {
+            if (m_searchHits.empty()) return;
+            gotoSearchHit(m_searchCur + 1, +1);
+        });
+        connect(m_searchBar, &SearchBar::findPrev, this, [this](const QString&) {
+            if (m_searchHits.empty()) return;
+            gotoSearchHit(m_searchCur - 1, -1);
+        });
+        connect(m_searchBar, &SearchBar::closed, this, [this]() {
+            clearSearchState();
+            viewport()->update();
+            setFocus();
+        });
+    }
+    m_searchBar->showSearch();
+    m_searchBar->move(width() - m_searchBar->width() - 20, 10);
+    m_searchBar->raise();
+}
+
+void ViewerWidget::hideSearchBar()
+{
+    if (m_searchBar && m_searchBar->isVisible()) m_searchBar->hideBar();
+}
+
+bool ViewerWidget::isSearchBarVisible() const
+{
+    return m_searchBar && m_searchBar->isVisible();
+}
+
+void ViewerWidget::clearSearchState()
+{
+    delete m_searchTask;
+    m_searchTask = nullptr;
+    m_searchText.clear();
+    m_searchHits.clear();
+    m_searchRendered.clear();
+    m_searchCur = -1;
+    m_searchCurChunk = -1;
+    m_searchCurInChunk = -1;
+}
+
+void ViewerWidget::onSearchTextChanged(const QString& text)
+{
+    m_searchText = text;
+    m_searchDebounce.start();
+}
+
+void ViewerWidget::startSearch()
+{
+    delete m_searchTask;
+    m_searchTask = nullptr;
+    m_searchHits.clear();
+    m_searchRendered.clear();
+    m_searchCur = -1;
+    m_searchCurChunk = -1;
+    m_searchCurInChunk = -1;
+    if (m_searchText.isEmpty() || !m_buffer) {
+        if (m_searchBar) m_searchBar->updateMatchInfo(0, 0);
+        viewport()->update();
+        return;
+    }
+    // 源文本（UTF-8）上的候选搜索；水位线以下才是已写完的数据
+    m_searchTask = new BufferSearchTask(m_buffer, m_watermark, m_searchText.toUtf8(), searchCaseSensitive(), this);
+    connect(m_searchTask, &BufferSearchTask::finished, this, &ViewerWidget::onSearchFinished);
+    m_searchTask->start();
+}
+
+void ViewerWidget::onSearchFinished()
+{
+    if (!m_searchTask) return;
+    m_searchHits = m_searchTask->takeHits();
+    m_searchTask->deleteLater();
+    m_searchTask = nullptr;
+    // 从当前视口顶部之后的第一个命中开始
+    const uint64_t topByte = m_chunks.empty() ? 0 : m_chunks[std::min(m_model.anchorChunk(), m_chunks.size() - 1)].byteStart;
+    int start = 0;
+    while (start < static_cast<int>(m_searchHits.size()) && m_searchHits[static_cast<size_t>(start)] < topByte) ++start;
+    if (start >= static_cast<int>(m_searchHits.size())) start = 0;
+    if (m_searchBar) m_searchBar->updateMatchInfo(m_searchHits.empty() ? -1 : 0, static_cast<int>(m_searchHits.size()));
+    if (m_searchHits.empty()) { viewport()->update(); return; }
+    gotoSearchHit(start, +1);
+    if (m_searchBar) m_searchBar->keepFocus();
+}
+
+const std::vector<std::pair<int, int>>& ViewerWidget::renderedHitsFor(size_t chunk)
+{
+    auto it = m_searchRendered.find(chunk);
+    if (it != m_searchRendered.end()) return it->second;
+    std::vector<std::pair<int, int>> hits;
+    const QString text = chunkText(chunk);
+    const Qt::CaseSensitivity cs = searchCaseSensitive() ? Qt::CaseSensitive : Qt::CaseInsensitive;
+    int from = 0;
+    while (!m_searchText.isEmpty()) {
+        const int pos = text.indexOf(m_searchText, from, cs);
+        if (pos < 0) break;
+        hits.emplace_back(pos, m_searchText.size());
+        from = pos + std::max(1, m_searchText.size());
+    }
+    return m_searchRendered.emplace(chunk, std::move(hits)).first->second;
+}
+
+// hitIndex：候选序号（越界回绕）；direction：+1 向后找下一个、-1 向前找上一个（跳过渲染文本中无命中的候选）
+void ViewerWidget::gotoSearchHit(int hitIndex, int direction)
+{
+    const int total = static_cast<int>(m_searchHits.size());
+    if (total == 0 || m_chunks.empty()) return;
+    for (int tries = 0; tries < std::min(total, 200); ++tries) {
+        int idx = ((hitIndex % total) + total) % total;
+        const uint64_t off = m_searchHits[static_cast<size_t>(idx)];
+        // 命中所在 chunk（byteStart 升序二分）
+        size_t lo = 0, hi = m_chunks.size();
+        while (lo < hi) {
+            const size_t mid = (lo + hi) / 2;
+            if (m_chunks[mid].byteStart <= off) lo = mid + 1; else hi = mid;
+        }
+        const size_t chunk = lo == 0 ? 0 : lo - 1;
+        // 该候选是本 chunk 内第几个候选
+        int k = 0;
+        for (int j = idx - 1; j >= 0 && m_searchHits[static_cast<size_t>(j)] >= m_chunks[chunk].byteStart; --j) ++k;
+        const auto& rendered = renderedHitsFor(chunk);
+        if (!rendered.empty()) {
+            const int inChunk = std::min(k, static_cast<int>(rendered.size()) - 1);
+            m_searchCur = idx;
+            m_searchCurChunk = static_cast<int>(chunk);
+            m_searchCurInChunk = inChunk;
+            // 定位：渲染命中所在块的 Y
+            ensureMetrics();
+            m_model.setViewportHeight(viewport()->height());
+            CacheEntry& e = ensureLayout(chunk);
+            qreal y = 0;
+            int counter = 0;
+            if (!PreviewPainter::locateCharY(e.layout.root, rendered[static_cast<size_t>(inChunk)].first, counter, 0.0, y))
+                y = 0;
+            // 命中块放在视口上 1/4 处
+            const double offset = std::max(0.0, static_cast<double>(y) - viewport()->height() * 0.25);
+            m_wheelRemaining = 0;
+            m_model.jumpTo(chunk, offset);
+            prepare();
+            m_positionTimer.start();
+            if (m_searchBar) m_searchBar->updateMatchInfo(idx, total);
+            return;
+        }
+        hitIndex = idx + direction;   // 渲染文本无此命中（仅出现在标记/URL 中），跳过
+    }
+    if (m_searchBar) m_searchBar->updateMatchInfo(-1, total);
+}
 
 }  // namespace viewer
