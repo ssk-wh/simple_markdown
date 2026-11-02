@@ -29,7 +29,7 @@ public:
 private:
     AstNodePtr parseBody(const QByteArray& utf8);
     AstNodePtr convertNode(cmark_node* node);
-    static constexpr int kMaxAstDepth = 200;  // AST 递归深度上限（防栈溢出）
+    static constexpr int kMaxAstDepth = 64;  // AST 递归深度上限：防栈溢出，同时使畸形的深层嵌套（实测 5000 层列表布局 >40s）有界
     int m_depth = 0;
     AstNodeType mapNodeType(cmark_node* node);
     void shiftLineNumbers(AstNode* node, int delta);

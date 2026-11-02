@@ -47,8 +47,11 @@ bool MarkdownParser::extractFrontmatter(const QString& rawMarkdown,
     ++i;
 
     // 5. 向下找结束 '---'
+    // 结束行必须在起始行之后 kMaxFrontmatterLines 行内：与分块扫描器（ChunkScanner）的判定保持一致，
+    // 否则「以水平线 --- 开头的普通文档」会把后面很远的另一条水平线之间的内容整体吞成 frontmatter
+    constexpr int kMaxFrontmatterLines = 200;
     int end = -1;
-    while (i < lines.size()) {
+    while (i < lines.size() && i - start <= kMaxFrontmatterLines) {
         if (lines[i].trimmed() == QStringLiteral("---")) {
             end = i;
             break;

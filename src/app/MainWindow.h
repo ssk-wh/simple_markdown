@@ -236,6 +236,7 @@ private:
     void rebuildThemeMenu();
     void openThemeDirectory();
     TabData* currentTab();
+    TabData* tabForPath(const QString& absPath);
 
     // 状态栏（只读查看器）：阅读位置 / 行数 / 大小 / 索引进度 + 右侧编码
     QLabel* m_statusWordCount = nullptr;   // 复用：文件大小

@@ -42,9 +42,11 @@ struct AssembledChunk {
 
 struct ScanOptions {
     int targetLines = 40;           // 达到该行数后在安全边界切块
-    int hardLines = 2000;           // 超过后启用强切
-    int hardBytes = 256 * 1024;     // 超过后启用强切
-    int maxLineBytes = 16 * 1024;   // 单行超过该长度按字节切片
+    // 强切上限按「单 chunk 布局不超过 ~20ms」取值（R4 病态输入探测：逐字符换行布局约 1µs/字符）
+    int hardLines = 600;            // 超过后启用强切（2 倍时在任意行边界切）
+    int hardBytes = 64 * 1024;      // 超过后启用强切（2 倍时在任意行边界切）
+    int fenceHardLines = 300;       // 围栏代码块内部强切行数（强切无损：续块合成围栏头）
+    int maxLineBytes = 8 * 1024;    // 单行超过该长度按字节切片
 };
 
 // 增量线性扫描器：非线程安全，由单个 worker 持有。
@@ -101,6 +103,7 @@ private:
 
     // 状态
     bool m_started = false;
+    bool m_seenNonBlank = false;     // 已见到首个非空行（此前不允许切块，保证 frontmatter 与其前导空行同属首块）
     bool m_prevBlank = true;
     bool m_prevParaText = false;     // 上一行是可成为 setext 标题的普通文本行
     QByteArray m_prevLineText;       // 上一行原文（setext 标题用）

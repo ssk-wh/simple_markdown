@@ -111,6 +111,15 @@ bool isRunOf(const LineView& l, uint64_t off, char ch)
     return true;
 }
 
+// 去掉首尾空白后恰好等于 "---"
+bool isTrimmedDashes(const LineView& l)
+{
+    uint64_t a = 0, b = l.len;
+    while (a < b && (isSpaceTab(l.p[a]) || l.p[a] == '\r')) ++a;
+    while (b > a && (isSpaceTab(l.p[b - 1]) || l.p[b - 1] == '\r')) --b;
+    return b - a == 3 && std::memcmp(l.p + a, "---", 3) == 0;
+}
+
 bool isBlankLine(const LineView& l)
 {
     for (uint64_t i = 0; i < l.len; ++i)
@@ -223,25 +232,25 @@ bool ChunkScanner::scan(const char* data, uint64_t available, bool final)
         const uint64_t ls = m_pos;
         if (!m_open) openChunk(ls, m_lineNo, 0, 0);
 
-        // 首行 frontmatter 判定（仅文件第一行）
-        if (m_lineNo == 0 && contentEnd - ls == 3 && std::memcmp(data + ls, "---", 3) == 0) {
-            // 向后查找收尾行（限当前可用数据内 200 行）
+        // frontmatter 判定：首个非空行（trim 后）== "---"，且 200 行内存在 trim 后为 "---" 的结束行。
+        // 规则必须与 MarkdownParser::extractFrontmatter 完全一致（反模式 B：两份实现必须同步）。
+        if (!m_seenNonBlank && !isBlankLine(LineView{data + ls, contentEnd - ls}) &&
+            isTrimmedDashes(LineView{data + ls, contentEnd - ls})) {
             uint64_t p = next;
             int n = 0;
             bool closed = false;
             while (p < available && n < 200) {
                 const void* nl2 = std::memchr(data + p, '\n', available - p);
-                uint64_t e = nl2 ? static_cast<uint64_t>(static_cast<const char*>(nl2) - data) : available;
+                const uint64_t e = nl2 ? static_cast<uint64_t>(static_cast<const char*>(nl2) - data) : available;
                 uint64_t ce = e;
                 if (ce > p && data[ce - 1] == '\r') --ce;
-                const uint64_t L = ce - p;
-                if ((L == 3 && (std::memcmp(data + p, "---", 3) == 0 || std::memcmp(data + p, "...", 3) == 0))) {
+                if (isTrimmedDashes(LineView{data + p, ce - p})) {
                     closed = true;
                     break;
                 }
-                p = nl2 ? e + 1 : available;
-                ++n;
                 if (!nl2) break;
+                p = e + 1;
+                ++n;
             }
             if (closed) m_inFrontmatter = true;
         }
@@ -309,10 +318,8 @@ void ChunkScanner::processLine(const char* data, uint64_t ls, uint64_t le, uint6
 
     // 1) frontmatter 内部：只找收尾行
     if (m_inFrontmatter) {
-        if (m_lineNo > 0 && line.len == 3 &&
-            (std::memcmp(line.p, "---", 3) == 0 || std::memcmp(line.p, "...", 3) == 0)) {
-            m_inFrontmatter = false;
-        }
+        if (m_seenNonBlank && isTrimmedDashes(line)) m_inFrontmatter = false;
+        m_seenNonBlank = true;
         m_prevBlank = false;
         m_prevParaText = false;
         return;
@@ -321,7 +328,7 @@ void ChunkScanner::processLine(const char* data, uint64_t ls, uint64_t le, uint6
     // 2) 围栏内部
     if (m_fenceChar) {
         // 达到强切上限：在围栏内部切开，续块补合成围栏头
-        if (m_curLines >= static_cast<uint32_t>(m_opt.hardLines) ||
+        if (m_curLines >= static_cast<uint32_t>(std::min(m_opt.hardLines, m_opt.fenceHardLines)) ||
             ls - m_curStart >= static_cast<uint64_t>(m_opt.hardBytes)) {
             closeChunk(ls, Chunk::kEndsInOpenFence);
             m_prologues.push_back(m_fenceHeader);
@@ -350,10 +357,12 @@ void ChunkScanner::processLine(const char* data, uint64_t ls, uint64_t le, uint6
         m_prevParaText = false;
         return;
     }
+    const bool firstNonBlank = !m_seenNonBlank;
+    m_seenNonBlank = true;
 
     // 4) 切块判定：空行之后、顶格、非列表项
     const bool listMarker = isListMarker(line, off);
-    if (m_prevBlank && indent == 0 && m_curLines > 0) {
+    if (m_prevBlank && indent == 0 && m_curLines > 0 && !firstNonBlank) {
         bool cut = false;
         if (!listMarker && m_curLines >= static_cast<uint32_t>(m_opt.targetLines)) cut = true;
         // 强切：超过硬上限时，列表允许在顶层项之间切开

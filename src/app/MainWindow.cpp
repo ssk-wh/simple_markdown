@@ -807,9 +807,12 @@ void MainWindow::restoreSession(const QString& requestedFile)
             watchFile(tab.filePath);
         }
         openFile(requestedFile);
-        if (reqLine > 0 && !m_tabs.isEmpty()) m_tabs.last().viewer->scrollToSourceLine(reqLine, false);
-        for (const auto& st : states)
-            if (st.file == reqAbs && !m_tabs.isEmpty()) m_tabs.last().viewer->deserializeMarkings(st.markings);
+        // 用路径定位刚打开的 tab：文件不可打开（如被拒绝的二进制）时 m_tabs.last() 可能是别的 tab
+        if (TabData* reqTab = tabForPath(reqAbs)) {
+            if (reqLine > 0) reqTab->viewer->scrollToSourceLine(reqLine, false);
+            for (const auto& st : states)
+                if (st.file == reqAbs) reqTab->viewer->deserializeMarkings(st.markings);
+        }
         reapplyTheme();
         return;
     }
@@ -823,8 +826,10 @@ void MainWindow::restoreSession(const QString& requestedFile)
             const auto& st = states[i];
             if (i == activeTab) {
                 openFile(st.file);
-                if (st.line > 0 && !m_tabs.isEmpty()) m_tabs.last().viewer->scrollToSourceLine(st.line, false);
-                if (!m_tabs.isEmpty()) m_tabs.last().viewer->deserializeMarkings(st.markings);
+                if (TabData* t = tabForPath(QFileInfo(st.file).absoluteFilePath())) {
+                    if (st.line > 0) t->viewer->scrollToSourceLine(st.line, false);
+                    t->viewer->deserializeMarkings(st.markings);
+                }
             } else {
                 TabData tab = createTab();
                 tab.filePath = QFileInfo(st.file).absoluteFilePath();
@@ -1825,6 +1830,13 @@ void MainWindow::startLocalServer(const char* serverName)
             QTimer::singleShot(1500, socket, [socket]() { if (socket->state() != QLocalSocket::UnconnectedState) socket->abort(); });
         }
     });
+}
+
+MainWindow::TabData* MainWindow::tabForPath(const QString& absPath)
+{
+    for (auto& t : m_tabs)
+        if (t.filePath == absPath) return &t;
+    return nullptr;
 }
 
 void MainWindow::saveSessionLater()

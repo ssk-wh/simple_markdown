@@ -12,11 +12,13 @@
 #include <cstring>
 #include <algorithm>
 #include <vector>
+#include "PerfProbe.h"
 #include "ViewerWidget.h"
 
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
+    if (qEnvironmentVariableIsSet("SM_PERF")) core::setPerfEnabled(true);
     QString file, shot;
     int line = -1, w = 1100, h = 800, scrollN = 0, benchN = 0, benchStep = 60;
     bool dark = false, toEnd = false;

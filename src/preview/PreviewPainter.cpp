@@ -1,4 +1,5 @@
 #include "PreviewPainter.h"
+#include "TextWrap.h"
 #include "ImageCache.h"
 #include "CodeBlockRenderer.h"
 
@@ -284,7 +285,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                     int fit = 0;
                     qreal acc = 0;
                     for (int i = physOffset; i < line.length(); ++i) {
-                        qreal cw = fm.horizontalAdvance(QString(line[i]));
+                        qreal cw = fm.horizontalAdvance(line[i]);
                         if (acc + cw > contentWidth && fit > 0) break;
                         acc += cw;
                         fit = i + 1 - physOffset;
@@ -784,8 +785,9 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
         QString text = run.text;
         int textOffset = 0;
         while (!text.isEmpty()) {
-            qreal fullWidth = fm.horizontalAdvance(text);
             qreal remaining = x + maxWidth - curX;
+            qreal fullWidth = 0;
+            textwrap::fitsInLine(fm, text, remaining, &fullWidth);   // 与 PreviewLayout 共用，见 TextWrap.h
 
             // 能放在当前行吗？
             if (fullWidth <= remaining || curX <= x) {
