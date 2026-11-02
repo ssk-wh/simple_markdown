@@ -6,10 +6,7 @@
 #include <QPointer>
 #include "Theme.h"
 
-class EditorWidget;
-class PreviewWidget;
-class ParseScheduler;
-class ScrollSync;
+namespace viewer { class ViewerWidget; }
 class RecentFiles;
 class TocPanel;
 class FolderPanel;
@@ -50,38 +47,25 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private slots:
-    void onNewFile();
     void onOpenFile();
     void onOpenFolder();
-    void onSaveFile();
-    void onSaveFileAs();
     void onCloseTab(int index);
     void onTabChanged(int index);
 
 private:
     struct TabData {
-        QSplitter* splitter = nullptr;
-        EditorWidget* editor = nullptr;
-        PreviewWidget* preview = nullptr;
-        ParseScheduler* scheduler = nullptr;
-        ScrollSync* scrollSync = nullptr;
-        bool pendingReload = false;  // 文件被外部修改，等切换到此 tab 时提示
-        bool pendingDelete = false;  // 文件被外部删除，等切换到此 tab 时提示并关闭
-        bool lazyPending = false;    // 懒加载：尚未加载文件内容（休眠状态复用同一字段）
-        QString lazyFilePath;        // 懒加载时记录的文件路径
-        // [Plan 2026-05-06-多Tab超阈值时休眠最早文档]
-        // 自增打开序号——多 Tab 休眠机制按"最早打开"FIFO 选淘汰对象。
-        // 0 表示尚未分配（旧 Tab 不参与休眠），> 0 才参与排序。
+        viewer::ViewerWidget* viewer = nullptr;
+        QString filePath;            // 绝对路径（懒加载 tab 也记录，加载前即可用于去重/会话）
+        bool pendingReload = false;  // 文件被外部修改，等切换到此 tab 时静默重载
+        bool pendingDelete = false;  // 文件被外部删除
+        bool lazyPending = false;    // 懒加载：尚未加载文件内容
+        int pendingLine = -1;        // 懒加载 tab 的待恢复阅读位置（0 基行号）
         qint64 openOrder = 0;
-        // [Plan 2026-05-06-外部修改弹窗去重]
-        // 跟踪本 Tab 当前正在显示的"是否重新加载"对话框；
-        // 非空时新一轮外部修改不再开新对话框，仅更新 pendingReload 标志，
-        // 避免文件被频繁修改时弹窗叠加。QPointer 在对话框被销毁时自动归零。
-        QPointer<QMessageBox> activeReloadDialog;
+        QPointer<QMessageBox> activeReloadDialog;  // 保留字段（兼容），只读查看器不再弹窗
     };
 
     // [Spec 模块-preview/09] 预览区链接 Ctrl+click 处理
-    void onPreviewLinkClicked(const QString& url, class EditorWidget* originEditor);
+    void onPreviewLinkClicked(const QString& url, const QString& originFile);
 
     // [Plan 文档统计信息] 弹窗统计当前文档的结构化信息
     void onShowDocumentStats();
@@ -133,7 +117,6 @@ private:
 
     // 持久化的视图设置
     QAction* m_restoreSessionAct = nullptr;
-    QAction* m_wordWrapAct = nullptr;
     QAction* m_followSystemThemeAct = nullptr;
     QAction* m_lightThemeAct = nullptr;
     QAction* m_darkThemeAct = nullptr;
@@ -218,20 +201,11 @@ private:
     // 底部居中 toast 通知
     void showToast(const QString& message, int durationMs = 3000);
 
-    // 显示区域模式：0=双栏, 1=仅编辑器, 2=仅预览
-    int m_displayMode = 2;
-    QActionGroup* m_displayGroup = nullptr;
-    QAction* m_displayBothAct = nullptr;
-    QAction* m_displayEditorAct = nullptr;
-    QAction* m_displayPreviewAct = nullptr;
-    void setDisplayMode(int mode);
-    void applyDisplayMode();  // 应用到当前 tab
 
     // 专注模式
     bool m_focusMode = false;
     QAction* m_focusModeAct = nullptr;
     QByteArray m_savedMainSplitterState;
-    QList<int> m_savedTabSplitterSizes;
     bool m_savedTocVisible = true;
     void toggleFocusMode();
     void enterFocusMode();
@@ -245,19 +219,7 @@ private:
     void applyFontSize();
     TabData createTab();
 
-    // [Plan 2026-05-06-多Tab超阈值时休眠最早文档]
-    // 多 Tab 休眠机制：已加载 Tab 数超过阈值时，把最早打开的 Tab "休眠"（卸载内容
-    // 但保留 Tab 头），避免内存随会话长度无限增长。复用现有 lazyPending / lazyFilePath
-    // 字段表示休眠态——切换激活时由 onTabChanged 中的 lazy 加载路径自动唤醒。
     qint64 m_nextTabOpenOrder = 1;
-    int m_tabSleepThreshold = 20;
-    // 把指定 Tab 休眠：卸载 editor/preview 内容、设 lazyPending=true。
-    // 跳过条件：已休眠 / 未保存修改 / 文件路径为空 / 当前活跃 Tab / 上次活跃 Tab。
-    // 返回 true 表示成功休眠。
-    bool dormantTab(int idx);
-    // 扫描所有 Tab，按 openOrder 排序，挑选最早的非豁免 Tab 调用 dormantTab；
-    // 直到已加载 Tab 数 ≤ m_tabSleepThreshold 或没有更多可休眠对象。
-    void enforceSleepThreshold();
     void updateTabTitle(int index);
     void setTabCloseButton(int index);
     void updateAllTabCloseButtons();
@@ -270,42 +232,16 @@ private:
     void rebuildThemeMenu();
     void openThemeDirectory();
     TabData* currentTab();
-    bool maybeSave(int index);
 
-    // 状态栏统计信息
-    QLabel* m_statusWordCount = nullptr;
-    QLabel* m_statusCharCount = nullptr;
+    // 状态栏（只读查看器）：阅读位置 / 行数 / 大小 / 索引进度 + 右侧编码
+    QLabel* m_statusWordCount = nullptr;   // 复用：文件大小
+    QLabel* m_statusCharCount = nullptr;   // 复用：索引进度 / 错误
     QLabel* m_statusLineCount = nullptr;
-    QLabel* m_statusCursorPos = nullptr;
-    QLabel* m_statusReadTime = nullptr;
-    // Spec: specs/模块-app/14-自动保存.md
-    // 自动保存失败时显示瞬时提示（5s 自动清空），平时为空字符串
-    QLabel* m_statusAutoSaveMsg = nullptr;
-    QTimer m_autoSaveMsgClearTimer;
-    QTimer m_statsDebounceTimer;
-    // Spec: specs/模块-app/15-状态栏布局.md
-    // 状态栏右区元数据：编码 / 换行 / 保存状态
-    // （主题名字段已移除 — 用户从整个 UI 颜色即可感知当前主题，不需要再占状态栏）
+    QLabel* m_statusCursorPos = nullptr;   // 复用：阅读位置 Ln x / y
     QLabel* m_statusEncoding = nullptr;
-    QLabel* m_statusLineEnding = nullptr;
-    QLabel* m_statusSaveStatus = nullptr;
-    // 30s 周期重算"已保存 · X 分钟前"相对时间
-    QTimer m_relTimeRefreshTimer;
     void setupStatusBar();
     void updateStatusBarStats();
-    void updateCursorPosition(int line, int column);
-    void connectTabStatusBar(const TabData& tab);
-    void updateRightStatusBar();   // 编码 + 换行 + 主题 + 保存状态全部刷新
-    void updateSaveStatusOnly();   // 仅刷新保存状态文本（30s timer 触发）
+    void updatePositionStatus();
+    void updateRightStatusBar();
 
-    // Spec: specs/模块-app/14-自动保存.md
-    // 编辑停顿后静默保存（仅有磁盘路径的 Tab）
-    QTimer m_autoSaveTimer;
-    bool m_autoSaveEnabled = false;       // 默认不开启自动保存
-    int m_autoSaveDelayMs = 300000;       // 默认延时 5 分钟
-    QAction* m_autoSaveEnabledAct = nullptr;
-    QVector<QAction*> m_autoSaveDelayActions;  // 1500 / 3000 / 5000 三档
-    void scheduleAutoSave();
-    void performAutoSave();
-    void showAutoSaveError(const QString& message);
 };
