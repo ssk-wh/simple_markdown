@@ -13,6 +13,7 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPointer>
 #include <QScopedValueRollback>
 #include <QScrollBar>
 #include <QToolTip>
@@ -124,6 +125,7 @@ ViewerWidget::~ViewerWidget()
 
 void ViewerWidget::loadFile(const QString& path)
 {
+    ++m_loadGen;
     m_path = path;
     m_error.clear();
     m_buffer.reset();
@@ -167,7 +169,9 @@ void ViewerWidget::reload()
     const int line = readingLine();
     if (!m_marks.empty()) m_pendingMarks = serializeMarkings();   // 重载后按原文重新锚定
     const QString p = m_path;
+    const QString keepSearch = m_searchText;   // 重载后继续沿用查找词（加载完成时自动重搜）
     loadFile(p);
+    m_searchText = keepSearch;
     m_pendingJumpLine = line;
     m_pendingJumpHighlight = false;
 }
@@ -756,21 +760,22 @@ QString ViewerWidget::chunkText(size_t i)
     return out;
 }
 
-QString ViewerWidget::chunkTextNoCache(size_t i)
+PreviewLayout::ChunkLayoutResult ViewerWidget::layoutNoCache(size_t i)
 {
     // 与 ensureLayout 同样的解析+布局，但结果用完即弃：不占 m_cache、不回写滚动模型
-    if (i >= m_chunks.size() || !m_buffer) return QString();
+    if (i >= m_chunks.size() || !m_buffer) return PreviewLayout::ChunkLayoutResult();
     auto it = m_cache.find(i);
-    QString out;
-    if (it != m_cache.end()) {
-        PreviewPainter::extractBlockText(it->second.layout.root, out);
-        return out;
-    }
+    if (it != m_cache.end()) return it->second.layout;
     const Chunk& c = m_chunks[i];
     const AssembledChunk a = ChunkScanner::assembleChunk(m_buffer->constData(), c, m_prologues, m_refDefs);
     AstNodePtr root = m_parser.parseChunk(a.text, static_cast<int>(c.lineStart) - a.lineBias, i == 0);
-    const auto res = m_layout->layoutChunk(*root, i == 0);
-    PreviewPainter::extractBlockText(res.root, out);
+    return m_layout->layoutChunk(*root, i == 0);
+}
+
+QString ViewerWidget::chunkTextNoCache(size_t i)
+{
+    QString out;
+    PreviewPainter::extractBlockText(layoutNoCache(i).root, out);
     return out;
 }
 
@@ -779,16 +784,22 @@ QString ViewerWidget::selectedText()
     if (!hasSelection()) return QString();
     SelPos lo = m_selA, hi = m_selB;
     if (hi < lo) std::swap(lo, hi);
+    if (m_copying) return QString();      // 重入保护
+    QScopedValueRollback<bool> copyingGuard(m_copying, true);
     QString out;
     const bool big = (hi.chunk - lo.chunk) > 200;
     if (big) QApplication::setOverrideCursor(Qt::WaitCursor);
     ensureMetrics();
     QElapsedTimer pump;
     pump.start();
+    QPointer<ViewerWidget> self(this);
+    const quint64 gen = m_loadGen;
     for (int c = lo.chunk; c <= hi.chunk && c < static_cast<int>(m_chunks.size()); ++c) {
-        // 超大范围（全选 50MB 文档）会持续较久：定期处理非输入事件，避免界面「未响应」
+        // 超大范围（全选 50MB 文档）会持续较久：定期处理非输入事件，避免界面「未响应」。
+        // 处理事件期间控件可能被销毁、或文档被重载替换：返回后必须复查，否则放弃复制。
         if (big && pump.elapsed() > 100) {
             QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+            if (!self || m_loadGen != gen) { QApplication::restoreOverrideCursor(); return QString(); }
             pump.restart();
         }
         const QString t = chunkTextNoCache(static_cast<size_t>(c));
@@ -978,15 +989,15 @@ void ViewerWidget::addMarkRange(int chunk, int start, int end)
     m.chunk = chunk;
     m.start = start;
     m.end = end;
-    const QString text = chunkTextNoCache(static_cast<size_t>(chunk));
+    const auto res = layoutNoCache(static_cast<size_t>(chunk));
+    QString text;
+    PreviewPainter::extractBlockText(res.root, text);
     m.text = text.mid(start, end - start);
-    // 源行：布局块里按字符序号定位所属文本块
+    // 源行：按字符序号在布局中定位所属文本块（未命中时退化为 chunk 起始行）
     int line = static_cast<int>(m_chunks[static_cast<size_t>(chunk)].lineStart);
-    if (auto it2 = m_cache.find(static_cast<size_t>(chunk)); it2 != m_cache.end()) {
-        int counter = 0;
-        const int l = PreviewPainter::locateCharLine(it2->second.layout.root, start, counter);
-        if (l >= 0) line = l;
-    }
+    int counter = 0;
+    const int l = PreviewPainter::locateCharLine(res.root, start, counter);
+    if (l >= 0) line = l;
     m.line = line;
     m_marks.push_back(std::move(m));
     std::sort(m_marks.begin(), m_marks.end(), [](const Mark& a, const Mark& b) {
@@ -1080,7 +1091,7 @@ void ViewerWidget::updateTocHighlights()
 // 格式（UTF-8 文本）：首行 "SMMK2"；其后每行 "源行<TAB>起点<TAB>终点<TAB>原文"（原文中的制表/换行已替换为空格）
 QByteArray ViewerWidget::serializeMarkings() const
 {
-    if (m_marks.empty()) return QByteArray();
+    if (m_marks.empty()) return m_pendingMarks;   // 尚未兑现（懒加载/加载中/加载失败）的标记原样保留
     QByteArray out = "SMMK2\n";
     for (const auto& m : m_marks) {
         QString t = m.text;
@@ -1101,9 +1112,12 @@ void ViewerWidget::deserializeMarkings(const QByteArray& data)
 void ViewerWidget::applyPendingMarks()
 {
     if (m_pendingMarks.isEmpty()) return;
+    // 读取失败/空文件（如外部编辑器的原子保存瞬间）：保留待恢复标记，等下一次成功加载再兑现
+    if (m_chunks.empty() || !m_error.isEmpty()) return;
     const QByteArray data = m_pendingMarks;
     m_pendingMarks.clear();
-    if (!data.startsWith("SMMK2\n") || m_chunks.empty()) return;
+    if (!data.startsWith("SMMK2\n")) return;
+    ensureMetrics();
     const QList<QByteArray> lines = data.split('\n');
     int applied = 0;
     for (int i = 1; i < lines.size() && applied < 500; ++i) {
@@ -1114,12 +1128,12 @@ void ViewerWidget::applyPendingMarks()
         int end = f[2].toInt();
         const QString text = QString::fromUtf8(f[3]);
         const int chunk = chunkForLine(line);
-        if (chunk < 0 || end <= start) continue;
+        if (chunk < 0 || start < 0 || end <= start || text.isEmpty()) continue;
         // 校验原文：偏移处文字一致则直接用；否则在该块（及相邻块）里按原文重新查找；都找不到就丢弃
         bool ok = false;
         for (int c = chunk; c <= std::min(chunk + 1, static_cast<int>(m_chunks.size()) - 1) && !ok; ++c) {
             const QString ct = chunkTextNoCache(static_cast<size_t>(c));
-            if (c == chunk && ct.mid(start, end - start) == text) {
+            if (c == chunk && end <= ct.size() && ct.mid(start, end - start) == text) {
                 addMarkRange(c, start, end);
                 ok = true;
             } else if (!text.isEmpty()) {
@@ -1283,7 +1297,7 @@ void ViewerWidget::gotoSearchHit(int hitIndex, int direction)
 {
     const int total = static_cast<int>(m_searchHits.size());
     if (total == 0 || m_chunks.empty()) return;
-    for (int tries = 0; tries < std::min(total, 200); ++tries) {
+    for (int tries = 0; tries < std::min(total, 20); ++tries) {
         int idx = ((hitIndex % total) + total) % total;
         const uint64_t off = m_searchHits[static_cast<size_t>(idx)];
         // 命中所在 chunk（byteStart 升序二分）
@@ -1293,6 +1307,10 @@ void ViewerWidget::gotoSearchHit(int hitIndex, int direction)
             if (m_chunks[mid].byteStart <= off) lo = mid + 1; else hi = mid;
         }
         const size_t chunk = lo == 0 ? 0 : lo - 1;
+        if (off >= m_chunks[chunk].byteEnd) {   // 候选落在尚未扫描到的区域（加载中搜索）：跳过
+            hitIndex = idx + direction;
+            continue;
+        }
         // 该候选是本 chunk 内第几个候选
         int k = 0;
         for (int j = idx - 1; j >= 0 && m_searchHits[static_cast<size_t>(j)] >= m_chunks[chunk].byteStart; --j) ++k;

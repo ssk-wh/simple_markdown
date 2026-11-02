@@ -512,3 +512,9 @@ target_link_libraries(StartupProbe PRIVATE Qt5::Widgets)
 add_executable(ViewerWidgetTest viewer/ViewerWidgetTest.cpp)
 target_link_libraries(ViewerWidgetTest PRIVATE sm_viewerwidget sm_viewer sm_preview sm_parser sm_core Qt5::Widgets gtest gtest_main)
 add_test(NAME ViewerWidgetTest COMMAND ViewerWidgetTest)
+
+# --- ViewerFuzzTest ---
+# Spec: specs/模块-viewer/04-查看器控件.md  随机文档 x 随机操作模糊测试（固定种子）
+add_executable(ViewerFuzzTest viewer/ViewerFuzzTest.cpp)
+target_link_libraries(ViewerFuzzTest PRIVATE sm_viewerwidget sm_viewer sm_preview sm_parser sm_core Qt5::Widgets gtest gtest_main)
+add_test(NAME ViewerFuzzTest COMMAND ViewerFuzzTest)

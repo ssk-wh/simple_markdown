@@ -213,6 +213,8 @@ private:
     quint64 m_useTick = 0;
     bool m_inPrepare = false;
     bool m_inPaint = false;
+    bool m_copying = false;        // selectedText 进行中（防重入）
+    quint64 m_loadGen = 0;         // 每次 loadFile 自增；长耗时循环据此判断文档是否已被替换
     double m_barScale = 1.0;   // 滚动条单位 = m_barScale 像素（文档总高超过 ~1e9 像素时才 >1）
     bool m_syncing = false;
     qreal m_layoutWidth = -1;
@@ -278,7 +280,8 @@ private:
     void gotoSearchHit(int hitIndex, int direction);
     const std::vector<std::pair<int, int>>& renderedHitsFor(size_t chunk);   // 可能触发布局：仅限 prepare/导航路径
     const std::vector<std::pair<int, int>>* renderedHitsCached(size_t chunk) const;   // 只读，paintEvent 使用
-    QString chunkTextNoCache(size_t chunkIndex);   // 复制用：不写布局缓存、不改滚动模型
+    QString chunkTextNoCache(size_t chunkIndex);
+    PreviewLayout::ChunkLayoutResult layoutNoCache(size_t chunkIndex);   // 解析+布局，用完即弃   // 复制用：不写布局缓存、不改滚动模型
     void clearSearchState();
     bool searchCaseSensitive() const;
 };

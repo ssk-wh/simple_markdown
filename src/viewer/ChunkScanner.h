@@ -101,6 +101,7 @@ private:
 
     // 状态
     bool m_started = false;
+    bool m_seenNonBlank = false;     // 已见到首个非空行（此前不允许切块，保证 frontmatter 与其前导空行同属首块）
     bool m_prevBlank = true;
     bool m_prevParaText = false;     // 上一行是可成为 setext 标题的普通文本行
     QByteArray m_prevLineText;       // 上一行原文（setext 标题用）
