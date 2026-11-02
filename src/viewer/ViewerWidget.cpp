@@ -88,7 +88,7 @@ ViewerWidget::ViewerWidget(QWidget* parent)
     m_tocTimer.setInterval(150);
     connect(&m_tocTimer, &QTimer::timeout, this, [this]() { emit tocEntriesChanged(m_tocEntries); });
     m_positionTimer.setSingleShot(true);
-    m_positionTimer.setInterval(400);
+    m_positionTimer.setInterval(120);
     connect(&m_positionTimer, &QTimer::timeout, this, [this]() { emit positionChanged(); });
 
     m_wheelTimer.setInterval(15);

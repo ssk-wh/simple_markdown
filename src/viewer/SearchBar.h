@@ -1,3 +1,4 @@
+// Spec: specs/模块-viewer/05-查找.md（原 editor 模块的通用查找栏，2.0.0 迁入 viewer）
 #pragma once
 #include <QWidget>
 #include "Theme.h"

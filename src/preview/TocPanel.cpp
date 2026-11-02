@@ -31,6 +31,24 @@
 #include <QIcon>
 #include <algorithm>
 
+namespace {
+// 文档信息卡容器：自绘背景与顶部分隔线。窗口级 QSS 会覆盖调色板背景（深色主题下出现浅色底），
+// 所以不依赖 QSS/调色板，直接按主题色绘制。
+class DocCardFrame : public QFrame {
+public:
+    using QFrame::QFrame;
+    QColor bg = Qt::white;
+    QColor border = Qt::gray;
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.fillRect(rect(), bg);
+        p.setPen(border);
+        p.drawLine(0, 0, width(), 0);
+    }
+};
+}  // namespace
+
 TocPanel::TocPanel(QWidget* parent)
     : QWidget(parent)
 {
@@ -71,7 +89,7 @@ TocPanel::TocPanel(QWidget* parent)
     mainLayout->addWidget(m_list);
 
     // ---- DocInfoCard（Spec INV-TOC-DOCCARD-NO-REPARSE / COLLAPSE-PERSIST） ----
-    m_docCard = new QFrame(this);
+    m_docCard = new DocCardFrame(this);
     m_docCard->setObjectName("docInfoCard");
     m_docCard->setFrameShape(QFrame::NoFrame);
     auto* docLayout = new QVBoxLayout(m_docCard);
@@ -209,8 +227,11 @@ void TocPanel::applyDocCardTheme()
         p.setColor(role, c);
         w->setPalette(p);
     };
-    m_docCard->setAutoFillBackground(true);
-    setPal(m_docCard, QPalette::Window, bg);
+    if (auto* card = static_cast<DocCardFrame*>(m_docCard)) {
+        card->bg = bg;
+        card->border = border;
+        card->update();
+    }
     if (m_docCardToggle) {
         setPal(m_docCardToggle, QPalette::ButtonText, fg);
         QFont f = m_docCardToggle->font();
@@ -225,7 +246,6 @@ void TocPanel::applyDocCardTheme()
         m_docCardBody->setFont(f);
     }
     update();
-    Q_UNUSED(border);
 }
 
 // ---- 父子关系辅助 ----

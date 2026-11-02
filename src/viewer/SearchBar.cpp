@@ -1,3 +1,4 @@
+// Spec: specs/模块-viewer/05-查找.md
 #include "SearchBar.h"
 
 #include <QLineEdit>
