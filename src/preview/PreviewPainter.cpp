@@ -58,7 +58,7 @@ void PreviewPainter::recordSegment(const QRectF& rect, int charStart, int charLe
                                     const QString& text, const QFont& font,
                                     const QString& linkUrl)
 {
-    m_textSegments.append({rect, charStart, charLen, text, font, linkUrl});
+    m_textSegments.append({rect, charStart, charLen, text, font, linkUrl, m_curChunk});
 }
 
 void PreviewPainter::paint(QPainter* painter, const LayoutBlock& root,
@@ -92,6 +92,22 @@ void PreviewPainter::paint(QPainter* painter, const LayoutBlock& root,
 #ifdef ENABLE_TEST_MODE
     saveBlocksToJson((int)viewportWidth, (int)viewportHeight);
 #endif
+}
+
+void PreviewPainter::paintChunk(QPainter* painter, const LayoutBlock& root, int chunkId,
+                                 qreal chunkTopOnScreen, qreal viewportHeight, qreal viewportWidth)
+{
+    if (!painter) return;
+    m_charCounter = 0;
+    m_unorderedListDepth = 0;
+    m_curChunk = chunkId;
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setRenderHint(QPainter::TextAntialiasing, true);
+    // paintBlock 的 drawY = absY - scrollY：令 scrollY = -chunkTopOnScreen 即把 chunk 平移到屏幕位置
+    const qreal scrollY = -chunkTopOnScreen;
+    for (const auto& child : root.children)
+        paintBlock(painter, child, 0, 0, scrollY, viewportHeight, viewportWidth);
+    m_curChunk = -1;
 }
 
 void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
