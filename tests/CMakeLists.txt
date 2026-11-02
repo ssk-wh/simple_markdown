@@ -754,3 +754,17 @@ target_include_directories(OpenLatencyBenchmark PRIVATE
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
     ${CMAKE_SOURCE_DIR}/src/parser ${CMAKE_SOURCE_DIR}/src/preview)
 target_link_libraries(OpenLatencyBenchmark PRIVATE sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets)
+
+# --- ChunkScannerTest ---
+# Spec: specs/模块-viewer/01-分块扫描.md  验收：T1 ~ T17
+add_executable(ChunkScannerTest viewer/ChunkScannerTest.cpp)
+target_include_directories(ChunkScannerTest PRIVATE ${CMAKE_SOURCE_DIR}/src/viewer)
+target_link_libraries(ChunkScannerTest PRIVATE sm_viewer Qt5::Core gtest gtest_main)
+add_test(NAME ChunkScannerTest COMMAND ChunkScannerTest)
+
+# --- ScrollModelTest ---
+# Spec: specs/模块-viewer/02-滚动模型.md  验收：T1 ~ T14
+add_executable(ScrollModelTest viewer/ScrollModelTest.cpp)
+target_include_directories(ScrollModelTest PRIVATE ${CMAKE_SOURCE_DIR}/src/viewer)
+target_link_libraries(ScrollModelTest PRIVATE sm_viewer Qt5::Core gtest gtest_main)
+add_test(NAME ScrollModelTest COMMAND ScrollModelTest)
