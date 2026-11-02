@@ -54,7 +54,7 @@ ImageCache::~ImageCache() = default;
 void ImageCache::scheduleImageReady(const QString& url)
 {
     // get() is often called from PreviewPainter::paintBlock(). Emitting imageReady
-    // synchronously from that stack lets PreviewWidget rebuild the layout while the
+    // synchronously from that stack lets ViewerWidget rebuild the layout while the
     // painter still holds LayoutBlock references. Queue the notification so the
     // current paint traversal finishes before any rebuild happens.
     QTimer::singleShot(0, this, [this, url]() {

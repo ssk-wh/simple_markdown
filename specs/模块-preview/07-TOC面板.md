@@ -12,6 +12,8 @@ depends:
 last_reviewed: 2026-04-27
 ---
 
+> **ℹ 2.0.0 迁移提示**：文中的 `PreviewWidget` / `EditorWidget` / `ScrollSync` / `PieceTable` / `ParseScheduler` 已由 `viewer::ViewerWidget` 及 `specs/模块-viewer/` 取代；涉及这些类的条款仅作历史参考，不变量语义以 viewer Spec 与代码为准。
+
 # TOC 面板（Table of Contents）
 
 ## 1. 目的
