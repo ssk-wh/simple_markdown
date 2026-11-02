@@ -1,25 +1,16 @@
 # SimpleMarkdown
 
-轻量、高性能的跨平台 Markdown 编辑器，基于 C++17 / Qt 5 全自绘渲染。编辑器和预览都自己画，没有 `QTextDocument`、没有 `QWebEngineView`，启动快、内存占用低、滚动丝滑。
+轻量、高性能的跨平台 **Markdown 查看器**（2.0.0 起只读），基于 C++17 / Qt 5 全自绘渲染。没有 `QTextDocument`、没有 `QWebEngineView`；分块 + 虚拟化架构让大文件（50MB+）也能秒开、滚动丝滑、点击目录即时跳转。
 
 > 当前版本：见 [CHANGELOG.md](CHANGELOG.md) 首条目
 
 ## 功能特性
 
-### 编辑器
-- QPainter 全自绘文本编辑器，极低资源占用
-- 行号显示 + Markdown 语法高亮（标题 / 粗体 / 斜体 / 代码 / 链接 / 列表 / 引用）
-- 撤销/重做、剪切/复制/粘贴、全选
-- Tab 缩进 / Shift+Tab 反缩进、Enter 自动缩进
-- Markdown 格式化快捷键（Ctrl+B/I/K/D/E）
-- 搜索替换（Ctrl+F / Ctrl+H），支持大小写敏感、正则、全词匹配
-- IME 中文输入支持
-
 ### 预览
 - QPainter 全自绘 Markdown 预览渲染
 - 支持：标题（H1-H6）、段落、粗体、斜体、行内代码、围栏代码块、引用块、有序/无序列表、GFM 表格、本地图片、分割线、链接、删除线
-- 编辑后 30ms 防抖自动刷新
-- 编辑器-预览双向滚动同步
+- 大文件：后台读取与索引，首屏与文件大小无关；外部修改后静默刷新并保持阅读位置
+- 全文查找（Ctrl+F）、目录面板（万级标题）
 - 内容标记功能（黄色荧光笔效果）
 - 高 DPI 屏精确适配（1x / 1.25x / 1.5x / 2x）
 
@@ -45,11 +36,10 @@
 simple_markdown/
 ├── src/
 │   ├── app/         应用入口（main、MainWindow、ChangelogDialog、ShortcutsDialog）
-│   ├── core/        核心数据模型（PieceTable、Document、UndoStack、Selection、Theme）
-│   ├── editor/      自绘编辑器（布局、绘制、输入、语法高亮、搜索栏）
-│   ├── parser/      Markdown 解析（cmark-gfm 封装、AST、ParseScheduler）
-│   ├── preview/     自绘预览（布局、绘制、图片缓存、代码块渲染、TOC 面板）
-│   └── sync/        编辑器-预览滚动同步
+│   ├── core/        核心（Theme、字体默认值、最近文件、性能探针）
+│   ├── viewer/      只读分块查看器（扫描、滚动模型、异步加载、查找、ViewerWidget）
+│   ├── parser/      Markdown 解析（cmark-gfm 封装、AST）
+│   └── preview/     自绘渲染（布局、绘制、图片缓存、代码块渲染、TOC 面板）
 ├── specs/           规范（Spec），SDD 核心 — 先改 Spec 再改代码
 ├── plans/           实施计划，记录"如何从 A 迁移到 B"
 ├── docs/            人类向文档（构建说明等）
