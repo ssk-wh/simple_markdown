@@ -67,6 +67,10 @@ public:
 
     // 把 chunk 组装为可独立解析的 UTF-8 文本
     AssembledChunk assemble(const char* data, const Chunk& c) const;
+    // 无需扫描器实例的组装（UI 线程持有 prologues/refDefs 副本即可）
+    static AssembledChunk assembleChunk(const char* data, const Chunk& c,
+                                        const std::vector<std::string>& prologues,
+                                        const QByteArray& refDefs);
 
     // 去除标题文本中的常见行内 Markdown 标记（供目录显示）
     static QString stripInlineMarkup(const QByteArray& raw);

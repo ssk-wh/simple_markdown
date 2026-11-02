@@ -202,6 +202,37 @@ void PreviewLayout::buildFromAst(const std::shared_ptr<AstNode>& root)
     m_mappingsCacheDirty = true;
 }
 
+// [Spec 模块-viewer/03] 分块布局：与 buildFromAst 同构，但状态无关（不写 m_root）
+PreviewLayout::ChunkLayoutResult PreviewLayout::layoutChunk(const AstNode& docRoot, bool isFirstChunk)
+{
+    ChunkLayoutResult res;
+    res.root.type = LayoutBlock::Document;
+    qreal y = 0;
+    if (isFirstChunk) {
+        // 与 buildFromAst 的 INV-PREVIEW-TOP-PAD 保持一致
+        y = cachedFontMetrics(m_baseFont).height() * 0.1;
+    }
+    for (const auto& child : docRoot.children) {
+        LayoutBlock block = layoutBlock(child.get(), m_viewportWidth);
+        block.bounds.moveTop(y);
+        y += block.bounds.height() + 12.0;
+        res.root.children.push_back(std::move(block));
+    }
+    res.root.bounds = QRectF(0, 0, m_viewportWidth, y);
+    res.height = y;
+    // 收集图片 URL（递归）
+    std::vector<const LayoutBlock*> stack;
+    for (const auto& c : res.root.children) stack.push_back(&c);
+    while (!stack.empty()) {
+        const LayoutBlock* b = stack.back();
+        stack.pop_back();
+        if (b->type == LayoutBlock::Image && !b->imageUrl.isEmpty())
+            res.imageUrls.push_back(b->imageUrl);
+        for (const auto& c : b->children) stack.push_back(&c);
+    }
+    return res;
+}
+
 // [plan A3 2026-05-12] 按需重建 sourceLine ↔ Y 双向映射缓存。
 // 之前每次 sourceLineToY / yToSourceLine 都重新 collectSourceMappings + sort，
 // 10k 行每帧多次调用累积可达毫秒级。改为 buildFromAst 后失效，首次访问重建一次。

@@ -17,6 +17,7 @@ struct TextSegment {
     QString text;      // 段内文本（用于逐字精确定位）
     QFont font;        // 段所用字体
     QString linkUrl;   // [Spec 模块-preview/09] 链接 URL，空串表示非链接
+    int chunk = -1;    // [Spec 模块-viewer/03] 分块渲染时所属 chunk 序号；charStart 为块内序号
 };
 
 // [测试模式] 行内元素信息
@@ -70,6 +71,16 @@ public:
 
     const QVector<TextSegment>& textSegments() const { return m_textSegments; }
 
+    // [Spec 模块-viewer/03 INV-PAINT-CHUNK-LOCAL] 分块绘制：
+    // beginFrame 清空本帧 segments；paintChunk 绘制一个 chunk（字符序号块内从 0 起），
+    // 调用前用 setSelection/setHighlights/setSearchHighlights 传入「块内」区间。
+    // chunkTopOnScreen：chunk 顶部相对 viewport 顶部的 y（可为负）。
+    void beginFrame() { m_textSegments.clear(); }
+    void paintChunk(QPainter* painter, const LayoutBlock& root, int chunkId,
+                    qreal chunkTopOnScreen, qreal viewportHeight, qreal viewportWidth);
+    // 该 chunk 的字符总数（与 paintChunk 的计数规则一致，供复制/选区边界使用）
+    int lastChunkCharCount() const { return m_charCounter; }
+
     // 选区绘制
     void setSelection(int selStart, int selEnd);
 
@@ -111,6 +122,7 @@ private:
     ImageCache* m_imageCache = nullptr;
     QVector<TextSegment> m_textSegments;
     int m_charCounter = 0;  // 绘制期间的字符计数器
+    int m_curChunk = -1;    // 分块绘制期间当前 chunk 序号
     // [Spec 模块-preview/03 INV-LIST-BULLET-LEVEL] 无序列表嵌套深度（绘制期间维护），
     // 用于按层级选择项目符号样式（实心圆→空心圆→实心菱形→空心菱形→三角）
     int m_unorderedListDepth = 0;
