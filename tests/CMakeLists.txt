@@ -747,3 +747,10 @@ target_link_libraries(CodeBlockRendererTest PRIVATE
     gtest_main
 )
 add_test(NAME CodeBlockRendererTest COMMAND CodeBlockRendererTest)
+
+# --- OpenLatencyBenchmark（秒开改造基线，手动运行，不入 ctest）---
+add_executable(OpenLatencyBenchmark preview/OpenLatencyBenchmark.cpp)
+target_include_directories(OpenLatencyBenchmark PRIVATE
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/parser ${CMAKE_SOURCE_DIR}/src/preview)
+target_link_libraries(OpenLatencyBenchmark PRIVATE sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets)
