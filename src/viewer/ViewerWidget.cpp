@@ -132,6 +132,7 @@ void ViewerWidget::loadFile(const QString& path)
     m_loadDone = false;
     m_loading = true;
     m_firstContentEmitted = false;
+    m_firstPaintMarked = false;
     m_firstContentMs = -1;
     m_visible.clear();
     m_cache.clear();
@@ -618,6 +619,10 @@ void ViewerWidget::paintEvent(QPaintEvent*)
         m_painter->paintChunk(&p, it->second.layout.root, static_cast<int>(v.index), v.screenY, vh, cw);
     }
     m_segments = m_painter->textSegments();
+    if (!m_firstPaintMarked) {
+        m_firstPaintMarked = true;
+        core::startupMark("viewer first content painted");
+    }
 }
 
 void ViewerWidget::resizeEvent(QResizeEvent* e)

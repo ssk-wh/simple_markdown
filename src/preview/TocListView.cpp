@@ -31,12 +31,7 @@ TocListView::TocListView(QWidget* parent) : QAbstractScrollArea(parent)
 void TocListView::setTheme(const Theme& theme)
 {
     m_theme = theme;
-    const QString thumb = theme.isDark ? QStringLiteral("rgba(255,255,255,50)")
-                                       : QStringLiteral("rgba(0,0,0,30)");
-    verticalScrollBar()->setStyleSheet(QString(
-        "QScrollBar:vertical { width: 5px; background: transparent; }"
-        "QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }").arg(thumb));
+    // 滚动条外观由主窗口 QSS 统一提供，这里不再单独设置（避免额外 QStyleSheetStyle 实例）
     viewport()->update();
 }
 

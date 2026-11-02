@@ -201,14 +201,29 @@ void TocPanel::applyDocCardTheme()
     const QColor fg = m_theme.previewHeading;
     const QColor sub = m_theme.previewImageInfoText;
 
-    m_docCard->setStyleSheet(QString(
-        "QFrame#docInfoCard { background: %1; border-top: 1px solid %2; }"
-        "QToolButton#docInfoCardToggle { color: %3; font-size: 12px; font-weight: bold;"
-        "                                 background: transparent; border: none; "
-        "                                 padding: 2px 0; text-align: left; }"
-        "QToolButton#docInfoCardToggle:hover { color: %4; }"
-        "QLabel#docInfoCardBody { color: %5; font-size: 11px; background: transparent; }"
-    ).arg(bg.name(), border.name(), fg.name(), m_theme.accentColor.name(), sub.name()));
+    // 不使用 QSS：QSS 会在挂入窗口时对整个子树逐控件 polish（实测 addWidget 耗时 200ms+）
+    auto setPal = [](QWidget* w, QPalette::ColorRole role, const QColor& c) {
+        QPalette p = w->palette();
+        p.setColor(role, c);
+        w->setPalette(p);
+    };
+    m_docCard->setAutoFillBackground(true);
+    setPal(m_docCard, QPalette::Window, bg);
+    if (m_docCardToggle) {
+        setPal(m_docCardToggle, QPalette::ButtonText, fg);
+        QFont f = m_docCardToggle->font();
+        f.setPixelSize(12);
+        f.setBold(true);
+        m_docCardToggle->setFont(f);
+    }
+    if (m_docCardBody) {
+        setPal(m_docCardBody, QPalette::WindowText, sub);
+        QFont f = m_docCardBody->font();
+        f.setPixelSize(11);
+        m_docCardBody->setFont(f);
+    }
+    update();
+    Q_UNUSED(border);
 }
 
 // ---- 父子关系辅助 ----
@@ -348,21 +363,33 @@ void TocPanel::setTheme(const Theme& theme)
     const QColor borderColor = theme.previewTableBorder;
     const QColor titleFg = theme.previewHeading;
 
-    setStyleSheet(QString(
-        "TocPanel { background: %1; border-left: 1px solid %2; }"
-    ).arg(bg.name(), borderColor.name()));
-
-    // 标题样式
-    if (auto* t = findChild<QLabel*>("tocTitle"))
-        t->setStyleSheet(QString(
-            "QLabel { color: %1; font-size: 14px; font-weight: bold; background: transparent; }"
-        ).arg(titleFg.name()));
+    // 面板背景与左边框在 paintEvent 中自绘；标题用调色板+字体（均不走 QSS，见 applyDocCardTheme 注释）
+    if (auto* t = findChild<QLabel*>("tocTitle")) {
+        QPalette p = t->palette();
+        p.setColor(QPalette::WindowText, titleFg);
+        t->setPalette(p);
+        QFont f = t->font();
+        f.setPixelSize(14);
+        f.setBold(true);
+        t->setFont(f);
+    }
+    update();
+    Q_UNUSED(bg);
+    Q_UNUSED(borderColor);
 
     m_list->setTheme(theme);
 
     applyDocCardTheme();
     rebuildDocCard();
     buildList();
+}
+
+void TocPanel::paintEvent(QPaintEvent*)
+{
+    QPainter p(this);
+    p.fillRect(rect(), m_theme.previewBg);
+    p.setPen(m_theme.previewTableBorder);
+    p.drawLine(0, 0, 0, height());   // 左边框
 }
 
 // ---- 宽度自适应 ----

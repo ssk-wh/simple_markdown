@@ -10,7 +10,7 @@ add_library(sm_core STATIC
     ThemeLoader.h ThemeLoader.cpp
     ThemeSchema.h
     FontDefaults.h
-    PerfProbe.h
+    PerfProbe.h PerfStartup.cpp
 )
 
 target_include_directories(sm_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

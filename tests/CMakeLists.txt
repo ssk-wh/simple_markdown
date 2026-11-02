@@ -781,3 +781,6 @@ target_link_libraries(ScanBench PRIVATE sm_viewer Qt5::Core)
 
 add_executable(ViewerDemo viewer/ViewerDemo.cpp)
 target_link_libraries(ViewerDemo PRIVATE sm_viewerwidget sm_viewer sm_preview sm_parser sm_core Qt5::Widgets)
+
+add_executable(StartupProbe viewer/StartupProbe.cpp)
+target_link_libraries(StartupProbe PRIVATE Qt5::Widgets)

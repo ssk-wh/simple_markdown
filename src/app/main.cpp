@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QIcon>
+#include <QPixmap>
 #include <QFileInfo>
 #include <QLocalSocket>
 #include <QSettings>
@@ -161,11 +162,13 @@ int main(int argc, char* argv[])
     core::SmApplication app(argc, argv);
     fprintf(stderr, "[2] QApplication created\n");
     fflush(stderr);
+    core::startupMark("QApplication created");
 
     app.setApplicationName("SimpleMarkdown");
     app.setOrganizationName("SimpleMarkdown");
     app.setApplicationVersion(APP_VERSION);
-    app.setWindowIcon(QIcon(":/app-icon.png"));
+    // 用 QPixmap 构造图标：QIcon(const QString&) 首次调用会初始化 QMimeDatabase（实测 80~150ms）
+    app.setWindowIcon(QIcon(QPixmap(":/app-icon.png")));
     fprintf(stderr, "[3] App properties set\n");
     fflush(stderr);
 
@@ -189,6 +192,7 @@ int main(int argc, char* argv[])
     MainWindow window;
     fprintf(stderr, "[6] MainWindow created\n");
     fflush(stderr);
+    core::startupMark("MainWindow created");
 
     window.startLocalServer(kServerName);
     fprintf(stderr, "[7] Local server started\n");
@@ -197,10 +201,12 @@ int main(int argc, char* argv[])
     window.restoreSession(filePath);
     fprintf(stderr, "[8] Session restored\n");
     fflush(stderr);
+    core::startupMark("Session restored");
 
     window.show();
     fprintf(stderr, "[9] Window shown\n");
     fflush(stderr);
+    core::startupMark("Window shown");
 
     int result = app.exec();
     fprintf(stderr, "[10] app.exec() returned %d\n", result);

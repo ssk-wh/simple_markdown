@@ -189,6 +189,7 @@ private:
     QElapsedTimer m_loadTimer;
     qint64 m_firstContentMs = -1;
     bool m_firstContentEmitted = false;
+    bool m_firstPaintMarked = false;
     QVector<TextSegment> m_segments;   // 上一帧绘制产生的 segments（命中测试用）
 
     // 跳转

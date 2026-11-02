@@ -82,6 +82,7 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
 
 private:
     void buildList();
