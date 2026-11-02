@@ -162,7 +162,7 @@ void TocPanel::rebuildDocCard()
 
     if (m_docCardCollapsed) {
         // 折叠态：只显示一行简略摘要
-        QString line = tr("Words: %1").arg(m_docInfo.wordCount);
+        QString line = tr("Words: %1").arg(m_docInfo.wordCount >= 0 ? QString::number(m_docInfo.wordCount) : QStringLiteral("-"));
         if (m_docInfo.mtime.isValid())
             line += QStringLiteral(" · %1").arg(formatMtime(m_docInfo.mtime));
         m_docCardBody->setText(line);
@@ -170,9 +170,11 @@ void TocPanel::rebuildDocCard()
     } else {
         // 展开态：详细信息
         QStringList rows;
-        rows << tr("Words: %1").arg(m_docInfo.wordCount)
+        // 大文件不统计字数/字符数（代价高），以 "-" 占位
+        auto num = [](int v) { return v >= 0 ? QString::number(v) : QStringLiteral("-"); };
+        rows << tr("Words: %1").arg(num(m_docInfo.wordCount))
              << tr("Chars: %1 (no space %2)")
-                    .arg(m_docInfo.charCount).arg(m_docInfo.charCountNoSpace)
+                    .arg(num(m_docInfo.charCount)).arg(num(m_docInfo.charCountNoSpace))
              << tr("Lines: %1").arg(m_docInfo.lineCount)
              << tr("Size: %1").arg(formatSize(m_docInfo.sizeBytes))
              << tr("Modified: %1").arg(formatMtime(m_docInfo.mtime));
