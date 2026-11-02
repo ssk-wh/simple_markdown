@@ -938,6 +938,32 @@ void PreviewPainter::paintFrontmatter(QPainter* p, const LayoutBlock& block,
     p->restore();
 }
 
+void PreviewPainter::extractBlockText(const LayoutBlock& block, QString& out)
+{
+    if (block.type == LayoutBlock::Frontmatter) {
+        out += block.frontmatterRawText;
+        if (!block.frontmatterRawText.isEmpty())
+            out += '\n';
+        return;
+    }
+    if (!block.inlineRuns.empty()) {
+        for (const auto& run : block.inlineRuns)
+            out += run.text;
+        out += '\n';
+    }
+    if (!block.codeText.isEmpty()) {
+        const QStringList lines = block.codeText.split('\n');
+        for (int i = 0; i < lines.size(); ++i) {
+            if (i == lines.size() - 1 && lines[i].isEmpty())
+                break;
+            out += lines[i];
+            out += '\n';
+        }
+    }
+    for (const auto& child : block.children)
+        extractBlockText(child, out);
+}
+
 void PreviewPainter::countBlockChars(const LayoutBlock& block)
 {
     if (block.placeholderOnly) {

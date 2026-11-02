@@ -63,6 +63,8 @@ public:
     void invalidateAll();
     // 单个 chunk 内容变化（如图片加载完成）：下次可视时重新测量
     void invalidate(size_t i);
+    // 缓存被淘汰后重新布局得到的实高（可能与记录不同）写回
+    void setMeasuredHeight(size_t i, double h) { if (i < m_lines.size()) applyMeasured(i, h); }
 
     // 拖动滚动条期间冻结估高校准，避免整体漂移
     void setCalibrationFrozen(bool f) { m_frozen = f; }

@@ -778,3 +778,6 @@ add_test(NAME DocumentLoaderTest COMMAND DocumentLoaderTest)
 
 add_executable(ScanBench viewer/ScanBench.cpp)
 target_link_libraries(ScanBench PRIVATE sm_viewer Qt5::Core)
+
+add_executable(ViewerDemo viewer/ViewerDemo.cpp)
+target_link_libraries(ViewerDemo PRIVATE sm_viewerwidget sm_viewer sm_preview sm_parser sm_core Qt5::Widgets)

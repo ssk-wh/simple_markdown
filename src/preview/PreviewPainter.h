@@ -80,6 +80,8 @@ public:
                     qreal chunkTopOnScreen, qreal viewportHeight, qreal viewportWidth);
     // 该 chunk 的字符总数（与 paintChunk 的计数规则一致，供复制/选区边界使用）
     int lastChunkCharCount() const { return m_charCounter; }
+    // 与 countBlockChars 同一套计数规则的纯文本抽取（反模式 B：两份代码必须成对修改）
+    static void extractBlockText(const LayoutBlock& block, QString& out);
 
     // 选区绘制
     void setSelection(int selStart, int selEnd);
