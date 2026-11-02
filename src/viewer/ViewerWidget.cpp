@@ -145,6 +145,8 @@ void ViewerWidget::loadFile(const QString& path)
     m_selA = m_selB = SelPos();
     m_segments.clear();
     clearSearchState();
+    m_marks.clear();
+    m_tocHighlighted.clear();
     m_pendingJumpLine = -1;
     m_loadTimer.start();
     emit tocEntriesChanged(m_tocEntries);
@@ -163,6 +165,7 @@ void ViewerWidget::reload()
 {
     if (m_path.isEmpty()) return;
     const int line = readingLine();
+    if (!m_marks.empty()) m_pendingMarks = serializeMarkings();   // 重载后按原文重新锚定
     const QString p = m_path;
     loadFile(p);
     m_pendingJumpLine = line;
@@ -218,6 +221,7 @@ void ViewerWidget::onBatches()
         else if (!m_tocTimer.isActive()) m_tocTimer.start();
     }
     if (m_loadDone) {
+        applyPendingMarks();
         emit loadStateChanged();
         if (!m_searchText.isEmpty() && isSearchBarVisible()) startSearch();   // 加载期间的搜索只覆盖了已读部分
     }
@@ -628,7 +632,6 @@ void ViewerWidget::paintEvent(QPaintEvent*)
     m_painter->beginFrame();
     p.translate(kPadX, 0);
     m_painter->setTargetLineHighlight(m_targetLine, m_targetOpacity);
-    m_painter->setHighlights({});
     m_painter->setSearchHighlights({});
     m_painter->setCurrentSearchHit(-1);
 
@@ -647,6 +650,12 @@ void ViewerWidget::paintEvent(QPaintEvent*)
             e = (static_cast<int>(v.index) == hi.chunk) ? hi.ch : kWholeChunk;
         }
         m_painter->setSelection(s, e);
+        {
+            QVector<QPair<int, int>> marks;
+            for (const auto& m : m_marks)
+                if (m.chunk == static_cast<int>(v.index)) marks.append(qMakePair(m.start, m.end));
+            m_painter->setHighlights(marks);
+        }
         if (!m_searchText.isEmpty() && !m_searchHits.empty()) {
             // 当前 chunk 的渲染文本命中（按需计算并缓存；只对可视 chunk 计算）
             QVector<QPair<int, int>> ranges;
@@ -928,7 +937,200 @@ void ViewerWidget::contextMenuEvent(QContextMenuEvent* e)
     connect(copy, &QAction::triggered, this, &ViewerWidget::copySelection);
     QAction* all = menu.addAction(tr("Select All"));
     connect(all, &QAction::triggered, this, &ViewerWidget::selectAll);
+    menu.addSeparator();
+    QAction* mark = menu.addAction(tr("Mark"));
+    mark->setEnabled(hasSelection());
+    connect(mark, &QAction::triggered, this, &ViewerWidget::addMarkFromSelection);
+    // 严格命中判定（反模式 C）：只有右键位置确实落在某个标记的文字上才允许「清除当前标记」
+    bool hitSeg = false;
+    bool overMark = false;
+    const SelPos at = hitTest(QPointF(e->pos()), true, &hitSeg);
+    if (hitSeg && at.valid()) {
+        for (const auto& m : m_marks)
+            if (m.chunk == at.chunk && at.ch >= m.start && at.ch < m.end) { overMark = true; break; }
+    }
+    QAction* clearCur = menu.addAction(tr("Clear Current Mark"));
+    clearCur->setEnabled(overMark);
+    const QPointF pos(e->pos());
+    connect(clearCur, &QAction::triggered, this, [this, pos]() { clearMarkAt(pos); });
+    QAction* clearAll = menu.addAction(tr("Clear All Marks"));
+    clearAll->setEnabled(!m_marks.empty());
+    connect(clearAll, &QAction::triggered, this, &ViewerWidget::clearAllMarks);
     menu.exec(e->globalPos());
+}
+
+// ---------------------------------------------------------------- 内容标记
+
+void ViewerWidget::addMarkRange(int chunk, int start, int end)
+{
+    if (end <= start) return;
+    // 与同块已有标记合并
+    for (auto it = m_marks.begin(); it != m_marks.end();) {
+        if (it->chunk == chunk && it->start <= end && it->end >= start) {
+            start = std::min(start, it->start);
+            end = std::max(end, it->end);
+            it = m_marks.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    Mark m;
+    m.chunk = chunk;
+    m.start = start;
+    m.end = end;
+    const QString text = chunkTextNoCache(static_cast<size_t>(chunk));
+    m.text = text.mid(start, end - start);
+    // 源行：布局块里按字符序号定位所属文本块
+    int line = static_cast<int>(m_chunks[static_cast<size_t>(chunk)].lineStart);
+    if (auto it2 = m_cache.find(static_cast<size_t>(chunk)); it2 != m_cache.end()) {
+        int counter = 0;
+        const int l = PreviewPainter::locateCharLine(it2->second.layout.root, start, counter);
+        if (l >= 0) line = l;
+    }
+    m.line = line;
+    m_marks.push_back(std::move(m));
+    std::sort(m_marks.begin(), m_marks.end(), [](const Mark& a, const Mark& b) {
+        return a.chunk != b.chunk ? a.chunk < b.chunk : a.start < b.start;
+    });
+}
+
+void ViewerWidget::addMarkFromSelection()
+{
+    if (!hasSelection()) return;
+    SelPos lo = m_selA, hi = m_selB;
+    if (hi < lo) std::swap(lo, hi);
+    for (int c = lo.chunk; c <= hi.chunk && c < static_cast<int>(m_chunks.size()); ++c) {
+        const int len = chunkTextNoCache(static_cast<size_t>(c)).size();
+        const int s = (c == lo.chunk) ? std::min(lo.ch, len) : 0;
+        const int e = (c == hi.chunk) ? std::min(hi.ch, len) : len;
+        addMarkRange(c, s, e);
+    }
+    updateTocHighlights();
+    viewport()->update();
+}
+
+void ViewerWidget::clearAllMarks()
+{
+    m_marks.clear();
+    updateTocHighlights();
+    viewport()->update();
+    emit positionChanged();   // 触发会话保存
+}
+
+void ViewerWidget::clearMarkAt(const QPointF& viewportPos)
+{
+    bool hit = false;
+    const SelPos at = hitTest(viewportPos, true, &hit);
+    if (!hit || !at.valid()) return;
+    for (auto it = m_marks.begin(); it != m_marks.end(); ++it) {
+        if (it->chunk == at.chunk && at.ch >= it->start && at.ch < it->end) {
+            m_marks.erase(it);
+            break;
+        }
+    }
+    updateTocHighlights();
+    viewport()->update();
+    emit positionChanged();
+}
+
+void ViewerWidget::clearMarksInSection(int tocIndex)
+{
+    if (tocIndex < 0 || tocIndex >= static_cast<int>(m_headings.size())) return;
+    const int level = m_headings[static_cast<size_t>(tocIndex)].level;
+    const int from = static_cast<int>(m_headings[static_cast<size_t>(tocIndex)].line);
+    int to = INT_MAX;
+    for (size_t i = static_cast<size_t>(tocIndex) + 1; i < m_headings.size(); ++i)
+        if (m_headings[i].level <= level) { to = static_cast<int>(m_headings[i].line); break; }
+    for (auto it = m_marks.begin(); it != m_marks.end();) {
+        if (it->line >= from && it->line < to) it = m_marks.erase(it);
+        else ++it;
+    }
+    updateTocHighlights();
+    viewport()->update();
+    emit positionChanged();
+}
+
+void ViewerWidget::updateTocHighlights()
+{
+    QSet<int> out;
+    // 每个标记归属「源行 ≤ 标记行的最后一个标题」所在章节；父章节同样高亮（与旧行为一致：范围有交集即高亮）
+    for (const auto& m : m_marks) {
+        size_t lo = 0, hi = m_headings.size();
+        while (lo < hi) {
+            const size_t mid = (lo + hi) / 2;
+            if (static_cast<int>(m_headings[mid].line) <= m.line) lo = mid + 1; else hi = mid;
+        }
+        if (lo == 0) continue;
+        int idx = static_cast<int>(lo) - 1;
+        out.insert(idx);
+        int level = m_headings[static_cast<size_t>(idx)].level;
+        for (int j = idx - 1; j >= 0 && level > 1; --j) {
+            if (m_headings[static_cast<size_t>(j)].level < level) {
+                out.insert(j);
+                level = m_headings[static_cast<size_t>(j)].level;
+            }
+        }
+    }
+    if (out != m_tocHighlighted) {
+        m_tocHighlighted = out;
+        emit tocHighlightChanged(out);
+    }
+}
+
+// 格式（UTF-8 文本）：首行 "SMMK2"；其后每行 "源行<TAB>起点<TAB>终点<TAB>原文"（原文中的制表/换行已替换为空格）
+QByteArray ViewerWidget::serializeMarkings() const
+{
+    if (m_marks.empty()) return QByteArray();
+    QByteArray out = "SMMK2\n";
+    for (const auto& m : m_marks) {
+        QString t = m.text;
+        t.replace(QChar('\t'), QChar(' '));
+        t.replace(QChar('\n'), QChar(' '));
+        out += QByteArray::number(m.line) + '\t' + QByteArray::number(m.start) + '\t' +
+               QByteArray::number(m.end) + '\t' + t.toUtf8() + '\n';
+    }
+    return out;
+}
+
+void ViewerWidget::deserializeMarkings(const QByteArray& data)
+{
+    m_pendingMarks = data;
+    if (m_loadDone) applyPendingMarks();   // 已加载完：立即应用；否则等加载完成
+}
+
+void ViewerWidget::applyPendingMarks()
+{
+    if (m_pendingMarks.isEmpty()) return;
+    const QByteArray data = m_pendingMarks;
+    m_pendingMarks.clear();
+    if (!data.startsWith("SMMK2\n") || m_chunks.empty()) return;
+    const QList<QByteArray> lines = data.split('\n');
+    int applied = 0;
+    for (int i = 1; i < lines.size() && applied < 500; ++i) {
+        const QList<QByteArray> f = lines[i].split('\t');
+        if (f.size() < 4) continue;
+        const int line = f[0].toInt();
+        int start = f[1].toInt();
+        int end = f[2].toInt();
+        const QString text = QString::fromUtf8(f[3]);
+        const int chunk = chunkForLine(line);
+        if (chunk < 0 || end <= start) continue;
+        // 校验原文：偏移处文字一致则直接用；否则在该块（及相邻块）里按原文重新查找；都找不到就丢弃
+        bool ok = false;
+        for (int c = chunk; c <= std::min(chunk + 1, static_cast<int>(m_chunks.size()) - 1) && !ok; ++c) {
+            const QString ct = chunkTextNoCache(static_cast<size_t>(c));
+            if (c == chunk && ct.mid(start, end - start) == text) {
+                addMarkRange(c, start, end);
+                ok = true;
+            } else if (!text.isEmpty()) {
+                const int p = ct.indexOf(text);
+                if (p >= 0) { addMarkRange(c, p, p + text.size()); ok = true; }
+            }
+        }
+        if (ok) ++applied;
+    }
+    updateTocHighlights();
+    viewport()->update();
 }
 
 // ---------------------------------------------------------------- 查找

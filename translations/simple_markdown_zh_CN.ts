@@ -1302,5 +1302,17 @@ Open the crash reports folder?</source>
         <source>Loading…</source>
         <translation>正在加载…</translation>
     </message>
+    <message>
+        <source>Mark</source>
+        <translation>标记</translation>
+    </message>
+    <message>
+        <source>Clear Current Mark</source>
+        <translation>清除当前标记</translation>
+    </message>
+    <message>
+        <source>Clear All Marks</source>
+        <translation>清除全部标记</translation>
+    </message>
 </context>
 </TS>

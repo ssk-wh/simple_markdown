@@ -332,3 +332,74 @@ TEST(ViewerWidgetTest, T14_EmptyAndSingleLineFiles)
         v.scrollToTop();
     }
 }
+
+// ---- 内容标记（Spec 模块-viewer/06）----
+
+TEST(ViewerWidgetTest, T15_MarkSelectionPersistsAcrossSerializeAndReload)
+{
+    QTemporaryDir dir;
+    ViewerWidget v;
+    v.resize(900, 600);
+    v.show();
+    const QString p = writeTmp(dir, "m.md", makeDoc(40));
+    loadAndWait(v, p);
+    ASSERT_GE(v.scrollModel().count(), 3u);
+    // 在第 2 个 chunk 内选一段并标记
+    v.selectChunkRangeForTest(1, 0, 10);
+    v.addMarkFromSelection();
+    EXPECT_EQ(v.markCountForTest(), 1);
+    EXPECT_FALSE(v.tocHighlightedIndices().isEmpty());
+    const QByteArray data = v.serializeMarkings();
+    EXPECT_TRUE(data.startsWith("SMMK2\n"));
+
+    // 全新查看器加载同一文件，反序列化后标记应被恢复
+    ViewerWidget v2;
+    v2.resize(900, 600);
+    v2.show();
+    v2.deserializeMarkings(data);              // 加载前先注入：加载完成后兑现
+    loadAndWait(v2, p);
+    QApplication::processEvents();
+    EXPECT_EQ(v2.markCountForTest(), 1);
+    EXPECT_EQ(v2.tocHighlightedIndices(), v.tocHighlightedIndices());
+}
+
+TEST(ViewerWidgetTest, T16_MarkDroppedWhenTextNoLongerExists)
+{
+    QTemporaryDir dir;
+    ViewerWidget v;
+    v.resize(900, 600);
+    v.show();
+    const QString p = writeTmp(dir, "m.md", makeDoc(40));
+    loadAndWait(v, p);
+    v.selectChunkRangeForTest(1, 0, 10);
+    v.addMarkFromSelection();
+    const QByteArray data = v.serializeMarkings();
+
+    // 文件内容完全改变：原文不存在 → 标记被丢弃，不崩溃
+    const QString p2 = writeTmp(dir, "m2.md", "# Totally different\n\nnothing here\n");
+    ViewerWidget v2;
+    v2.resize(900, 600);
+    v2.deserializeMarkings(data);
+    loadAndWait(v2, p2);
+    EXPECT_EQ(v2.markCountForTest(), 0);
+}
+
+TEST(ViewerWidgetTest, T17_ClearMarksInSectionAndAll)
+{
+    QTemporaryDir dir;
+    ViewerWidget v;
+    v.resize(900, 600);
+    v.show();
+    loadAndWait(v, writeTmp(dir, "m.md", makeDoc(40)));
+    v.selectChunkRangeForTest(1, 0, 10);
+    v.addMarkFromSelection();
+    v.selectChunkRangeForTest(5, 0, 10);
+    v.addMarkFromSelection();
+    EXPECT_EQ(v.markCountForTest(), 2);
+    const int first = *std::min_element(v.tocHighlightedIndices().begin(), v.tocHighlightedIndices().end());
+    v.clearMarksInSection(first);
+    EXPECT_LE(v.markCountForTest(), 1);
+    v.clearAllMarks();
+    EXPECT_EQ(v.markCountForTest(), 0);
+    EXPECT_TRUE(v.tocHighlightedIndices().isEmpty());
+}

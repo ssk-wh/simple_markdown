@@ -80,6 +80,19 @@ public:
     void copySelection();
     QString selectedText();
 
+    // ---- 内容标记（荧光笔，Spec 模块-viewer/06）----
+    void addMarkFromSelection();
+    void clearAllMarks();
+    void clearMarkAt(const QPointF& viewportPos);
+    void clearMarksInSection(int tocIndex);
+    bool hasMarks() const { return !m_marks.empty(); }
+    // 会话持久化：文本格式，按「块源行 + 块内偏移 + 原文」锚定，重载/恢复时校验原文
+    QByteArray serializeMarkings() const;
+    void deserializeMarkings(const QByteArray& data);
+    const QSet<int>& tocHighlightedIndices() const { return m_tocHighlighted; }
+    int markCountForTest() const { return static_cast<int>(m_marks.size()); }
+    void selectChunkRangeForTest(int chunk, int a, int b) { m_selA = SelPos{chunk, a}; m_selB = SelPos{chunk, b}; }
+
     // ---- 查找（Spec 模块-viewer/05）----
     void showSearchBar();
     void hideSearchBar();
@@ -114,6 +127,7 @@ signals:
     void loadStateChanged();          // 开始/完成/失败
     void firstContentReady();         // 首屏内容已可绘制
     void linkClicked(const QString& url);
+    void tocHighlightChanged(const QSet<int>& indices);   // 含标记的章节（目录面板高亮）
     void positionChanged();           // 滚动位置变化（调用方自行防抖保存）
 
 protected:
@@ -231,6 +245,21 @@ private:
     QTimer m_autoScrollTimer;
     QPoint m_lastMousePos;
     QString m_hoverLink;
+
+    // 内容标记
+    struct Mark {
+        int chunk = 0;
+        int start = 0;      // 块内渲染文本字符序号 [start, end)
+        int end = 0;
+        int line = 0;       // 所属文本块的源起始行（持久化锚点、目录章节归属）
+        QString text;       // 原文（恢复时校验）
+    };
+    std::vector<Mark> m_marks;
+    QByteArray m_pendingMarks;
+    QSet<int> m_tocHighlighted;
+    void applyPendingMarks();
+    void updateTocHighlights();
+    void addMarkRange(int chunk, int start, int end);
 
     // 查找（Spec 模块-viewer/05）
     SearchBar* m_searchBar = nullptr;

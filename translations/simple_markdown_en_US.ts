@@ -1283,5 +1283,17 @@ Open the crash reports folder?</translation>
         <source>Loading…</source>
         <translation>Loading…</translation>
     </message>
+    <message>
+        <source>Mark</source>
+        <translation>Mark</translation>
+    </message>
+    <message>
+        <source>Clear Current Mark</source>
+        <translation>Clear Current Mark</translation>
+    </message>
+    <message>
+        <source>Clear All Marks</source>
+        <translation>Clear All Marks</translation>
+    </message>
 </context>
 </TS>

@@ -228,6 +228,10 @@ MainWindow::MainWindow(QWidget* parent)
     // 章节跳转仍可通过右侧目录面板点击实现（共用 smoothScrollToSourceLine 路径，
     // 用户已接受其潜在偏差）。
 
+    connect(m_tocPanel, &TocPanel::clearSectionMarksRequested, this, [this](int entryIndex) {
+        if (auto* tab = currentTab()) tab->viewer->clearMarksInSection(entryIndex);
+    });
+
     // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-AUTO
     // TocPanel 宽度自适应：每次 setEntries 后重算偏好宽度，应用到 mainSplitter
     connect(m_tocPanel, &TocPanel::preferredWidthChanged,
@@ -773,7 +777,7 @@ void MainWindow::restoreSession(const QString& requestedFile)
     QSettings s;
     const bool restore = s.value("session/restoreLastFile", true).toBool();
 
-    struct TabState { QString file; int line; };
+    struct TabState { QString file; int line; QByteArray markings; };
     QVector<TabState> states;
     if (restore) {
         const int count = s.beginReadArray("session/tabs");
@@ -781,7 +785,7 @@ void MainWindow::restoreSession(const QString& requestedFile)
             s.setArrayIndex(i);
             const QString fp = s.value("file").toString();
             if (!fp.isEmpty() && QFileInfo::exists(fp))
-                states.append({fp, s.value("viewLine", 0).toInt()});
+                states.append({fp, s.value("viewLine", 0).toInt(), s.value("markings").toByteArray()});
         }
         s.endArray();
     }
@@ -796,6 +800,7 @@ void MainWindow::restoreSession(const QString& requestedFile)
             tab.filePath = QFileInfo(st.file).absoluteFilePath();
             tab.lazyPending = true;
             tab.pendingLine = st.line;
+            tab.viewer->deserializeMarkings(st.markings);
             const int idx = addPage(tab.viewer, QFileInfo(st.file).fileName());
             m_tabs.append(tab);
             setTabCloseButton(idx);
@@ -803,6 +808,8 @@ void MainWindow::restoreSession(const QString& requestedFile)
         }
         openFile(requestedFile);
         if (reqLine > 0 && !m_tabs.isEmpty()) m_tabs.last().viewer->scrollToSourceLine(reqLine, false);
+        for (const auto& st : states)
+            if (st.file == reqAbs && !m_tabs.isEmpty()) m_tabs.last().viewer->deserializeMarkings(st.markings);
         reapplyTheme();
         return;
     }
@@ -817,11 +824,13 @@ void MainWindow::restoreSession(const QString& requestedFile)
             if (i == activeTab) {
                 openFile(st.file);
                 if (st.line > 0 && !m_tabs.isEmpty()) m_tabs.last().viewer->scrollToSourceLine(st.line, false);
+                if (!m_tabs.isEmpty()) m_tabs.last().viewer->deserializeMarkings(st.markings);
             } else {
                 TabData tab = createTab();
                 tab.filePath = QFileInfo(st.file).absoluteFilePath();
                 tab.lazyPending = true;
                 tab.pendingLine = st.line;
+                tab.viewer->deserializeMarkings(st.markings);
                 const int idx = addPage(tab.viewer, QFileInfo(st.file).fileName());
                 m_tabs.append(tab);
                 setTabCloseButton(idx);
@@ -900,6 +909,13 @@ MainWindow::TabData MainWindow::createTab()
             this, [this, v = tab.viewer](const QVector<TocEntry>& entries) {
         if (currentTab() && currentTab()->viewer == v)
             m_tocPanel->setEntries(entries);
+    });
+
+    // 含标记的章节 → 目录面板高亮
+    connect(tab.viewer, &viewer::ViewerWidget::tocHighlightChanged,
+            this, [this, v = tab.viewer](const QSet<int>& indices) {
+        if (currentTab() && currentTab()->viewer == v)
+            m_tocPanel->setHighlightedEntries(indices);
     });
 
     // 链接（Ctrl+点击）
@@ -1491,6 +1507,7 @@ void MainWindow::onTabChanged(int index)
         // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-COLLAPSE：先 fileKey 再 entries
         m_tocPanel->setCurrentFileKey(fp);
         m_tocPanel->setEntries(v->tocEntries());
+        m_tocPanel->setHighlightedEntries(v->tocHighlightedIndices());
         m_folderPanel->selectFile(fp);
 
         // 切换到有待重载标记的 tab：静默重载并保持阅读位置
@@ -1869,6 +1886,10 @@ void MainWindow::saveSettings()
         // 懒加载未激活的 tab 沿用上次保存的行号
         s.setValue("viewLine", m_tabs[i].lazyPending ? m_tabs[i].pendingLine
                                                       : m_tabs[i].viewer->readingLine());
+        // Spec: specs/模块-viewer/06-内容标记.md —— 标记随会话持久化（按源行+原文锚定）
+        const QByteArray markings = m_tabs[i].viewer->serializeMarkings();
+        if (!markings.isEmpty()) s.setValue("markings", markings);
+        else s.remove("markings");
     }
     s.endArray();
 }
