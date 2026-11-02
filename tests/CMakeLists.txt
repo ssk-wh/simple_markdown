@@ -768,3 +768,13 @@ add_executable(ScrollModelTest viewer/ScrollModelTest.cpp)
 target_include_directories(ScrollModelTest PRIVATE ${CMAKE_SOURCE_DIR}/src/viewer)
 target_link_libraries(ScrollModelTest PRIVATE sm_viewer Qt5::Core gtest gtest_main)
 add_test(NAME ScrollModelTest COMMAND ScrollModelTest)
+
+# --- DocumentLoaderTest ---
+# Spec: specs/模块-viewer/03-异步加载.md  验收：T1 ~ T9
+add_executable(DocumentLoaderTest viewer/DocumentLoaderTest.cpp)
+target_include_directories(DocumentLoaderTest PRIVATE ${CMAKE_SOURCE_DIR}/src/viewer)
+target_link_libraries(DocumentLoaderTest PRIVATE sm_viewer Qt5::Core gtest gtest_main)
+add_test(NAME DocumentLoaderTest COMMAND DocumentLoaderTest)
+
+add_executable(ScanBench viewer/ScanBench.cpp)
+target_link_libraries(ScanBench PRIVATE sm_viewer Qt5::Core)

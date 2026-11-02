@@ -97,6 +97,16 @@ public:
     bool updateMetrics(QPaintDevice* device);  // 返回 true 表示度量有变化
     void setTheme(const Theme& theme);
     void buildFromAst(const std::shared_ptr<AstNode>& root);
+
+    // [Spec 模块-viewer/03 INV-CHUNK-LAYOUT-STATELESS] 分块布局入口：不触碰 m_root / 映射缓存，
+    // 把一个 chunk 的 Document AST 独立布局为 root（子块 y 相对 chunk 顶部），
+    // height 含末尾 12px 块间距，使相邻 chunk 的拼接间距与整篇布局一致。
+    struct ChunkLayoutResult {
+        LayoutBlock root;
+        qreal height = 0;
+        std::vector<QString> imageUrls;  // 该 chunk 引用的图片，供 imageReady 精准失效
+    };
+    ChunkLayoutResult layoutChunk(const AstNode& docRoot, bool isFirstChunk);
     qreal totalHeight() const;
     const LayoutBlock& rootBlock() const;
 

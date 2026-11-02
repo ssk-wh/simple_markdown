@@ -461,6 +461,13 @@ void ChunkScanner::processLine(const char* data, uint64_t ls, uint64_t le, uint6
 
 AssembledChunk ChunkScanner::assemble(const char* data, const Chunk& c) const
 {
+    return assembleChunk(data, c, m_prologues, m_refDefs);
+}
+
+AssembledChunk ChunkScanner::assembleChunk(const char* data, const Chunk& c,
+                                           const std::vector<std::string>& m_prologues,
+                                           const QByteArray& m_refDefs)
+{
     AssembledChunk out;
     QByteArray& t = out.text;
     t.reserve(static_cast<int>(c.byteEnd - c.byteStart) + m_refDefs.size() + 64);
