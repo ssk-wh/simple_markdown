@@ -1,3 +1,5 @@
+> **ℹ 2.0.0 迁移提示**：文中的 `PreviewWidget` / `EditorWidget` / `ScrollSync` / `PieceTable` / `ParseScheduler` 已由 `viewer::ViewerWidget` 及 `specs/模块-viewer/` 取代；涉及这些类的条款仅作历史参考，不变量语义以 viewer Spec 与代码为准。
+
 # 模块：core（核心数据模型）
 
 ## 职责
