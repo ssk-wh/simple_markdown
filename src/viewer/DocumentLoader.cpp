@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <new>
 
 namespace viewer {
 
@@ -133,6 +134,7 @@ void runLoad(const std::shared_ptr<LoadState>& stp, ScanOptions opt,
     auto fail = [&](const QString& msg) {
         pub.publish(scanner, 0, true, msg, notify);
     };
+    try {
 
     QFile f(st.path);
     if (!f.open(QIODevice::ReadOnly)) {
@@ -198,6 +200,12 @@ void runLoad(const std::shared_ptr<LoadState>& stp, ScanOptions opt,
     // 文件被截断时 got < size：以实际读到的长度为准
     scanner.scan(buf, got, true);
     pub.publish(scanner, got, true, QString(), notify);
+    } catch (const std::bad_alloc&) {
+        // 1GB 级文件或转码（GBK→UTF-16→UTF-8 会放大内存）时分配失败：给出提示，不让进程 terminate
+        fail(QStringLiteral("内存不足，无法打开该文件"));
+    } catch (...) {
+        fail(QStringLiteral("读取文件时发生未知错误"));
+    }
 }
 
 }  // namespace

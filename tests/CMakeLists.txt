@@ -64,45 +64,11 @@ add_test(NAME ThemeLoaderTest COMMAND ThemeLoaderTest)
 # Spec: specs/模块-app/12-主题插件系统.md
 # 回归：主题切换后必须清 highlight cache，否则旧主题 token format 残留
 qt5_add_resources(THEME_CACHE_RES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
-add_executable(SyntaxHighlighterThemeCacheTest
-    editor/SyntaxHighlighterThemeCacheTest.cpp
-    ${THEME_CACHE_RES}
-)
-target_include_directories(SyntaxHighlighterThemeCacheTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/editor
-)
-target_link_libraries(SyntaxHighlighterThemeCacheTest PRIVATE
-    sm_editor
-    sm_core
-    Qt5::Core
-    Qt5::Gui
-    gtest
-)
-add_test(NAME SyntaxHighlighterThemeCacheTest COMMAND SyntaxHighlighterThemeCacheTest)
 
 # --- SyntaxHighlighterTokensTest ---
 # Spec: specs/模块-editor/README.md
 # 验收：T-STRIKE-1, T-BOLDITALIC-1, T-PRIORITY-1
 qt5_add_resources(TOKENS_TEST_RES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
-add_executable(SyntaxHighlighterTokensTest
-    editor/SyntaxHighlighterTokensTest.cpp
-    ${TOKENS_TEST_RES}
-)
-target_include_directories(SyntaxHighlighterTokensTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/editor
-)
-target_link_libraries(SyntaxHighlighterTokensTest PRIVATE
-    sm_editor
-    sm_core
-    Qt5::Core
-    Qt5::Gui
-    gtest
-)
-add_test(NAME SyntaxHighlighterTokensTest COMMAND SyntaxHighlighterTokensTest)
 
 # --- TocPanelTest ---
 # Spec: specs/模块-preview/07-TOC面板.md
@@ -207,32 +173,6 @@ target_link_libraries(PreviewLayoutListSpacingTest PRIVATE
 
 add_test(NAME PreviewLayoutListSpacingTest COMMAND PreviewLayoutListSpacingTest)
 
-# --- PreviewMarkingPersistenceTest ---
-# Spec: specs/模块-preview/08-内容标记.md INV-5、§4 接口、§8.3
-# 验收：T-PERSIST-1/2/3/4（标记会话级序列化往返、越界丢弃、损坏字节流不崩溃、空数据合法格式）
-add_executable(PreviewMarkingPersistenceTest
-    preview/PreviewMarkingPersistenceTest.cpp
-)
-
-target_include_directories(PreviewMarkingPersistenceTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/parser
-    ${CMAKE_SOURCE_DIR}/src/preview
-)
-
-target_link_libraries(PreviewMarkingPersistenceTest PRIVATE
-    sm_preview
-    sm_parser
-    sm_core
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Test
-    gtest
-)
-
-add_test(NAME PreviewMarkingPersistenceTest COMMAND PreviewMarkingPersistenceTest)
 
 # --- PreviewRenderBenchmark ---
 # Plan: plans/归档/2026-05-06-大文件渲染性能基线脚本.md
@@ -348,21 +288,11 @@ target_link_libraries(PreviewSelectionHeightTest PRIVATE
 
 add_test(NAME PreviewSelectionHeightTest COMMAND PreviewSelectionHeightTest)
 
-# --- PreviewDoubleClickCellTest ---
-# Spec: specs/模块-preview/12-选区与拖动.md INV-3/INV-4
-# Bug: plans/2026-05-13-预览区双击选词与复制粘贴异常.md（表格单元格双击只选一个字母/错位）
-add_executable(PreviewDoubleClickCellTest preview/PreviewDoubleClickCellTest.cpp)
-target_include_directories(PreviewDoubleClickCellTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/parser ${CMAKE_SOURCE_DIR}/src/preview)
-target_link_libraries(PreviewDoubleClickCellTest PRIVATE
-    sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets gtest gtest_main)
-add_test(NAME PreviewDoubleClickCellTest COMMAND PreviewDoubleClickCellTest)
 
 # --- PreviewSelectionDragTest ---
 # Spec: specs/模块-preview/12-选区与拖动.md INV-1（选区终点 snap：同行 dx 优先 → 2D fallback）
 # Bug: 归档/表格行右侧空白拖选扩散整段（2026-05-09 报告 / 2026-05-11 修复）
-# 验收：T-1/T-2/T-3（直接调 PreviewWidget::textIndexForSegments 真实算法）
+# 验收：T-1/T-2/T-3（直接调 TextHitTest::textIndexForSegments 真实算法）
 add_executable(PreviewSelectionDragTest preview/PreviewSelectionDragTest.cpp)
 target_include_directories(PreviewSelectionDragTest PRIVATE
     ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
@@ -382,61 +312,7 @@ target_link_libraries(PreviewBrLineBreakTest PRIVATE
     sm_preview sm_parser sm_core Qt5::Core Qt5::Gui Qt5::Widgets gtest gtest_main)
 add_test(NAME PreviewBrLineBreakTest COMMAND PreviewBrLineBreakTest)
 
-# --- PreviewCopyConsistencyTest ---
-# Spec: specs/模块-preview/13-复制语义.md
-# Bug: plans/2026-06-15-渲染区单元格复制粘贴内容不一致回归.md
-# 验收：T-COPY-CONSIST-1/2（选区索引↔复制源 m_plainText 字符流逐字节一致，含视口剪裁）
-add_executable(PreviewCopyConsistencyTest
-    preview/PreviewCopyConsistencyTest.cpp
-)
 
-target_include_directories(PreviewCopyConsistencyTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/parser
-    ${CMAKE_SOURCE_DIR}/src/preview
-)
-
-target_link_libraries(PreviewCopyConsistencyTest PRIVATE
-    sm_preview
-    sm_parser
-    sm_core
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    gtest
-    gtest_main
-)
-
-add_test(NAME PreviewCopyConsistencyTest COMMAND PreviewCopyConsistencyTest)
-
-# --- PreviewTocJumpTest ---
-# Spec: specs/模块-preview/07-TOC面板.md INV-TOC-JUMP-CORRECT
-# Bug: plans/2026-06-15-渲染区目录点击章节跳转位置错误.md
-# 验收：T-TOC-JUMP-1/2（视口剪裁下 TOC 跳转自校正收敛到一致不动点 → 落位准确）
-add_executable(PreviewTocJumpTest
-    preview/PreviewTocJumpTest.cpp
-)
-
-target_include_directories(PreviewTocJumpTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/parser
-    ${CMAKE_SOURCE_DIR}/src/preview
-)
-
-target_link_libraries(PreviewTocJumpTest PRIVATE
-    sm_preview
-    sm_parser
-    sm_core
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    gtest
-    gtest_main
-)
-
-add_test(NAME PreviewTocJumpTest COMMAND PreviewTocJumpTest)
 
 # --- SnapSplitterDragFinishedTest ---
 # Spec: specs/模块-app/13-分隔条吸附刻度.md
@@ -542,24 +418,6 @@ target_link_libraries(FolderPanelResourceTest PRIVATE
     sm_core Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Test gtest gtest_main)
 add_test(NAME FolderPanelResourceTest COMMAND FolderPanelResourceTest)
 
-# --- LazyWorkerThreadTest ---
-# Spec: specs/横切关注点/10-线程模型.md INV-8
-# 验收：T-5/T-6
-add_executable(LazyWorkerThreadTest
-    app/LazyWorkerThreadTest.cpp
-)
-target_include_directories(LazyWorkerThreadTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/app
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/editor
-    ${CMAKE_SOURCE_DIR}/src/parser
-    ${CMAKE_SOURCE_DIR}/src/preview
-)
-target_link_libraries(LazyWorkerThreadTest PRIVATE
-    sm_editor sm_preview sm_parser sm_core
-    Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Test gtest gtest_main)
-add_test(NAME LazyWorkerThreadTest COMMAND LazyWorkerThreadTest)
 
 # --- ReloadDialogI18nTest ---
 # Spec: specs/横切关注点/60-国际化.md INV-QMSGBOX-TR（标准按钮用自定义 tr 文案）
@@ -567,112 +425,11 @@ add_test(NAME LazyWorkerThreadTest COMMAND LazyWorkerThreadTest)
 # 验收：T-7（中文 locale 下「文件外部修改」弹窗按钮显示中文）
 # 需把项目 qrc 编进测试 exe 才能访问 :/translations/simple_markdown_zh_CN.qm
 qt5_add_resources(RELOAD_I18N_TEST_RES ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
-add_executable(ReloadDialogI18nTest
-    app/ReloadDialogI18nTest.cpp
-    ${RELOAD_I18N_TEST_RES}
-)
-target_include_directories(ReloadDialogI18nTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
-target_link_libraries(ReloadDialogI18nTest PRIVATE
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    gtest
-    gtest_main
-)
-add_test(NAME ReloadDialogI18nTest COMMAND ReloadDialogI18nTest)
 
-# --- UndoStackTest ---
-# Spec: specs/模块-core/README.md
-# 验收：T-US-1 ~ T-US-11（撤销栈核心契约 + 合并策略 + 保存点）
-add_executable(UndoStackTest
-    core/UndoStackTest.cpp
-)
-target_include_directories(UndoStackTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-)
-target_link_libraries(UndoStackTest PRIVATE
-    sm_core
-    Qt5::Core
-    gtest
-    gtest_main
-)
-add_test(NAME UndoStackTest COMMAND UndoStackTest)
 
-# --- PieceTableTest ---
-# Spec: specs/模块-core/README.md
-# 验收：T-PT-1 ~ T-PT-17（文本存储核心契约 + 边界 + 混合操作）
-add_executable(PieceTableTest
-    core/PieceTableTest.cpp
-)
-target_include_directories(PieceTableTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-)
-target_link_libraries(PieceTableTest PRIVATE
-    sm_core
-    Qt5::Core
-    gtest
-    gtest_main
-)
-add_test(NAME PieceTableTest COMMAND PieceTableTest)
 
-# --- LineIndexTest ---
-# Spec: specs/模块-core/README.md
-# 验收：T-LI-1 ~ T-LI-2（行索引骨架默认行为锁定）
-add_executable(LineIndexTest
-    core/LineIndexTest.cpp
-)
-target_include_directories(LineIndexTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-)
-target_link_libraries(LineIndexTest PRIVATE
-    sm_core
-    Qt5::Core
-    gtest
-    gtest_main
-)
-add_test(NAME LineIndexTest COMMAND LineIndexTest)
 
-# --- SelectionTest ---
-# Spec: specs/模块-core/README.md
-# 验收：T-SEL-1 ~ T-SEL-8（选区模型核心契约）
-add_executable(SelectionTest
-    core/SelectionTest.cpp
-)
-target_include_directories(SelectionTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-)
-target_link_libraries(SelectionTest PRIVATE
-    sm_core
-    Qt5::Core
-    gtest
-    gtest_main
-)
-add_test(NAME SelectionTest COMMAND SelectionTest)
 
-# --- DocumentTest ---
-# Spec: specs/模块-core/README.md
-# 验收：T-DOC-1 ~ T-DOC-12（文档模型核心契约，不含文件 I/O）
-add_executable(DocumentTest
-    core/DocumentTest.cpp
-)
-target_include_directories(DocumentTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-)
-target_link_libraries(DocumentTest PRIVATE
-    sm_core
-    Qt5::Core
-    Qt5::Test
-    gtest
-    gtest_main
-)
-add_test(NAME DocumentTest COMMAND DocumentTest)
 
 # --- MarkdownAstTest ---
 # Spec: specs/模块-parser/README.md
@@ -692,42 +449,7 @@ target_link_libraries(MarkdownAstTest PRIVATE
 )
 add_test(NAME MarkdownAstTest COMMAND MarkdownAstTest)
 
-# --- SearchWorkerTest ---
-# Spec: specs/模块-editor/README.md
-# 验收：T-SW-1 ~ T-SW-9（搜索结果正确性：普通/全词/正则/大小写/边界）
-add_executable(SearchWorkerTest
-    editor/SearchWorkerTest.cpp
-)
-target_include_directories(SearchWorkerTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/editor
-)
-target_link_libraries(SearchWorkerTest PRIVATE
-    sm_editor
-    Qt5::Core
-    Qt5::Test
-    gtest
-    gtest_main
-)
-add_test(NAME SearchWorkerTest COMMAND SearchWorkerTest)
 
-# --- MappedFileTest ---
-# Spec: specs/模块-core/README.md
-# 验收：T-MF-1 ~ T-MF-7（文件内存映射：打开/读取/移动/关闭/重复打开/边界）
-add_executable(MappedFileTest
-    core/MappedFileTest.cpp
-)
-target_include_directories(MappedFileTest PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/core
-)
-target_link_libraries(MappedFileTest PRIVATE
-    sm_core
-    Qt5::Core
-    gtest
-    gtest_main
-)
-add_test(NAME MappedFileTest COMMAND MappedFileTest)
 
 # --- CodeBlockRendererTest ---
 # Spec: specs/模块-preview/02-布局引擎.md

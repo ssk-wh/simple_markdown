@@ -68,6 +68,8 @@ public:
     void smoothScrollToSourceLine(int line) { scrollToSourceLine(line, true); }
     // 当前视口顶部对应的源文件 0 基行号（会话恢复/记住阅读位置用）
     int topSourceLine() const;
+    // 会话持久化用：加载未完成时返回待恢复行，否则等于 topSourceLine()
+    int readingLine() const;
     void scrollToTop();
     void scrollToBottom();
 
@@ -197,6 +199,7 @@ private:
     quint64 m_useTick = 0;
     bool m_inPrepare = false;
     bool m_inPaint = false;
+    double m_barScale = 1.0;   // 滚动条单位 = m_barScale 像素（文档总高超过 ~1e9 像素时才 >1）
     bool m_syncing = false;
     qreal m_layoutWidth = -1;
     qreal m_lastDpr = 0;
@@ -244,7 +247,9 @@ private:
     void startSearch();
     void onSearchFinished();
     void gotoSearchHit(int hitIndex, int direction);
-    const std::vector<std::pair<int, int>>& renderedHitsFor(size_t chunk);
+    const std::vector<std::pair<int, int>>& renderedHitsFor(size_t chunk);   // 可能触发布局：仅限 prepare/导航路径
+    const std::vector<std::pair<int, int>>* renderedHitsCached(size_t chunk) const;   // 只读，paintEvent 使用
+    QString chunkTextNoCache(size_t chunkIndex);   // 复制用：不写布局缓存、不改滚动模型
     void clearSearchState();
     bool searchCaseSensitive() const;
 };

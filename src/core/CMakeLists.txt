@@ -1,10 +1,4 @@
 add_library(sm_core STATIC
-    MappedFile.h MappedFile.cpp
-    PieceTable.h PieceTable.cpp
-    LineIndex.h LineIndex.cpp
-    UndoStack.h UndoStack.cpp
-    Selection.h Selection.cpp
-    Document.h Document.cpp
     RecentFiles.h RecentFiles.cpp
     Theme.h Theme.cpp
     ThemeLoader.h ThemeLoader.cpp

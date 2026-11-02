@@ -25,7 +25,7 @@
 #include "MarkdownAst.h"
 #include "PerfProbe.h"
 #include "PreviewPainter.h"
-#include "PreviewWidget.h"  // 复用 textIndexForSegments / findWordBoundaryFor 两个纯函数
+#include "TextHitTest.h"
 #include "SearchBar.h"
 
 namespace viewer {
@@ -153,10 +153,16 @@ void ViewerWidget::loadFile(const QString& path)
     viewport()->update();
 }
 
+int ViewerWidget::readingLine() const
+{
+    // 加载尚未完成时，待恢复的位置才是「真正的阅读位置」（此时 topSourceLine 恒为 0）
+    return m_pendingJumpLine >= 0 ? m_pendingJumpLine : topSourceLine();
+}
+
 void ViewerWidget::reload()
 {
     if (m_path.isEmpty()) return;
-    const int line = topSourceLine();
+    const int line = readingLine();
     const QString p = m_path;
     loadFile(p);
     m_pendingJumpLine = line;
@@ -211,7 +217,10 @@ void ViewerWidget::onBatches()
         if (m_loadDone) { m_tocTimer.stop(); emit tocEntriesChanged(m_tocEntries); }
         else if (!m_tocTimer.isActive()) m_tocTimer.start();
     }
-    if (m_loadDone) emit loadStateChanged();
+    if (m_loadDone) {
+        emit loadStateChanged();
+        if (!m_searchText.isEmpty() && isSearchBarVisible()) startSearch();   // 加载期间的搜索只覆盖了已读部分
+    }
     if (anyChunks || !m_error.isEmpty()) {
         applyPendingJump();
         prepare();
@@ -304,6 +313,14 @@ ViewerWidget::CacheEntry& ViewerWidget::ensureLayout(size_t i)
         it->second.lastUse = ++m_useTick;
         return it->second;
     }
+    // INV-VIEW-NO-LAYOUT-IN-PAINT：绘制期绝不允许新建布局/改动缓存与滚动模型
+    Q_ASSERT_X(!m_inPaint, "ViewerWidget::ensureLayout", "layout requested inside paintEvent");
+    if (m_inPaint) {
+        static CacheEntry s_empty;
+        s_empty.layout = PreviewLayout::ChunkLayoutResult();
+        s_empty.layout.root.type = LayoutBlock::Document;
+        return s_empty;
+    }
     SM_PERF_SCOPE("viewer.layoutChunk");
     CacheEntry entry;
     if (i < m_chunks.size() && m_buffer) {
@@ -341,6 +358,10 @@ void ViewerWidget::prepare()
         }
         if (!changed) break;
     }
+    if (!m_searchText.isEmpty() && !m_searchHits.empty()) {
+        if (m_searchRendered.size() > 512) m_searchRendered.clear();   // 简单上限，防无界增长
+        for (const auto& v : m_visible) renderedHitsFor(v.index);
+    }
     syncScrollBar();
     evictCache();
     if (!m_firstContentEmitted && !m_visible.empty()) {
@@ -356,13 +377,16 @@ void ViewerWidget::syncScrollBar()
 {
     QScrollBar* bar = verticalScrollBar();
     const double maxTop = m_model.maxTopY();
-    const int maxV = static_cast<int>(std::min<double>(maxTop, static_cast<double>(INT_MAX / 2)));
-    const int page = std::max(1, viewport()->height());
+    // 文档总高超过 ~1e9 像素（约 4000 万行）时，滚动条按比例缩放，保证能拖到真正的末尾
+    constexpr double kMaxBarUnits = 1.0e9;
+    m_barScale = maxTop > kMaxBarUnits ? maxTop / kMaxBarUnits : 1.0;
+    const int maxV = static_cast<int>(std::min<double>(maxTop / m_barScale, kMaxBarUnits));
+    const int page = std::max(1, static_cast<int>(viewport()->height() / m_barScale));
     QScopedValueRollback<bool> g(m_syncing, true);
     bar->setRange(0, maxV);
     bar->setPageStep(page);
-    bar->setSingleStep(static_cast<int>(lineHeightPx() * 3));
-    bar->setValue(static_cast<int>(std::min<double>(m_model.topY(), static_cast<double>(maxV))));
+    bar->setSingleStep(std::max(1, static_cast<int>(lineHeightPx() * 3 / m_barScale)));
+    bar->setValue(static_cast<int>(std::min<double>(m_model.topY() / m_barScale, static_cast<double>(maxV))));
 }
 
 void ViewerWidget::evictCache()
@@ -435,7 +459,7 @@ void ViewerWidget::onImageReady(const QString& url)
 void ViewerWidget::onScrollBarValue(int v)
 {
     if (m_syncing) return;
-    m_model.setTopY(static_cast<double>(v));
+    m_model.setTopY(static_cast<double>(v) * m_barScale);
     prepare();
     m_positionTimer.start();
 }
@@ -626,9 +650,10 @@ void ViewerWidget::paintEvent(QPaintEvent*)
         if (!m_searchText.isEmpty() && !m_searchHits.empty()) {
             // 当前 chunk 的渲染文本命中（按需计算并缓存；只对可视 chunk 计算）
             QVector<QPair<int, int>> ranges;
-            const auto& rh = renderedHitsFor(v.index);
-            ranges.reserve(static_cast<int>(rh.size()));
-            for (const auto& r : rh) ranges.append(qMakePair(r.first, r.second));
+            if (const auto* rh = renderedHitsCached(v.index)) {
+                ranges.reserve(static_cast<int>(rh->size()));
+                for (const auto& r : *rh) ranges.append(qMakePair(r.first, r.second));
+            }
             m_painter->setSearchHighlights(ranges);
             m_painter->setCurrentSearchHit(static_cast<int>(v.index) == m_searchCurChunk ? m_searchCurInChunk : -1);
         } else {
@@ -692,7 +717,7 @@ ViewerWidget::SelPos ViewerWidget::hitTest(const QPointF& vp, bool strict, bool*
     if (strict && hitSegment && !*hitSegment) return none;
     SelPos r;
     r.chunk = static_cast<int>(target->index);
-    r.ch = PreviewWidget::textIndexForSegments(mine, pt, viewport());
+    r.ch = TextHitTest::textIndexForSegments(mine, pt, viewport());
     return r;
 }
 
@@ -722,18 +747,47 @@ QString ViewerWidget::chunkText(size_t i)
     return out;
 }
 
+QString ViewerWidget::chunkTextNoCache(size_t i)
+{
+    // 与 ensureLayout 同样的解析+布局，但结果用完即弃：不占 m_cache、不回写滚动模型
+    if (i >= m_chunks.size() || !m_buffer) return QString();
+    auto it = m_cache.find(i);
+    QString out;
+    if (it != m_cache.end()) {
+        PreviewPainter::extractBlockText(it->second.layout.root, out);
+        return out;
+    }
+    const Chunk& c = m_chunks[i];
+    const AssembledChunk a = ChunkScanner::assembleChunk(m_buffer->constData(), c, m_prologues, m_refDefs);
+    AstNodePtr root = m_parser.parseChunk(a.text, static_cast<int>(c.lineStart) - a.lineBias, i == 0);
+    const auto res = m_layout->layoutChunk(*root, i == 0);
+    PreviewPainter::extractBlockText(res.root, out);
+    return out;
+}
+
 QString ViewerWidget::selectedText()
 {
     if (!hasSelection()) return QString();
     SelPos lo = m_selA, hi = m_selB;
     if (hi < lo) std::swap(lo, hi);
     QString out;
+    const bool big = (hi.chunk - lo.chunk) > 200;
+    if (big) QApplication::setOverrideCursor(Qt::WaitCursor);
+    ensureMetrics();
+    QElapsedTimer pump;
+    pump.start();
     for (int c = lo.chunk; c <= hi.chunk && c < static_cast<int>(m_chunks.size()); ++c) {
-        const QString t = chunkText(static_cast<size_t>(c));
+        // 超大范围（全选 50MB 文档）会持续较久：定期处理非输入事件，避免界面「未响应」
+        if (big && pump.elapsed() > 100) {
+            QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+            pump.restart();
+        }
+        const QString t = chunkTextNoCache(static_cast<size_t>(c));
         const int s = (c == lo.chunk) ? std::min(lo.ch, static_cast<int>(t.size())) : 0;
         const int e = (c == hi.chunk) ? std::min(hi.ch, static_cast<int>(t.size())) : static_cast<int>(t.size());
         if (e > s) out += t.mid(s, e - s);
     }
+    if (big) QApplication::restoreOverrideCursor();
     // 复制结果不带最后一个块分隔换行
     while (out.endsWith('\n')) out.chop(1);
     return out;
@@ -831,7 +885,7 @@ void ViewerWidget::mouseDoubleClickEvent(QMouseEvent* e)
     const SelPos p = hitTest(QPointF(e->pos()), true, &hit);
     if (!hit || !p.valid()) return;
     const QString text = chunkText(static_cast<size_t>(p.chunk));
-    const QPair<int, int> r = PreviewWidget::findWordBoundaryFor(text, p.ch);
+    const QPair<int, int> r = TextHitTest::findWordBoundaryFor(text, p.ch);
     if (r.first < 0 || r.second <= r.first) return;
     m_selA = SelPos{p.chunk, r.first};
     m_selB = SelPos{p.chunk, r.second};
@@ -992,6 +1046,12 @@ void ViewerWidget::onSearchFinished()
     if (m_searchHits.empty()) { viewport()->update(); return; }
     gotoSearchHit(start, +1);
     if (m_searchBar) m_searchBar->keepFocus();
+}
+
+const std::vector<std::pair<int, int>>* ViewerWidget::renderedHitsCached(size_t chunk) const
+{
+    auto it = m_searchRendered.find(chunk);
+    return it == m_searchRendered.end() ? nullptr : &it->second;
 }
 
 const std::vector<std::pair<int, int>>& ViewerWidget::renderedHitsFor(size_t chunk)

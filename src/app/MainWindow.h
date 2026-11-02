@@ -4,6 +4,7 @@
 #include <QTimer>
 #include <QFileSystemWatcher>
 #include <QPointer>
+#include <QSet>
 #include "Theme.h"
 
 namespace viewer { class ViewerWidget; }
@@ -163,6 +164,9 @@ private:
     void unwatchFile(const QString& path);
     void onFileChangedExternally(const QString& path);
     void promptReloadTab(int tabIndex);
+    void flushPendingReloads();
+    QTimer m_reloadTimer;           // 外部修改事件合并（300ms）
+    QSet<QString> m_reloadPaths;
 
     void setupMenuBar();
     void setupDragDrop();

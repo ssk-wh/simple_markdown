@@ -1,6 +1,5 @@
 #include "ChangelogDialog.h"
-#include "PreviewWidget.h"
-#include "MarkdownParser.h"
+#include "ViewerWidget.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -8,16 +7,18 @@
 #include <QFile>
 #include <QApplication>
 #include <QDebug>
+#include <QFileInfo>
+#include <QLabel>
 
 ChangelogDialog::ChangelogDialog(const Theme& theme, QWidget* parent)
-    : QDialog(parent), m_previewWidget(nullptr)
+    : QDialog(parent), m_viewer(nullptr)
 {
     setWindowTitle(tr("Update History"));
     setMinimumSize(700, 500);
 
-    // 预览组件
-    m_previewWidget = new PreviewWidget(this);
-    m_previewWidget->setTheme(theme);
+    // 查看器组件（2.0.0 起与主窗口共用同一套只读渲染管线）
+    m_viewer = new viewer::ViewerWidget(this);
+    m_viewer->setTheme(theme);
 
     // 关闭按钮：与 onShowWelcome 首次启动欢迎对话框完全一致的最简实现
     // [Spec 模块-app/07-快捷键弹窗.md INV-6] 不 setStyleSheet / setObjectName /
@@ -27,7 +28,7 @@ ChangelogDialog::ChangelogDialog(const Theme& theme, QWidget* parent)
     connect(closeBtn, &QPushButton::clicked, this, &QDialog::accept);
 
     QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->addWidget(m_previewWidget);
+    layout->addWidget(m_viewer);
     layout->addWidget(closeBtn);
 
     loadChangelog();
@@ -51,23 +52,18 @@ void ChangelogDialog::loadChangelog()
     paths << "/usr/local/share/doc/simplemarkdown/CHANGELOG.md";
 #endif
 
-    QString content;
     for (const auto& path : paths) {
-        QFile file(path);
-        if (file.exists() && file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            content = QString::fromUtf8(file.readAll());
+        if (QFileInfo::exists(path)) {
             qDebug() << "[ChangelogDialog] Loaded from:" << path;
-            break;
+            m_viewer->loadFile(QFileInfo(path).absoluteFilePath());
+            return;
         }
     }
 
-    if (content.isEmpty()) {
-        content = tr("Update history file not found.\n\n"
-                     "Please ensure CHANGELOG.md is installed with the application.");
-    }
-
-    // 使用项目的 Markdown 解析器渲染
-    MarkdownParser parser;
-    auto ast = parser.parse(content);
-    m_previewWidget->updateAst(std::shared_ptr<AstNode>(std::move(ast)));
+    // 未找到更新历史文件：隐藏查看器，改显示一条说明
+    m_viewer->hide();
+    auto* label = new QLabel(tr("Update history file not found.\n\n"
+                                "Please ensure CHANGELOG.md is installed with the application."), this);
+    label->setWordWrap(true);
+    static_cast<QVBoxLayout*>(this->layout())->insertWidget(0, label);
 }
