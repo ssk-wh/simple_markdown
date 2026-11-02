@@ -127,7 +127,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
 
     // [plan A1] placeholderOnly 块：bounds 是粗估占位，inlineRuns/children 空，
     // 视口外（buffer 之外）的块走此路径。绘制路径无 op，但保持字符计数语义不变。
-    // 进入视口前 PreviewWidget 滚动监听器会触发 buildFromAst 升级为精算。
+    // 进入视口前 ViewerWidget 滚动监听器会触发 buildFromAst 升级为精算。
     if (block.placeholderOnly) {
         countBlockChars(block);
         return;
