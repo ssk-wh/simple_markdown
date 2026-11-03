@@ -853,6 +853,66 @@ Open the crash reports folder?</translation>
         <source>Close All Documents</source>
         <translation>Close All Documents</translation>
     </message>
+    <message>
+        <source>Open with Default Application</source>
+        <translation>Open with Default Application</translation>
+    </message>
+    <message>
+        <source>Show in File Explorer</source>
+        <translation>Show in File Explorer</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>Select All</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Size: %1</source>
+        <translation>Size: %1</translation>
+    </message>
+    <message>
+        <source>Indexing…</source>
+        <translation>Indexing…</translation>
+    </message>
+    <message>
+        <source>Ln %1 / %2</source>
+        <translation>Ln %1 / %2</translation>
+    </message>
+    <message>
+        <source>File not found: %1</source>
+        <translation>File not found: %1</translation>
+    </message>
+    <message>
+        <source>Headings: %1</source>
+        <translation>Headings: %1</translation>
+    </message>
+    <message>
+        <source>Size: %1 bytes</source>
+        <translation>Size: %1 bytes</translation>
+    </message>
+    <message>
+        <source>%1 has been deleted by another program.</source>
+        <translation>%1 has been deleted by another program.</translation>
+    </message>
+    <message>
+        <source>File is too large to export or print (limit 8 MB).</source>
+        <translation>File is too large to export or print (limit 8 MB).</translation>
+    </message>
+    <message>
+        <source>Read-only viewer: opens huge files instantly and scrolls smoothly</source>
+        <translation>Read-only viewer: opens huge files instantly and scrolls smoothly</translation>
+    </message>
+    <message>
+        <source>Auto-refresh when the file changes on disk, keeping your reading position</source>
+        <translation>Auto-refresh when the file changes on disk, keeping your reading position</translation>
+    </message>
+    <message>
+        <source>Shortcuts: Ctrl+O Open, Ctrl+B Toggle Sidebar, Ctrl+F Find</source>
+        <translation>Shortcuts: Ctrl+O Open, Ctrl+B Toggle Sidebar, Ctrl+F Find</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPainter</name>
@@ -1203,6 +1263,37 @@ Open the crash reports folder?</translation>
     <message>
         <source>Shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+B Toggle Sidebar</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shortcuts: Ctrl+O Open, Ctrl+B Toggle Sidebar, Ctrl+F Find</source>
+        <translation>Shortcuts: Ctrl+O Open, Ctrl+B Toggle Sidebar, Ctrl+F Find</translation>
+    </message>
+</context>
+<context>
+    <name>viewer::ViewerWidget</name>
+    <message>
+        <source>Copy</source>
+        <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>Select All</translation>
+    </message>
+    <message>
+        <source>Loading…</source>
+        <translation>Loading…</translation>
+    </message>
+    <message>
+        <source>Mark</source>
+        <translation>Mark</translation>
+    </message>
+    <message>
+        <source>Clear Current Mark</source>
+        <translation>Clear Current Mark</translation>
+    </message>
+    <message>
+        <source>Clear All Marks</source>
+        <translation>Clear All Marks</translation>
     </message>
 </context>
 </TS>

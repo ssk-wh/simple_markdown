@@ -47,8 +47,11 @@ bool MarkdownParser::extractFrontmatter(const QString& rawMarkdown,
     ++i;
 
     // 5. 向下找结束 '---'
+    // 结束行必须在起始行之后 kMaxFrontmatterLines 行内：与分块扫描器（ChunkScanner）的判定保持一致，
+    // 否则「以水平线 --- 开头的普通文档」会把后面很远的另一条水平线之间的内容整体吞成 frontmatter
+    constexpr int kMaxFrontmatterLines = 200;
     int end = -1;
-    while (i < lines.size()) {
+    while (i < lines.size() && i - start <= kMaxFrontmatterLines) {
         if (lines[i].trimmed() == QStringLiteral("---")) {
             end = i;
             break;
@@ -116,18 +119,9 @@ void MarkdownParser::shiftLineNumbers(AstNode* node, int delta)
         shiftLineNumbers(child.get(), delta);
 }
 
-AstNodePtr MarkdownParser::parse(const QString& markdown)
+AstNodePtr MarkdownParser::parseBody(const QByteArray& utf8)
 {
     ensureExtensions();
-
-    // Spec §5.2：先剥离 frontmatter
-    QString body;
-    AstNodePtr fmNode;
-    int fmLines = 0;
-    const bool hasFm = extractFrontmatter(markdown, body, fmNode, fmLines);
-
-    QByteArray utf8 = body.toUtf8();
-
     // [删除线仅双波浪线] CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE 关闭单波浪线 ~text~ 触发删除线，
     // 只识别 GFM 标准的 ~~text~~，与编辑器高亮正则 ~~([^~]+)~~ 保持一致
     cmark_parser* parser = cmark_parser_new(CMARK_OPT_DEFAULT | CMARK_OPT_STRIKETHROUGH_DOUBLE_TILDE);
@@ -147,10 +141,40 @@ AstNodePtr MarkdownParser::parse(const QString& markdown)
     cmark_parser_feed(parser, utf8.data(), utf8.size());
     cmark_node* doc = cmark_parser_finish(parser);
 
+    m_depth = 0;
     AstNodePtr root = convertNode(doc);
 
     cmark_node_free(doc);
     cmark_parser_free(parser);
+    return root;
+}
+
+AstNodePtr MarkdownParser::parseChunk(const QByteArray& utf8, int lineDelta, bool allowFrontmatter)
+{
+    AstNodePtr root;
+    if (allowFrontmatter && utf8.startsWith("---")) {
+        root = parse(QString::fromUtf8(utf8));
+    } else {
+        root = parseBody(utf8);
+    }
+    if (lineDelta != 0) {
+        for (auto& child : root->children)
+            shiftLineNumbers(child.get(), lineDelta);
+    }
+    return root;
+}
+
+AstNodePtr MarkdownParser::parse(const QString& markdown)
+{
+    ensureExtensions();
+
+    // Spec §5.2：先剥离 frontmatter
+    QString body;
+    AstNodePtr fmNode;
+    int fmLines = 0;
+    const bool hasFm = extractFrontmatter(markdown, body, fmNode, fmLines);
+
+    AstNodePtr root = parseBody(body.toUtf8());
 
     // Spec §8.9：把 cmark 返回的所有节点的行号加回剥离掉的行数
     if (hasFm && fmLines > 0) {
@@ -181,6 +205,12 @@ void MarkdownParser::ensureExtensions()
 
 AstNodePtr MarkdownParser::convertNode(cmark_node* node)
 {
+    // 深度保护：畸形文档（如上万层嵌套引用）会令递归转换栈溢出，超过上限的子树直接丢弃
+    struct DepthGuard {
+        int& d;
+        explicit DepthGuard(int& v) : d(v) { ++d; }
+        ~DepthGuard() { --d; }
+    } depthGuard(m_depth);
     auto ast = std::make_unique<AstNode>();
     ast->type = mapNodeType(node);
     ast->startLine = cmark_node_get_start_line(node) - 1; // cmark 1-based -> 0-based
@@ -219,7 +249,8 @@ AstNodePtr MarkdownParser::convertNode(cmark_node* node)
     // 递归处理子节点
     cmark_node* child = cmark_node_first_child(node);
     while (child) {
-        ast->addChild(convertNode(child));
+        if (m_depth < kMaxAstDepth)
+            ast->addChild(convertNode(child));
         child = cmark_node_next(child);
     }
 

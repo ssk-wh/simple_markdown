@@ -1,4 +1,5 @@
 #include "PreviewPainter.h"
+#include "TextWrap.h"
 #include "ImageCache.h"
 #include "CodeBlockRenderer.h"
 
@@ -58,7 +59,7 @@ void PreviewPainter::recordSegment(const QRectF& rect, int charStart, int charLe
                                     const QString& text, const QFont& font,
                                     const QString& linkUrl)
 {
-    m_textSegments.append({rect, charStart, charLen, text, font, linkUrl});
+    m_textSegments.append({rect, charStart, charLen, text, font, linkUrl, m_curChunk});
 }
 
 void PreviewPainter::paint(QPainter* painter, const LayoutBlock& root,
@@ -94,6 +95,22 @@ void PreviewPainter::paint(QPainter* painter, const LayoutBlock& root,
 #endif
 }
 
+void PreviewPainter::paintChunk(QPainter* painter, const LayoutBlock& root, int chunkId,
+                                 qreal chunkTopOnScreen, qreal viewportHeight, qreal viewportWidth)
+{
+    if (!painter) return;
+    m_charCounter = 0;
+    m_unorderedListDepth = 0;
+    m_curChunk = chunkId;
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setRenderHint(QPainter::TextAntialiasing, true);
+    // paintBlock 的 drawY = absY - scrollY：令 scrollY = -chunkTopOnScreen 即把 chunk 平移到屏幕位置
+    const qreal scrollY = -chunkTopOnScreen;
+    for (const auto& child : root.children)
+        paintBlock(painter, child, 0, 0, scrollY, viewportHeight, viewportWidth);
+    m_curChunk = -1;
+}
+
 void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                                  qreal offsetX, qreal offsetY,
                                  qreal scrollY, qreal viewportHeight, qreal viewportWidth)
@@ -110,7 +127,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
 
     // [plan A1] placeholderOnly 块：bounds 是粗估占位，inlineRuns/children 空，
     // 视口外（buffer 之外）的块走此路径。绘制路径无 op，但保持字符计数语义不变。
-    // 进入视口前 PreviewWidget 滚动监听器会触发 buildFromAst 升级为精算。
+    // 进入视口前 ViewerWidget 滚动监听器会触发 buildFromAst 升级为精算。
     if (block.placeholderOnly) {
         countBlockChars(block);
         return;
@@ -268,7 +285,7 @@ void PreviewPainter::paintBlock(QPainter* p, const LayoutBlock& block,
                     int fit = 0;
                     qreal acc = 0;
                     for (int i = physOffset; i < line.length(); ++i) {
-                        qreal cw = fm.horizontalAdvance(QString(line[i]));
+                        qreal cw = fm.horizontalAdvance(line[i]);
                         if (acc + cw > contentWidth && fit > 0) break;
                         acc += cw;
                         fit = i + 1 - physOffset;
@@ -768,8 +785,9 @@ void PreviewPainter::paintInlineRuns(QPainter* p, const LayoutBlock& block,
         QString text = run.text;
         int textOffset = 0;
         while (!text.isEmpty()) {
-            qreal fullWidth = fm.horizontalAdvance(text);
             qreal remaining = x + maxWidth - curX;
+            qreal fullWidth = 0;
+            textwrap::fitsInLine(fm, text, remaining, &fullWidth);   // 与 PreviewLayout 共用，见 TextWrap.h
 
             // 能放在当前行吗？
             if (fullWidth <= remaining || curX <= x) {
@@ -920,6 +938,91 @@ void PreviewPainter::paintFrontmatter(QPainter* p, const LayoutBlock& block,
     }
 
     p->restore();
+}
+
+void PreviewPainter::extractBlockText(const LayoutBlock& block, QString& out)
+{
+    if (block.type == LayoutBlock::Frontmatter) {
+        out += block.frontmatterRawText;
+        if (!block.frontmatterRawText.isEmpty())
+            out += '\n';
+        return;
+    }
+    if (!block.inlineRuns.empty()) {
+        for (const auto& run : block.inlineRuns)
+            out += run.text;
+        out += '\n';
+    }
+    if (!block.codeText.isEmpty()) {
+        const QStringList lines = block.codeText.split('\n');
+        for (int i = 0; i < lines.size(); ++i) {
+            if (i == lines.size() - 1 && lines[i].isEmpty())
+                break;
+            out += lines[i];
+            out += '\n';
+        }
+    }
+    for (const auto& child : block.children)
+        extractBlockText(child, out);
+}
+
+int PreviewPainter::locateCharLine(const LayoutBlock& block, int target, int& counter)
+{
+    if (block.type == LayoutBlock::Frontmatter) {
+        const int len = block.frontmatterRawText.length() + (block.frontmatterRawText.isEmpty() ? 0 : 1);
+        if (target < counter + len) return block.sourceStartLine;
+        counter += len;
+        return -1;
+    }
+    if (!block.inlineRuns.empty()) {
+        int own = 1;
+        for (const auto& run : block.inlineRuns) own += run.text.length();
+        if (target < counter + own) return block.sourceStartLine;
+        counter += own;
+    }
+    if (!block.codeText.isEmpty()) {
+        const QStringList lines = block.codeText.split('\n');
+        for (int i = 0; i < lines.size(); ++i) {
+            if (i == lines.size() - 1 && lines[i].isEmpty()) break;
+            const int len = lines[i].length() + 1;
+            if (target < counter + len) return block.sourceStartLine + i + 1;
+            counter += len;
+        }
+    }
+    for (const auto& child : block.children) {
+        const int r = locateCharLine(child, target, counter);
+        if (r >= 0) return r;
+    }
+    return -1;
+}
+
+bool PreviewPainter::locateCharY(const LayoutBlock& block, int target, int& counter, qreal parentY, qreal& outY)
+{
+    const qreal absY = parentY + block.bounds.y();
+    if (block.type == LayoutBlock::Frontmatter) {
+        const int len = block.frontmatterRawText.length() + (block.frontmatterRawText.isEmpty() ? 0 : 1);
+        if (target < counter + len) { outY = absY; return true; }
+        counter += len;
+        return false;
+    }
+    if (!block.inlineRuns.empty()) {
+        int own = 1;
+        for (const auto& run : block.inlineRuns) own += run.text.length();
+        if (target < counter + own) { outY = absY; return true; }
+        counter += own;
+    }
+    if (!block.codeText.isEmpty()) {
+        const QStringList lines = block.codeText.split('\n');
+        for (int i = 0; i < lines.size(); ++i) {
+            if (i == lines.size() - 1 && lines[i].isEmpty()) break;
+            const int len = lines[i].length() + 1;
+            if (target < counter + len) { outY = absY + i * 18.0; return true; }
+            counter += len;
+        }
+    }
+    for (const auto& child : block.children)
+        if (locateCharY(child, target, counter, absY, outY)) return true;
+    return false;
 }
 
 void PreviewPainter::countBlockChars(const LayoutBlock& block)

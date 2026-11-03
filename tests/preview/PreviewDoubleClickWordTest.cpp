@@ -18,7 +18,7 @@
 #include <QApplication>
 #include <QString>
 
-#include "preview/PreviewWidget.h"
+#include "preview/TextHitTest.h"
 
 namespace {
 
@@ -53,22 +53,22 @@ TEST(PreviewDoubleClickWordTest, T_DC_1_AsciiWordSelected)
     // 注意：QTextBoundaryFinder::Word 把 underscore 视为 word 内部字符（与 Qt::TextWord 一致）
 
     // 双击 'h'（idx=0，词首边界）
-    auto r0 = PreviewWidget::findWordBoundaryFor(text, 0);
+    auto r0 = TextHitTest::findWordBoundaryFor(text, 0);
     EXPECT_EQ(r0.first, 0);
     EXPECT_EQ(r0.second, 5);
 
     // 双击词中 'l'（idx=3）
-    auto r1 = PreviewWidget::findWordBoundaryFor(text, 3);
+    auto r1 = TextHitTest::findWordBoundaryFor(text, 3);
     EXPECT_EQ(r1.first, 0);
     EXPECT_EQ(r1.second, 5);
 
     // 双击词尾前一字 'o'（idx=4，词内最末字符）
-    auto r2 = PreviewWidget::findWordBoundaryFor(text, 4);
+    auto r2 = TextHitTest::findWordBoundaryFor(text, 4);
     EXPECT_EQ(r2.first, 0);
     EXPECT_EQ(r2.second, 5);
 
     // 双击 "world" 的 'w'（idx=6）
-    auto r3 = PreviewWidget::findWordBoundaryFor(text, 6);
+    auto r3 = TextHitTest::findWordBoundaryFor(text, 6);
     EXPECT_EQ(r3.first, 6);
     EXPECT_EQ(r3.second, 11);
 }
@@ -84,7 +84,7 @@ TEST(PreviewDoubleClickWordTest, T_DC_2_CjkDoesNotSwallowEntireParagraph)
     const QString text = QStringLiteral("今天天气真不错很适合编程");  // 12 个汉字
 
     for (int idx = 0; idx < text.length(); ++idx) {
-        auto r = PreviewWidget::findWordBoundaryFor(text, idx);
+        auto r = TextHitTest::findWordBoundaryFor(text, idx);
         ASSERT_GE(r.first, 0) << "idx=" << idx;
         ASSERT_GT(r.second, r.first) << "idx=" << idx;
         ASSERT_LE(r.second, text.length()) << "idx=" << idx;
@@ -106,12 +106,12 @@ TEST(PreviewDoubleClickWordTest, T_DC_3_WhitespacePunctSingleChar)
 {
     const QString text = "hello, world";
     // idx=5 是逗号 ','
-    auto rComma = PreviewWidget::findWordBoundaryFor(text, 5);
+    auto rComma = TextHitTest::findWordBoundaryFor(text, 5);
     EXPECT_EQ(rComma.first, 5);
     EXPECT_EQ(rComma.second, 6);
 
     // idx=6 是空格
-    auto rSpace = PreviewWidget::findWordBoundaryFor(text, 6);
+    auto rSpace = TextHitTest::findWordBoundaryFor(text, 6);
     EXPECT_EQ(rSpace.first, 6);
     EXPECT_EQ(rSpace.second, 7);
 }
@@ -126,15 +126,15 @@ TEST(PreviewDoubleClickWordTest, T_DC_A_OutOfRangeReturnsSentinel)
 {
     const QString text = "abc";
 
-    auto rNeg = PreviewWidget::findWordBoundaryFor(text, -1);
+    auto rNeg = TextHitTest::findWordBoundaryFor(text, -1);
     EXPECT_EQ(rNeg.first, -1);
     EXPECT_EQ(rNeg.second, -1);
 
-    auto rAtLen = PreviewWidget::findWordBoundaryFor(text, text.length());
+    auto rAtLen = TextHitTest::findWordBoundaryFor(text, text.length());
     EXPECT_EQ(rAtLen.first, -1);
     EXPECT_EQ(rAtLen.second, -1);
 
-    auto rEmpty = PreviewWidget::findWordBoundaryFor(QString(), 0);
+    auto rEmpty = TextHitTest::findWordBoundaryFor(QString(), 0);
     EXPECT_EQ(rEmpty.first, -1);
     EXPECT_EQ(rEmpty.second, -1);
 }
@@ -146,7 +146,7 @@ TEST(PreviewDoubleClickWordTest, T_DC_A_OutOfRangeReturnsSentinel)
 TEST(PreviewDoubleClickWordTest, T_DC_R1_RegressionCjkNotEntireRange)
 {
     const QString text = QStringLiteral("段落");  // 2 字
-    auto r = PreviewWidget::findWordBoundaryFor(text, 0);
+    auto r = TextHitTest::findWordBoundaryFor(text, 0);
     // 至少 first==0；end 可能是 1（单字）或 2（整段，仅当 Qt 把 2 字看作一个词）
     // 但更重要的是"通用情况下不返回整段"——T-DC-2 已覆盖更强的多字断言
     EXPECT_GE(r.first, 0);

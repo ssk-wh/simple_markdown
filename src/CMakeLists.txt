@@ -1,6 +1,5 @@
 add_subdirectory(core)
-add_subdirectory(editor)
 add_subdirectory(parser)
 add_subdirectory(preview)
-add_subdirectory(sync)
+add_subdirectory(viewer)
 add_subdirectory(app)

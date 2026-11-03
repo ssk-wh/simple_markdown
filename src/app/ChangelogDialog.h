@@ -3,7 +3,7 @@
 #include <QDialog>
 #include "Theme.h"
 
-class PreviewWidget;
+namespace viewer { class ViewerWidget; }
 
 class ChangelogDialog : public QDialog {
     Q_OBJECT
@@ -12,5 +12,5 @@ public:
 
 private:
     void loadChangelog();
-    PreviewWidget* m_previewWidget;
+    viewer::ViewerWidget* m_viewer = nullptr;
 };

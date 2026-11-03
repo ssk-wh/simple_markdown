@@ -106,8 +106,9 @@ void WelcomePanel::retranslateUi()
     m_subtitleLabel->setText(tr("Get started by opening a file or folder"));
     m_openFileBtn->setText(tr("Open File..."));
     m_openFolderBtn->setText(tr("Open Folder..."));
-    m_newFileBtn->setText(tr("New File"));
-    m_hintLabel->setText(tr("Shortcuts: Ctrl+N New, Ctrl+O Open, Ctrl+B Toggle Sidebar"));
+    // 只读查看器没有「新建文件」：隐藏该按钮（信号保留以兼容接口）
+    m_newFileBtn->hide();
+    m_hintLabel->setText(tr("Shortcuts: Ctrl+O Open, Ctrl+B Toggle Sidebar, Ctrl+F Find"));
 }
 
 void WelcomePanel::rebuildStyles()

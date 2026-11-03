@@ -1,16 +1,13 @@
 #include "MainWindow.h"
-#include "EditorWidget.h"
-#include "PreviewWidget.h"
-#include "ParseScheduler.h"
-#include "ScrollSync.h"
+#include "../core/PerfProbe.h"
+#include "ViewerWidget.h"
+#include "MarkdownParser.h"
 #include "TocPanel.h"
-#include "Document.h"
 #include "RecentFiles.h"
 #include "ChangelogDialog.h"
 #include "ShortcutsDialog.h"
 #include "WelcomePanel.h"  // Spec: specs/模块-app/22-空白引导页.md
 #include "UpdateChecker.h"  // Spec: specs/模块-app/23-检查更新.md
-#include "EditorLayout.h"
 #include "PreviewLayout.h"
 #include "FontDefaults.h"
 #include "SnapSplitter.h"
@@ -123,7 +120,8 @@ MainWindow::MainWindow(QWidget* parent)
         // Spec INV-3：先加载 Qt 内置 widget 翻译（标准按钮 Yes/No/Save、对话框等），
         // 否则中文界面下 QMessageBox 等标准按钮仍显示英文。qm 嵌入 qrc 以保证部署后
         // 用户机也能加载（不依赖 Qt 安装路径）。英文 locale 无 qt_en_US.qm，load 失败即跳过。
-        if (m_qtTranslator->load(":/translations/qt_" + locale + ".qm"))
+        const bool qtOk = m_qtTranslator->load(":/translations/qt_" + locale + ".qm");
+        if (qtOk)
             qApp->installTranslator(m_qtTranslator);
         if (m_translator->load(":/translations/simple_markdown_" + locale + ".qm"))
             qApp->installTranslator(m_translator);
@@ -139,7 +137,7 @@ MainWindow::MainWindow(QWidget* parent)
     // 后续所有 tab 操作仍用 m_tabBar，可见性 / 主题色用容器 m_tabBarBox。
     m_tabBarBox = new TabBarWithAdd(this);
     m_tabBar = m_tabBarBox->bar();
-    connect(m_tabBarBox, &TabBarWithAdd::addClicked, this, &MainWindow::onNewFile);
+    connect(m_tabBarBox, &TabBarWithAdd::addClicked, this, &MainWindow::onOpenFile);
     m_tabBar->setTabsClosable(true);
     m_tabBar->setMovable(true);
     m_tabBar->setDocumentMode(true);
@@ -154,7 +152,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_welcomePanel->hide();
     connect(m_welcomePanel, &WelcomePanel::openFileClicked, this, &MainWindow::onOpenFile);
     connect(m_welcomePanel, &WelcomePanel::openFolderClicked, this, &MainWindow::onOpenFolder);
-    connect(m_welcomePanel, &WelcomePanel::newFileClicked, this, &MainWindow::onNewFile);
+    connect(m_welcomePanel, &WelcomePanel::newFileClicked, this, &MainWindow::onOpenFile);
 
     m_tocPanel = new TocPanel(this);
     m_tocPanel->setMinimumWidth(160);
@@ -168,7 +166,7 @@ MainWindow::MainWindow(QWidget* parent)
         m_tabBar->setCurrentIndex(index);
     });
     connect(m_sideTabBar, &SideTabBar::tabCloseRequested, this, &MainWindow::onCloseTab);
-    connect(m_sideTabBar, &SideTabBar::addClicked, this, &MainWindow::onNewFile);
+    connect(m_sideTabBar, &SideTabBar::addClicked, this, &MainWindow::onOpenFile);
 
     // folderPanel 包在容器中：容器始终在 splitter 中可见，folderPanel 在容器内 hide/show
     // 这样 QSplitter 不会因 folderPanel 隐藏而回收空间导致 sideTabBar 跳动
@@ -220,7 +218,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_tocPanel, &TocPanel::headingClicked, this, [this](int sourceLine) {
         auto* tab = currentTab();
         if (tab)
-            tab->preview->smoothScrollToSourceLine(sourceLine);
+            tab->viewer->scrollToSourceLine(sourceLine, true);
     });
 
     // [2026-05-13] Ctrl+1..9 章节跳转功能已移除——A1 视口剪裁让 sourceLineToY 累加
@@ -231,9 +229,7 @@ MainWindow::MainWindow(QWidget* parent)
     // 用户已接受其潜在偏差）。
 
     connect(m_tocPanel, &TocPanel::clearSectionMarksRequested, this, [this](int entryIndex) {
-        auto* tab = currentTab();
-        if (tab)
-            tab->preview->clearHighlightsInSection(entryIndex);
+        if (auto* tab = currentTab()) tab->viewer->clearMarksInSection(entryIndex);
     });
 
     // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-WIDTH-AUTO
@@ -274,6 +270,7 @@ MainWindow::MainWindow(QWidget* parent)
                 m_contentStack->setCurrentIndex(m_tabBar->currentIndex());
             }
         }
+        if (m_tabBarOnSide) syncSideTabBar();
         saveSessionLater();
     });
 
@@ -289,7 +286,7 @@ MainWindow::MainWindow(QWidget* parent)
         if (idx < 0) {
             // Tab 空白区右键菜单
             QMenu menu(this);
-            menu.addAction(tr("New File"), this, &MainWindow::onNewFile);
+            menu.addAction(tr("New File"), this, &MainWindow::onOpenFile);
             QAction* closeAllAct = menu.addAction(tr("Close All Documents"), [this]() {
                 for (int i = m_tabs.size() - 1; i >= 0; --i)
                     onCloseTab(i);
@@ -320,7 +317,7 @@ MainWindow::MainWindow(QWidget* parent)
         // [Plan plans/2026-04-14-Tab打开文件所在目录.md]
         menu.addSeparator();
         QString filePath = (idx < m_tabs.size())
-            ? m_tabs[idx].editor->document()->filePath() : QString();
+            ? m_tabs[idx].filePath : QString();
         QAction* openDirAct = menu.addAction(tr("Open Containing Folder"), [this, filePath]() {
             if (filePath.isEmpty()) return;
 #ifdef Q_OS_WIN
@@ -342,6 +339,9 @@ MainWindow::MainWindow(QWidget* parent)
     m_saveSessionTimer.setSingleShot(true);
     m_saveSessionTimer.setInterval(1000);
     connect(&m_saveSessionTimer, &QTimer::timeout, this, &MainWindow::saveSettings);
+    m_reloadTimer.setSingleShot(true);
+    m_reloadTimer.setInterval(300);
+    connect(&m_reloadTimer, &QTimer::timeout, this, &MainWindow::flushPendingReloads);
 
     // 监控文件外部修改
     connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged,
@@ -363,19 +363,10 @@ void MainWindow::setupMenuBar()
     // -- 文件菜单 --
     QMenu* fileMenu = menuBar()->addMenu(tr("File"));
 
-    QAction* newAct = fileMenu->addAction(tr("New"), this, &MainWindow::onNewFile, QKeySequence::New);
-    Q_UNUSED(newAct);
-
     QAction* openAct = fileMenu->addAction(tr("Open..."), this, &MainWindow::onOpenFile, QKeySequence::Open);
     Q_UNUSED(openAct);
 
     fileMenu->addAction(tr("Open Folder..."), this, &MainWindow::onOpenFolder);
-
-    QAction* saveAct = fileMenu->addAction(tr("Save"), this, &MainWindow::onSaveFile, QKeySequence::Save);
-    Q_UNUSED(saveAct);
-
-    QAction* saveAsAct = fileMenu->addAction(tr("Save As..."), this, &MainWindow::onSaveFileAs, QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_S));
-    Q_UNUSED(saveAsAct);
 
     fileMenu->addSeparator();
 
@@ -383,6 +374,18 @@ void MainWindow::setupMenuBar()
     updateRecentFilesMenu();
     connect(m_recentFiles, &RecentFiles::changed,
             this, &MainWindow::updateRecentFilesMenu);
+
+    fileMenu->addSeparator();
+
+    // 只读查看器：编辑功能的替代入口——用系统默认程序打开 / 在资源管理器中定位
+    fileMenu->addAction(tr("Open with Default Application"), this, [this]() {
+        if (auto* tab = currentTab(); tab && !tab->filePath.isEmpty())
+            QDesktopServices::openUrl(QUrl::fromLocalFile(tab->filePath));
+    });
+    fileMenu->addAction(tr("Show in File Explorer"), this, [this]() {
+        if (auto* tab = currentTab(); tab && !tab->filePath.isEmpty())
+            QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(tab->filePath).absolutePath()));
+    });
 
     fileMenu->addSeparator();
 
@@ -394,62 +397,18 @@ void MainWindow::setupMenuBar()
 
     fileMenu->addAction(tr("Exit"), this, &QWidget::close, QKeySequence::Quit);
 
-    // -- 编辑菜单 --
+    // -- 编辑菜单（只读：复制 / 全选 / 查找）--
     QMenu* editMenu = menuBar()->addMenu(tr("Edit"));
-
-    editMenu->addAction(tr("Undo"), [this]() {
-        if (auto* tab = currentTab())
-            tab->editor->document()->undo();
-    }, QKeySequence::Undo);
-
-    editMenu->addAction(tr("Redo"), [this]() {
-        if (auto* tab = currentTab())
-            tab->editor->document()->redo();
-    }, QKeySequence::Redo);
-
+    editMenu->addAction(tr("Copy"), [this]() {
+        if (auto* tab = currentTab()) tab->viewer->copySelection();
+    }, QKeySequence::Copy);
+    editMenu->addAction(tr("Select All"), [this]() {
+        if (auto* tab = currentTab()) tab->viewer->selectAll();
+    }, QKeySequence::SelectAll);
     editMenu->addSeparator();
-
-    // [Spec 模块-preview/11 INV-6 + INV-9] Ctrl+F 路由：焦点优先 + 可见性兜底，
-    // 与 INV-9 互斥要求结合：
-    // - 焦点在 preview/editor 且对应区域可见 → 该侧
-    // - 否则按可见性默认（editor 可见 → editor，否则 preview 可见 → preview）
-    // - 都不可见 → 静默 no-op（理论 currentTab 非空时至少一侧可见）
-    // 互斥：打开目标侧前先关非目标侧（含搜索高亮一并清）
     editMenu->addAction(tr("Find..."), [this]() {
-        auto* tab = currentTab();
-        if (!tab) return;
-
-        QWidget* focused = QApplication::focusWidget();
-        bool focusInPreview = false;
-        bool focusInEditor = false;
-        for (QWidget* w = focused; w != nullptr; w = w->parentWidget()) {
-            if (tab->preview && w == tab->preview) { focusInPreview = true; break; }
-            if (tab->editor  && w == tab->editor)  { focusInEditor  = true; break; }
-        }
-
-        const bool previewVisible = tab->preview && tab->preview->isVisible();
-        const bool editorVisible  = tab->editor  && tab->editor->isVisible();
-
-        auto openPreview = [&]() {
-            if (tab->editor) tab->editor->hideSearchBar();
-            tab->preview->showSearchBar();
-        };
-        auto openEditor = [&]() {
-            if (tab->preview) tab->preview->hideSearchBar();
-            tab->editor->showSearchBar();
-        };
-
-        if (focusInPreview && previewVisible)        openPreview();
-        else if (focusInEditor && editorVisible)     openEditor();
-        else if (editorVisible)                      openEditor();   // 默认走编辑器
-        else if (previewVisible)                     openPreview();  // 纯预览模式兜底
-        // 两侧都不可见时不做事
+        if (auto* tab = currentTab()) tab->viewer->showSearchBar();
     }, QKeySequence::Find);
-
-    editMenu->addAction(tr("Replace..."), [this]() {
-        if (auto* tab = currentTab())
-            tab->editor->showReplaceBar();
-    }, QKeySequence(Qt::CTRL + Qt::Key_H));
 
     // -- 视图菜单 --
     QMenu* viewMenu = menuBar()->addMenu(tr("View"));
@@ -462,18 +421,6 @@ void MainWindow::setupMenuBar()
     rebuildThemeMenu();
 
     viewMenu->addSeparator();
-
-    // 自动换行
-    m_wordWrapAct = viewMenu->addAction(tr("Word Wrap"));
-    m_wordWrapAct->setCheckable(true);
-    m_wordWrapAct->setChecked(true);
-    connect(m_wordWrapAct, &QAction::triggered, this, [this]() {
-        bool checked = m_wordWrapAct->isChecked();
-        for (auto& tab : m_tabs) {
-            tab.editor->setWordWrap(checked);
-            tab.preview->setWordWrap(checked);
-        }
-    });
 
     // 行间距
     QMenu* lineSpacingMenu = viewMenu->addMenu(tr("Line Spacing"));
@@ -494,11 +441,9 @@ void MainWindow::setupMenuBar()
         qreal factor = opt.factor;
         connect(act, &QAction::triggered, this, [this, factor]() {
             m_lineSpacingFactor = factor;
-            // [Spec 模块-preview/02 INV-13] 编辑区与预览区行高乘数必须同步推送，
-            // 否则两侧视觉错位（用户感知最直观的 bug）
             for (auto& tab : m_tabs) {
-                tab.editor->setLineSpacing(factor);
-                tab.preview->setLineSpacingFactor(factor);
+                tab.viewer->setLineSpacingFactor(factor);
+                tab.viewer->rebuildLayout();
             }
         });
     }
@@ -563,31 +508,6 @@ void MainWindow::setupMenuBar()
         m_tabPosGroup->addAction(m_tabPosHideAllAct);
     }
 
-    // 显示区域子菜单：编辑器+预览 / 仅编辑器 / 仅预览
-    {
-        QMenu* displayMenu = viewMenu->addMenu(tr("Display Area"));
-        m_displayGroup = new QActionGroup(this);
-        m_displayGroup->setExclusive(true);
-
-        m_displayBothAct = displayMenu->addAction(tr("Editor and Preview"));
-        m_displayBothAct->setCheckable(true);
-
-        m_displayPreviewAct = displayMenu->addAction(tr("Preview Only"));
-        m_displayPreviewAct->setCheckable(true);
-        m_displayPreviewAct->setChecked(true);
-
-        m_displayEditorAct = displayMenu->addAction(tr("Editor Only"));
-        m_displayEditorAct->setCheckable(true);
-
-        m_displayGroup->addAction(m_displayBothAct);
-        m_displayGroup->addAction(m_displayEditorAct);
-        m_displayGroup->addAction(m_displayPreviewAct);
-
-        connect(m_displayBothAct, &QAction::triggered, this, [this]() { setDisplayMode(0); });
-        connect(m_displayEditorAct, &QAction::triggered, this, [this]() { setDisplayMode(1); });
-        connect(m_displayPreviewAct, &QAction::triggered, this, [this]() { setDisplayMode(2); });
-    }
-
     viewMenu->addSeparator();
 
     // [Spec/Plan 文档统计信息] 弹窗显示标题/段落/代码块/图片/链接统计
@@ -601,41 +521,6 @@ void MainWindow::setupMenuBar()
 
     // -- 设置菜单 --
     QMenu* settingsMenu = menuBar()->addMenu(tr("Settings"));
-
-    // Spec: specs/模块-app/14-自动保存.md
-    // 自动保存：开关（默认关闭）+ 三档延迟（30s / 5min / 10min，默认 5min）
-    m_autoSaveEnabledAct = settingsMenu->addAction(tr("Auto Save"));
-    m_autoSaveEnabledAct->setCheckable(true);
-    m_autoSaveEnabledAct->setChecked(m_autoSaveEnabled);
-    connect(m_autoSaveEnabledAct, &QAction::toggled, this, [this](bool checked) {
-        m_autoSaveEnabled = checked;
-        if (!checked) m_autoSaveTimer.stop();
-        saveSessionLater();
-    });
-
-    QMenu* autoSaveDelayMenu = settingsMenu->addMenu(tr("Auto Save Delay"));
-    QActionGroup* autoSaveDelayGroup = new QActionGroup(this);
-    autoSaveDelayGroup->setExclusive(true);
-    struct DelayChoice { int ms; const char* label; };
-    static const DelayChoice kDelays[] = {
-        { 30000,  QT_TR_NOOP("30 seconds") },
-        { 300000, QT_TR_NOOP("5 minutes") },
-        { 600000, QT_TR_NOOP("10 minutes") },
-    };
-    m_autoSaveDelayActions.clear();
-    for (const auto& dc : kDelays) {
-        QAction* a = autoSaveDelayMenu->addAction(tr(dc.label));
-        a->setCheckable(true);
-        autoSaveDelayGroup->addAction(a);
-        a->setData(dc.ms);
-        const int ms = dc.ms;
-        connect(a, &QAction::triggered, this, [this, ms]() {
-            m_autoSaveDelayMs = ms;
-            saveSessionLater();
-        });
-        m_autoSaveDelayActions.append(a);
-    }
-    settingsMenu->addSeparator();
 
     QMenu* languageMenu = settingsMenu->addMenu(tr("Language"));
     QActionGroup* langGroup = new QActionGroup(this);
@@ -858,61 +743,8 @@ void MainWindow::clampSidePanelsToScreenQuarter()
 //   - 未保存修改（避免数据丢失）
 //   - 文件路径为空（无源可恢复）
 //   - 当前活跃 Tab / 上次活跃 Tab（避免 Ctrl+Tab 反复切撞墙）
-bool MainWindow::dormantTab(int idx)
-{
-    if (idx < 0 || idx >= m_tabs.size()) return false;
-    auto& tab = m_tabs[idx];
-    if (tab.lazyPending) return false;
-    if (idx == m_tabBar->currentIndex()) return false;
-
-    auto* doc = tab.editor->document();
-    if (!doc) return false;
-    if (doc->isModified()) return false;
-
-    QString fp = doc->filePath();
-    if (fp.isEmpty()) return false;
-
-    // 卸载内容：清编辑器 PieceTable + 清预览 AST
-    // Document 没有 setContent，用 remove(0, length) 清空；remove 触发 modified=true，
-    // 故必须在 remove 之后再 setModified(false) 让 Tab 标题不带 "*" 标记
-    int curLen = doc->length();
-    if (curLen > 0) doc->remove(0, curLen);
-    doc->setModified(false);
-    tab.preview->updateAst(nullptr);
-    tab.lazyPending = true;
-    tab.lazyFilePath = fp;
-    return true;
-}
-
 // 扫描已加载（非 lazy）Tab 数，超阈值时按 openOrder 升序（最早打开优先）休眠最早的 Tab
 // 直到回到阈值之内或没有更多可休眠对象。
-void MainWindow::enforceSleepThreshold()
-{
-    if (m_tabSleepThreshold <= 0) return;
-
-    // 收集 (openOrder, idx) 用于排序
-    QVector<QPair<qint64, int>> active;
-    for (int i = 0; i < m_tabs.size(); ++i) {
-        if (!m_tabs[i].lazyPending) {
-            active.append({m_tabs[i].openOrder, i});
-        }
-    }
-    if (active.size() <= m_tabSleepThreshold) return;
-
-    // FIFO：按 openOrder 升序
-    std::sort(active.begin(), active.end(),
-              [](const QPair<qint64, int>& a, const QPair<qint64, int>& b) {
-                  return a.first < b.first;
-              });
-
-    int needSleep = active.size() - m_tabSleepThreshold;
-    int slept = 0;
-    for (const auto& p : active) {
-        if (slept >= needSleep) break;
-        if (dormantTab(p.second)) ++slept;
-    }
-}
-
 // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-VALIGN
 // 拆分 QTabWidget 后，addTab/removeTab 需同时操作 m_tabBar 与 m_contentStack
 int MainWindow::addPage(QWidget* page, const QString& title)
@@ -937,221 +769,88 @@ void MainWindow::removePage(int index)
     if (m_tabBarOnSide) m_sideTabBar->removeTab(index);
 }
 
-void MainWindow::newTab()
-{
-    TabData tab = createTab();
-    int index = addPage(tab.splitter, tr("Untitled"));
-    m_tabs.append(tab);
-    setTabCloseButton(index);
-    m_tabBar->setCurrentIndex(index);
-
-    // 为新建空标签页插入示例文本
-    tab.editor->document()->insert(0,
-        "# SimpleMarkdown\n"
-        "\n"
-        "A **lightweight** cross-platform Markdown editor.\n"
-    );
-    tab.editor->document()->setModified(false);
-    // parseNow 会由 textChanged → debounce 自动触发
-
-    // Spec: specs/模块-app/22-空白引导页.md INV-EMPTY-OPEN-EXITS
-    updateEmptyState();
-}
-
 void MainWindow::restoreSession(const QString& requestedFile)
 {
-    // Spec: specs/横切关注点/30-主题系统.md INV-3（切换主题时全部 widget 必须响应）
-    // 根因：loadSettings() 在构造末尾调用 applyTheme 时 m_tabs 为空，随后 restoreSession
-    // 创建的 Tab 虽然 createTab 里调了 setTheme(m_currentTheme)，但解析器/块缓存时序在
-    // 某些路径下会把默认浅色固化进 preview 块缓存，导致编辑器/预览区保持浅色。
-    // 修复：在所有返回路径末尾重新 applyTheme 一次，触发 tab 重绘并清缓存。
-    // 用 lambda 封装避免在 3 个 return 点重复写。
+    // 启动加速：先显示窗口，再恢复；只有活跃 tab 立即加载，其余懒加载。
     auto reapplyTheme = [this]() { applyTheme(m_currentTheme); };
 
     QSettings s;
-    bool restore = s.value("session/restoreLastFile", true).toBool();
+    const bool restore = s.value("session/restoreLastFile", true).toBool();
 
-    // 命令行指定了文件
-    if (!requestedFile.isEmpty()) {
-        // 先恢复会话中的其他标签页
-        if (restore) {
-            int count = s.beginReadArray("session/tabs");
-            for (int i = 0; i < count; ++i) {
-                s.setArrayIndex(i);
-                QString fp = s.value("file").toString();
-                if (fp == QFileInfo(requestedFile).absoluteFilePath()) continue;
-                if (!fp.isEmpty() && QFileInfo::exists(fp)) {
-                    openFile(fp);
-                    int idx = m_tabBar->count() - 1;
-                    int es = s.value("editorScroll", 0).toInt();
-                    int ehs = s.value("editorHScroll", 0).toInt();
-                    int ps = s.value("previewScroll", 0).toInt();
-                    int phs = s.value("previewHScroll", 0).toInt();
-                    int cLine = s.value("cursorLine", 0).toInt();
-                    int cCol = s.value("cursorColumn", 0).toInt();
-                    int ew = s.value("editorWidth", -1).toInt();
-                    int pw = s.value("previewWidth", -1).toInt();
-                    // Spec: specs/模块-preview/08-内容标记.md INV-5
-                    QByteArray markings = s.value("markings").toByteArray();
-                    QTimer::singleShot(200, this, [this, idx, es, ehs, ps, phs, cLine, cCol, ew, pw, markings]() {
-                        if (idx < m_tabs.size()) {
-                            // 恢复分隔条位置
-                            if (ew > 0 && pw > 0) {
-                                m_tabs[idx].splitter->setSizes({ew, pw});
-                            }
-                            m_tabs[idx].editor->document()->selection().setCursorPosition({cLine, cCol});
-                            m_tabs[idx].editor->verticalScrollBar()->setValue(es);
-                            m_tabs[idx].editor->horizontalScrollBar()->setValue(ehs);
-                            m_tabs[idx].preview->verticalScrollBar()->setValue(ps);
-                            m_tabs[idx].preview->horizontalScrollBar()->setValue(phs);
-                            if (!markings.isEmpty()) {
-                                m_tabs[idx].preview->deserializeMarkings(markings);
-                            }
-                        }
-                    });
-                }
-            }
-            s.endArray();
+    struct TabState { QString file; int line; QByteArray markings; };
+    QVector<TabState> states;
+    if (restore) {
+        const int count = s.beginReadArray("session/tabs");
+        for (int i = 0; i < count; ++i) {
+            s.setArrayIndex(i);
+            const QString fp = s.value("file").toString();
+            if (!fp.isEmpty() && QFileInfo::exists(fp))
+                states.append({fp, s.value("viewLine", 0).toInt(), s.value("markings").toByteArray()});
         }
-        // 打开命令行指定的文件并恢复其滚动位置
+        s.endArray();
+    }
+
+    // 命令行指定了文件：其他会话 tab 懒加载，指定文件立即加载并恢复其阅读位置
+    if (!requestedFile.isEmpty()) {
+        const QString reqAbs = QFileInfo(requestedFile).absoluteFilePath();
+        int reqLine = 0;
+        for (const auto& st : states) {
+            if (st.file == reqAbs) { reqLine = st.line; continue; }
+            TabData tab = createTab();
+            tab.filePath = QFileInfo(st.file).absoluteFilePath();
+            tab.lazyPending = true;
+            tab.pendingLine = st.line;
+            tab.viewer->deserializeMarkings(st.markings);
+            const int idx = addPage(tab.viewer, QFileInfo(st.file).fileName());
+            m_tabs.append(tab);
+            setTabCloseButton(idx);
+            watchFile(tab.filePath);
+        }
         openFile(requestedFile);
-        if (restore) {
-            int count = s.beginReadArray("session/tabs");
-            for (int i = 0; i < count; ++i) {
-                s.setArrayIndex(i);
-                if (s.value("file").toString() == QFileInfo(requestedFile).absoluteFilePath()) {
-                    int es = s.value("editorScroll", 0).toInt();
-                    int ehs = s.value("editorHScroll", 0).toInt();
-                    int ps = s.value("previewScroll", 0).toInt();
-                    int phs = s.value("previewHScroll", 0).toInt();
-                    int cLine = s.value("cursorLine", 0).toInt();
-                    int cCol = s.value("cursorColumn", 0).toInt();
-                    int ew = s.value("editorWidth", -1).toInt();
-                    int pw = s.value("previewWidth", -1).toInt();
-                    // Spec: specs/模块-preview/08-内容标记.md INV-5
-                    QByteArray markings = s.value("markings").toByteArray();
-                    QTimer::singleShot(200, this, [this, es, ehs, ps, phs, cLine, cCol, ew, pw, markings]() {
-                        if (auto* tab = currentTab()) {
-                            // 恢复分隔条位置
-                            if (ew > 0 && pw > 0) {
-                                tab->splitter->setSizes({ew, pw});
-                            }
-                            tab->editor->document()->selection().setCursorPosition({cLine, cCol});
-                            tab->editor->ensureCursorVisible();
-                            tab->editor->verticalScrollBar()->setValue(es);
-                            tab->editor->horizontalScrollBar()->setValue(ehs);
-                            tab->preview->verticalScrollBar()->setValue(ps);
-                            tab->preview->horizontalScrollBar()->setValue(phs);
-                            if (!markings.isEmpty()) {
-                                tab->preview->deserializeMarkings(markings);
-                            }
-                        }
-                    });
-                    break;
-                }
-            }
-            s.endArray();
+        // 用路径定位刚打开的 tab：文件不可打开（如被拒绝的二进制）时 m_tabs.last() 可能是别的 tab
+        if (TabData* reqTab = tabForPath(reqAbs)) {
+            if (reqLine > 0) reqTab->viewer->scrollToSourceLine(reqLine, false);
+            for (const auto& st : states)
+                if (st.file == reqAbs) reqTab->viewer->deserializeMarkings(st.markings);
         }
         reapplyTheme();
         return;
     }
 
-    // 无命令行文件：恢复整个会话
-    if (restore) {
-        struct TabState {
-            QString filePath;
-            int editorScroll, editorHScroll, previewScroll, previewHScroll;
-            int cursorLine, cursorColumn;
-            int editorWidth, previewWidth;  // 分隔条位置（宽度）
-            // Spec: specs/模块-preview/08-内容标记.md INV-5
-            QByteArray markings;
-        };
-        int count = s.beginReadArray("session/tabs");
-        QVector<TabState> tabStates;
-        for (int i = 0; i < count; ++i) {
-            s.setArrayIndex(i);
-            QString fp = s.value("file").toString();
-            if (!fp.isEmpty() && QFileInfo::exists(fp)) {
-                tabStates.append({fp,
-                                  s.value("editorScroll", 0).toInt(),
-                                  s.value("editorHScroll", 0).toInt(),
-                                  s.value("previewScroll", 0).toInt(),
-                                  s.value("previewHScroll", 0).toInt(),
-                                  s.value("cursorLine", 0).toInt(),
-                                  s.value("cursorColumn", 0).toInt(),
-                                  s.value("editorWidth", -1).toInt(),
-                                  s.value("previewWidth", -1).toInt(),
-                                  s.value("markings").toByteArray()});
+    if (!states.isEmpty()) {
+        int activeTab = 0;
+        const QString activeFile = s.value("session/activeFile").toString();
+        for (int i = 0; i < states.size(); ++i)
+            if (!activeFile.isEmpty() && states[i].file == activeFile) { activeTab = i; break; }
+        for (int i = 0; i < states.size(); ++i) {
+            const auto& st = states[i];
+            if (i == activeTab) {
+                openFile(st.file);
+                if (TabData* t = tabForPath(QFileInfo(st.file).absoluteFilePath())) {
+                    if (st.line > 0) t->viewer->scrollToSourceLine(st.line, false);
+                    t->viewer->deserializeMarkings(st.markings);
+                }
+            } else {
+                TabData tab = createTab();
+                tab.filePath = QFileInfo(st.file).absoluteFilePath();
+                tab.lazyPending = true;
+                tab.pendingLine = st.line;
+                tab.viewer->deserializeMarkings(st.markings);
+                const int idx = addPage(tab.viewer, QFileInfo(st.file).fileName());
+                m_tabs.append(tab);
+                setTabCloseButton(idx);
+                watchFile(tab.filePath);
             }
         }
-        s.endArray();
-
-        if (!tabStates.isEmpty()) {
-            int activeTab = s.value("session/activeTab", 0).toInt();
-            if (activeTab < 0 || activeTab >= tabStates.size())
-                activeTab = 0;
-
-            // 创建所有标签页：活跃 tab 立即加载，其余懒加载
-            for (int i = 0; i < tabStates.size(); ++i) {
-                const auto& st = tabStates[i];
-                if (i == activeTab) {
-                    openFile(st.filePath);
-                    // Spec: specs/模块-preview/08-内容标记.md INV-5
-                    // 立即注入 m_pendingMarkings；updateAst 完成后由 applyPendingMarkings 兑现
-                    if (!st.markings.isEmpty() && !m_tabs.isEmpty()) {
-                        m_tabs.last().preview->deserializeMarkings(st.markings);
-                    }
-                } else {
-                    // 懒加载：创建 tab 但不加载文件内容
-                    TabData tab = createTab();
-                    int idx = addPage(tab.splitter, QFileInfo(st.filePath).fileName());
-                    tab.lazyPending = true;
-                    tab.lazyFilePath = st.filePath;
-                    m_tabs.append(tab);
-                    setTabCloseButton(idx);
-                    watchFile(QFileInfo(st.filePath).absoluteFilePath());
-                    // 恢复该 Tab 的分隔条位置
-                    if (st.editorWidth > 0 && st.previewWidth > 0) {
-                        tab.splitter->setSizes({st.editorWidth, st.previewWidth});
-                    }
-                    // Spec: specs/模块-preview/08-内容标记.md INV-5
-                    // 懒加载 tab 把标记字节流先注入 m_pendingMarkings，
-                    // 切换激活并触发 openFile/updateAst 后由 applyPendingMarkings 兑现
-                    if (!st.markings.isEmpty()) {
-                        tab.preview->deserializeMarkings(st.markings);
-                    }
-                }
-            }
-
-            // 设置活跃标签
-            if (activeTab >= 0 && activeTab < m_tabBar->count())
-                m_tabBar->setCurrentIndex(activeTab);
-
-            // 延迟恢复活跃标签页的光标、滚动位置和分隔条
-            const auto& activeSt = tabStates[activeTab];
-            QTimer::singleShot(200, this, [this, activeSt]() {
-                if (auto* tab = currentTab()) {
-                    // 恢复分隔条位置
-                    if (activeSt.editorWidth > 0 && activeSt.previewWidth > 0) {
-                        tab->splitter->setSizes({activeSt.editorWidth, activeSt.previewWidth});
-                    }
-                    tab->editor->document()->selection().setCursorPosition(
-                        {activeSt.cursorLine, activeSt.cursorColumn});
-                    tab->editor->ensureCursorVisible();
-                    tab->editor->verticalScrollBar()->setValue(activeSt.editorScroll);
-                    tab->editor->horizontalScrollBar()->setValue(activeSt.editorHScroll);
-                    tab->preview->verticalScrollBar()->setValue(activeSt.previewScroll);
-                    tab->preview->horizontalScrollBar()->setValue(activeSt.previewHScroll);
-                    m_folderPanel->selectFile(tab->editor->document()->filePath());
-                }
-            });
-            reapplyTheme();
-            return;
+        if (activeTab >= 0 && activeTab < m_tabBar->count()) {
+            m_tabBar->setCurrentIndex(activeTab);
+            onTabChanged(activeTab);   // 与首个 tab 同理：确保目录/文件键与当前 tab 同步
         }
+        reapplyTheme();
+        return;
     }
 
     // Spec: specs/模块-app/22-空白引导页.md INV-EMPTY-NO-AUTO-CREATE
-    // 无可恢复 Tab 且无命令行文件时，不再自动创建 Untitled，改显示空白引导面板
     updateEmptyState();
     reapplyTheme();
 }
@@ -1159,20 +858,11 @@ void MainWindow::restoreSession(const QString& requestedFile)
 void MainWindow::openFile(const QString& path)
 {
     // 检查文件是否已在某个标签页打开（包括懒加载未加载的 tab）
-    QString absPath = QFileInfo(path).absoluteFilePath();
+    const QString absPath = QFileInfo(path).absoluteFilePath();
     for (int i = 0; i < m_tabs.size(); ++i) {
-        QString tabFp = m_tabs[i].editor->document()->filePath();
-        if (tabFp.isEmpty() && m_tabs[i].lazyPending)
-            tabFp = m_tabs[i].lazyFilePath;
-        if (tabFp == absPath) {
+        if (m_tabs[i].filePath == absPath) {
             m_tabBar->setCurrentIndex(i);
-
-            // [修复] 如果文件已打开，切换到该标签页后必须提升窗口
-            // 场景：用户在浏览器中打开 markdown 文件时，应用加载文件但窗口被其他应用遮挡
-            // 解决方案：通过以下三个步骤确保窗口被置于最前：
-            // 1. setWindowState - 恢复最小化状态并设置活跃状态
-            // 2. raise() - 在 Z 序中将窗口提升到最前
-            // 3. activateWindow() - 确保窗口获得键盘焦点
+            // 已打开：切换后提升窗口（浏览器等外部程序打开文件时窗口可能被遮挡）
             setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
             raise();
             activateWindow();
@@ -1180,27 +870,27 @@ void MainWindow::openFile(const QString& path)
         }
     }
 
-    // 创建新标签页并加载文件
+    // 创建新标签页并异步加载文件（INV-LOAD-NONBLOCKING：UI 线程不做文件 IO）
     TabData tab = createTab();
-    int index = addPage(tab.splitter, QFileInfo(path).fileName());
+    tab.filePath = absPath;
+    const int index = addPage(tab.viewer, QFileInfo(path).fileName());
     m_tabs.append(tab);
     setTabCloseButton(index);
     m_tabBar->setCurrentIndex(index);
-    // Spec: specs/模块-app/22-空白引导页.md INV-EMPTY-OPEN-EXITS
+    // 第一个 tab：addTab 时 currentChanged 已在 m_tabs 为空时触发过，之后 setCurrentIndex 不再触发，
+    // 需显式同步目录面板的文件键/折叠状态等
+    if (m_tabs.size() == 1) onTabChanged(index);
     updateEmptyState();
 
-    tab.editor->document()->loadFromFile(path);
-    tab.preview->setDocumentDir(QFileInfo(path).absolutePath());
-    tab.scheduler->parseNow();
+    tab.viewer->setDocumentDir(QFileInfo(absPath).absolutePath());
+    tab.viewer->loadFile(absPath);
 
     m_recentFiles->addFile(path);
     updateTabTitle(index);
-    watchFile(QFileInfo(path).absoluteFilePath());
-
-    // 文件夹面板自动选中当前打开的文件
+    watchFile(absPath);
     m_folderPanel->selectFile(path);
 
-    // [修复] 加载新文件后必须提升窗口，确保用户能看到
+    // 加载新文件后必须提升窗口，确保用户能看到
     setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
     raise();
     activateWindow();
@@ -1211,152 +901,47 @@ void MainWindow::openFile(const QString& path)
 MainWindow::TabData MainWindow::createTab()
 {
     TabData tab;
-    // [Plan 2026-05-06-多Tab超阈值时休眠最早文档] 分配单调自增的打开序号供 FIFO 排序
     tab.openOrder = m_nextTabOpenOrder++;
 
-    // Spec: specs/模块-app/13-分隔条吸附刻度.md
-    // 用 SnapSplitter 替代 QSplitter，启用 1/4、1/2、3/4 吸附刻度
-    auto* snap = new app::SnapSplitter(Qt::Horizontal);
-    snap->setAccentColor(m_currentTheme.accentColor);
-    tab.splitter = snap;
-    tab.editor = new EditorWidget(tab.splitter);
-    tab.splitter->addWidget(tab.editor);
+    // Spec: specs/模块-viewer/04-查看器控件.md —— Tab 内容 = 单个只读 ViewerWidget
+    tab.viewer = new viewer::ViewerWidget();
+    tab.viewer->setTheme(m_currentTheme);
+    tab.viewer->setLineSpacingFactor(m_lineSpacingFactor);
+    tab.viewer->previewLayout()->setFont(font_defaults::defaultPreviewFont(m_fontSizeDelta));
 
-    tab.preview = new PreviewWidget(tab.splitter);
-    tab.splitter->addWidget(tab.preview);
-    tab.splitter->setSizes({640, 640});
-
-    // 允许拖拽到底完全隐藏编辑器或预览区
-    tab.editor->setMinimumWidth(0);
-    tab.preview->setMinimumWidth(0);
-    tab.splitter->setChildrenCollapsible(true);
-
-    // [Spec 模块-app/13 INV-SNAP-LAZY-PANE-REBUILD]
-    // 拖拽期间 PreviewWidget::resizeEvent / EditorWidget::resizeEvent 检测到
-    // splitter 上 dynamic property "smSnapDragging" = true 后跳过全文重排。
-    // 这里在拖拽结束时触发各 pane 一次性最终重排，对齐松手位置的实际宽度。
-    // 用 dragFinished 信号而非 splitterMoved——后者拖拽过程中连续多次 emit，
-    // 用于驱动吸附检测；前者仅在 mouseRelease 时一次，是 lazy rebuild 的兑现点。
-    connect(snap, &app::SnapSplitter::dragFinished, this,
-            [editor = tab.editor, preview = tab.preview]() {
-        if (editor) editor->recomputeWrapForCurrentWidth();
-        if (preview) {
-            preview->rebuildLayout();
-            preview->viewport()->update();
-        }
-    });
-
-    // splitter 拖拽联动 displayMode 菜单状态
-    // splitter 拖拽联动 displayMode（debounce 200ms，松手后才判断）
-    connect(tab.splitter, &QSplitter::splitterMoved, this, [this, splitter = tab.splitter]() {
-        if (m_focusMode) return;
-        // 每次 splitterMoved 重启 debounce timer
-        QTimer::singleShot(200, this, [this, splitter]() {
-            if (m_focusMode) return;
-            QList<int> sizes = splitter->sizes();
-            if (sizes.size() < 2) return;
-            int newMode = 0;
-            if (sizes[0] == 0) newMode = 2;
-            else if (sizes[1] == 0) newMode = 1;
-            if (newMode != m_displayMode) {
-                m_displayMode = newMode;
-                if (m_displayBothAct) m_displayBothAct->setChecked(newMode == 0);
-                if (m_displayEditorAct) m_displayEditorAct->setChecked(newMode == 1);
-                if (m_displayPreviewAct) m_displayPreviewAct->setChecked(newMode == 2);
-                // [2026-05-13] splitter 拖拽改变 m_displayMode 时也更新行号 label 可见性
-                if (m_statusCursorPos) m_statusCursorPos->setVisible(newMode != 2);
-                if (newMode == 1)
-                    showToast(tr("Preview hidden. Restore via View > Display Area."));
-                else if (newMode == 2)
-                    showToast(tr("Editor hidden. Restore via View > Display Area."));
-            }
-        });
-    });
-
-    // 解析调度器：关联文档到预览
-    tab.scheduler = new ParseScheduler(tab.splitter);
-    tab.scheduler->setDocument(tab.editor->document());
-    // [Spec 模块-preview/13 INV-3] 桥接：在更新 AST 之前先把 raw source 拷给预览，
-    // 让 copyAsMarkdown 能切对应行。doc / preview / scheduler 同生命周期（同 tab）
-    {
-        PreviewWidget* previewPtr = tab.preview;
-        Document* docPtr = tab.editor->document();
-        connect(tab.scheduler, &ParseScheduler::astReady, tab.preview,
-                [previewPtr, docPtr](std::shared_ptr<AstNode> root) {
-                    if (docPtr) previewPtr->setSourceText(docPtr->text());
-                    previewPtr->updateAst(std::move(root));
-                });
-    }
-
-    // 滚动同步：编辑器 → 预览
-    tab.scrollSync = new ScrollSync(tab.editor, tab.preview, tab.splitter);
-
-    // 应用当前设置
-    tab.editor->setTheme(m_currentTheme);
-    tab.preview->setTheme(m_currentTheme);
-    tab.editor->setWordWrap(m_wordWrapAct && m_wordWrapAct->isChecked());
-    tab.preview->setWordWrap(m_wordWrapAct && m_wordWrapAct->isChecked());
-    tab.editor->setLineSpacing(m_lineSpacingFactor);
-    // [Spec 模块-preview/02 INV-13] 新建 tab 时同步行间距到预览区
-    tab.preview->setLineSpacingFactor(m_lineSpacingFactor);
-
-    // TOC 信号：仅当此 tab 是当前活跃 tab 时更新全局 TocPanel
-    connect(tab.preview, &PreviewWidget::tocEntriesChanged,
-            this, [this, preview = tab.preview](const QVector<TocEntry>& entries) {
-        if (currentTab() && currentTab()->preview == preview)
+    // 目录：仅当此 tab 是当前活跃 tab 时更新全局 TocPanel
+    connect(tab.viewer, &viewer::ViewerWidget::tocEntriesChanged,
+            this, [this, v = tab.viewer](const QVector<TocEntry>& entries) {
+        if (currentTab() && currentTab()->viewer == v)
             m_tocPanel->setEntries(entries);
     });
-    connect(tab.preview, &PreviewWidget::tocHighlightChanged,
-            this, [this, preview = tab.preview](const QSet<int>& indices) {
-        if (currentTab() && currentTab()->preview == preview)
+
+    // 含标记的章节 → 目录面板高亮
+    connect(tab.viewer, &viewer::ViewerWidget::tocHighlightChanged,
+            this, [this, v = tab.viewer](const QSet<int>& indices) {
+        if (currentTab() && currentTab()->viewer == v)
             m_tocPanel->setHighlightedEntries(indices);
     });
 
-    // [Spec 模块-preview/09] 预览区链接 Ctrl+click
-    connect(tab.preview, &PreviewWidget::linkClicked,
-            this, [this, editor = tab.editor](const QString& url) {
-        onPreviewLinkClicked(url, editor);
+    // 链接（Ctrl+点击）
+    connect(tab.viewer, &viewer::ViewerWidget::linkClicked,
+            this, [this, v = tab.viewer](const QString& url) {
+        onPreviewLinkClicked(url, v->filePath());
     });
 
-    // 预览区右键菜单：在浏览器中打开
-    connect(tab.preview, &PreviewWidget::openInBrowserRequested,
-            this, [this]() {
-        auto* tab = currentTab();
-        if (!tab) return;
-
-        QString body = currentMarkdownToHtml();
-        if (body.isEmpty()) return;
-
-        QString baseName = QFileInfo(tab->editor->document()->filePath()).completeBaseName();
-        if (baseName.isEmpty()) baseName = "untitled";
-
-        QString html = QString(kHtmlTemplate).arg(baseName.toHtmlEscaped(), body);
-
-        // 创建临时 HTML 文件
-        QString tempPath = QDir::temp().filePath(baseName + ".html");
-        QFile file(tempPath);
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            file.write(html.toUtf8());
-            file.close();
-            QDesktopServices::openUrl(QUrl::fromLocalFile(tempPath));
+    // 加载状态变化 → 刷新状态栏/文档信息
+    connect(tab.viewer, &viewer::ViewerWidget::loadStateChanged, this, [this, v = tab.viewer]() {
+        if (currentTab() && currentTab()->viewer == v) {
+            updateStatusBarStats();
+            updateRightStatusBar();
         }
     });
 
-    // TocPanel 点击 → 当前 tab 的 preview 跳转
-    // （在 MainWindow 构造中统一连接一次即可，不需要每个 tab 连接）
-
-    // 追踪修改状态以更新标签页标题和状态栏保存状态
-    connect(tab.editor->document(), &Document::modifiedChanged,
-            this, [this](bool) {
-        int idx = m_tabBar->currentIndex();
-        if (idx >= 0)
-            updateTabTitle(idx);
-        // Spec: specs/模块-app/15-状态栏布局.md
-        updateSaveStatusOnly();
+    // 阅读位置变化 → 状态栏 + 会话持久化（ViewerWidget 内部已去抖）
+    connect(tab.viewer, &viewer::ViewerWidget::positionChanged, this, [this, v = tab.viewer]() {
+        if (currentTab() && currentTab()->viewer == v) updatePositionStatus();
+        saveSessionLater();
     });
-
-    // 状态栏信号连接
-    connectTabStatusBar(tab);
 
     return tab;
 }
@@ -1366,20 +951,8 @@ void MainWindow::updateTabTitle(int index)
     if (index < 0 || index >= m_tabs.size())
         return;
 
-    Document* doc = m_tabs[index].editor->document();
-    QString fp = doc->filePath();
-    // 懒加载 tab 尚未加载文件，从 lazyFilePath 获取路径
-    if (fp.isEmpty() && m_tabs[index].lazyPending)
-        fp = m_tabs[index].lazyFilePath;
-
-    QString title;
-    if (fp.isEmpty()) {
-        title = tr("Untitled");
-    } else {
-        title = QFileInfo(fp).fileName();
-    }
-    if (doc->isModified())
-        title = "* " + title;
+    const QString fp = m_tabs[index].filePath;
+    const QString title = fp.isEmpty() ? tr("Untitled") : QFileInfo(fp).fileName();
 
     m_tabBar->setTabText(index, title);
     m_tabBar->setTabToolTip(index, fp.isEmpty() ? tr("Untitled") : QFileInfo(fp).absoluteFilePath());
@@ -1628,11 +1201,7 @@ void MainWindow::applyTheme(const Theme& theme)
 {
     m_currentTheme = theme;
     for (auto& tab : m_tabs) {
-        tab.editor->setTheme(theme);
-        tab.preview->setTheme(theme);
-        // Spec: specs/模块-app/13-分隔条吸附刻度.md INV-SNAP-THEME
-        if (auto* snap = qobject_cast<app::SnapSplitter*>(tab.splitter))
-            snap->setAccentColor(theme.accentColor);
+        tab.viewer->setTheme(theme);
     }
     m_tocPanel->setTheme(theme);
     m_folderPanel->setTheme(theme);
@@ -1873,56 +1442,7 @@ MainWindow::TabData* MainWindow::currentTab()
     return &m_tabs[idx];
 }
 
-bool MainWindow::maybeSave(int index)
-{
-    if (index < 0 || index >= m_tabs.size())
-        return true;
-
-    Document* doc = m_tabs[index].editor->document();
-    if (!doc->isModified())
-        return true;
-
-    // 空的未命名文件无需保存确认
-    if (doc->filePath().isEmpty() && doc->length() == 0)
-        return true;
-
-    QString name = doc->filePath().isEmpty() ? tr("Untitled") : QFileInfo(doc->filePath()).fileName();
-    QMessageBox box(QMessageBox::Warning, tr("Save Changes"),
-                    tr("Do you want to save changes to \"%1\"?").arg(name),
-                    QMessageBox::NoButton, this);
-    QPushButton* saveBtn = box.addButton(tr("Save"), QMessageBox::AcceptRole);
-    QPushButton* discardBtn = box.addButton(tr("Discard"), QMessageBox::DestructiveRole);
-    box.addButton(tr("Cancel"), QMessageBox::RejectRole);
-    box.setDefaultButton(saveBtn);
-    box.exec();
-
-    QAbstractButton* clicked = box.clickedButton();
-    if (clicked == saveBtn) {
-        if (doc->filePath().isEmpty()) {
-            QString path = QFileDialog::getSaveFileName(
-                this, tr("Save File"), QString(),
-                tr("Markdown Files (*.md *.markdown);;All Files (*)"));
-            if (path.isEmpty())
-                return false;
-            doc->saveToFile(path);
-        } else {
-            unwatchFile(doc->filePath());
-            doc->saveToFile();
-            // 关闭 tab 时不需要重新监控（tab 即将被移除）
-        }
-        return true;
-    } else if (clicked == discardBtn) {
-        return true;
-    }
-    return false;  // Cancel
-}
-
 // -- 槽函数 --
-
-void MainWindow::onNewFile()
-{
-    newTab();
-}
 
 void MainWindow::onOpenFile()
 {
@@ -1946,70 +1466,22 @@ void MainWindow::onOpenFolder()
     saveSettings();  // 文件夹路径是关键状态，立即持久化
 }
 
-void MainWindow::onSaveFile()
-{
-    auto* tab = currentTab();
-    if (!tab) return;
-
-    Document* doc = tab->editor->document();
-    if (doc->filePath().isEmpty()) {
-        onSaveFileAs();
-    } else {
-        QString fp = doc->filePath();
-        unwatchFile(fp);
-        doc->saveToFile();
-        updateTabTitle(m_tabBar->currentIndex());
-        // 延迟重新监控，避免捕获自身保存产生的文件变更事件
-        QTimer::singleShot(500, this, [this, fp]() { watchFile(fp); });
-        // Spec: specs/模块-app/15-状态栏布局.md
-        updateSaveStatusOnly();
-    }
-}
-
-void MainWindow::onSaveFileAs()
-{
-    auto* tab = currentTab();
-    if (!tab) return;
-
-    QString oldPath = tab->editor->document()->filePath();
-    QString path = QFileDialog::getSaveFileName(
-        this, tr("Save File As"), QString(),
-        tr("Markdown Files (*.md *.markdown);;All Files (*)"));
-    if (path.isEmpty()) return;
-
-    if (!oldPath.isEmpty())
-        unwatchFile(oldPath);
-    tab->editor->document()->saveToFile(path);
-    // 另存为后更新预览区文档目录（图片相对路径可能变化）
-    tab->preview->setDocumentDir(QFileInfo(path).absolutePath());
-    QString absFp = QFileInfo(path).absoluteFilePath();
-    QTimer::singleShot(500, this, [this, absFp]() { watchFile(absFp); });
-    m_recentFiles->addFile(path);
-    updateTabTitle(m_tabBar->currentIndex());
-    // Spec: specs/模块-app/15-状态栏布局.md
-    updateRightStatusBar();
-}
-
 void MainWindow::onCloseTab(int index)
 {
-    if (!maybeSave(index))
-        return;
+    if (index < 0 || index >= m_tabs.size()) return;
 
     // 取消文件监控
-    QString fp = m_tabs[index].editor->document()->filePath();
-    if (fp.isEmpty() && m_tabs[index].lazyPending)
-        fp = m_tabs[index].lazyFilePath;
+    const QString fp = m_tabs[index].filePath;
     if (!fp.isEmpty())
         unwatchFile(fp);
 
-    // 移除标签页数据
-    auto* sp = m_tabs[index].splitter;
+    // 移除标签页数据（ViewerWidget 析构会取消后台加载，不阻塞）
+    auto* v = m_tabs[index].viewer;
     m_tabs.removeAt(index);
     removePage(index);  // 从 tabBar + contentStack 移除
-    if (sp) sp->deleteLater();
+    if (v) v->deleteLater();
 
     // Spec: specs/模块-app/22-空白引导页.md INV-EMPTY-CLOSE-LAST
-    // 关闭最后一个 Tab 后回到空白引导状态（不再自动 newTab）
     updateEmptyState();
 
     saveSessionLater();
@@ -2022,100 +1494,40 @@ void MainWindow::onTabChanged(int index)
 
     updateTabTitle(index);
 
-    // 懒加载：切换到尚未加载的 tab 时触发文件加载（也覆盖运行时休眠后切回的唤醒路径）
-    if (index >= 0 && index < m_tabs.size() && m_tabs[index].lazyPending) {
-        m_tabs[index].lazyPending = false;
-        QString fp = m_tabs[index].lazyFilePath;
-        m_tabs[index].lazyFilePath.clear();
-        if (!fp.isEmpty() && QFileInfo::exists(fp)) {
-            m_tabs[index].editor->document()->loadFromFile(fp);
-            m_tabs[index].preview->setDocumentDir(QFileInfo(fp).absolutePath());
-            m_tabs[index].scheduler->parseNow();
-        }
-    }
-
-    // 切换 tab 时更新 TOC 面板
     if (index >= 0 && index < m_tabs.size()) {
-        auto* preview = m_tabs[index].preview;
-        // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-COLLAPSE
-        // 切 Tab 先更新 fileKey（触发折叠状态 load），再 setEntries
-        QString fp = m_tabs[index].editor->document()->filePath();
-        // 更新预览区文档目录，用于解析图片相对路径
-        preview->setDocumentDir(fp.isEmpty() ? QString() : QFileInfo(fp).absolutePath());
+        TabData& tab = m_tabs[index];
+        // 懒加载：切换到尚未加载的 tab 时才触发文件加载
+        if (tab.lazyPending) {
+            tab.lazyPending = false;
+            if (!tab.filePath.isEmpty() && QFileInfo::exists(tab.filePath)) {
+                tab.viewer->setDocumentDir(QFileInfo(tab.filePath).absolutePath());
+                tab.viewer->loadFile(tab.filePath);
+                if (tab.pendingLine > 0) tab.viewer->scrollToSourceLine(tab.pendingLine, false);
+                tab.pendingLine = -1;
+            }
+        }
+        auto* v = tab.viewer;
+        const QString fp = tab.filePath;
+        v->setDocumentDir(fp.isEmpty() ? QString() : QFileInfo(fp).absolutePath());
+        // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-COLLAPSE：先 fileKey 再 entries
         m_tocPanel->setCurrentFileKey(fp);
-        m_tocPanel->setEntries(preview->tocEntries());
-        m_tocPanel->setHighlightedEntries(preview->tocHighlightedIndices());
-
-        // 文件夹面板同步选中当前文件
+        m_tocPanel->setEntries(v->tocEntries());
+        m_tocPanel->setHighlightedEntries(v->tocHighlightedIndices());
         m_folderPanel->selectFile(fp);
 
-        // 切换到有待重载标记的 tab 时弹窗提示
-        // [Plan 2026-05-06-外部修改弹窗去重] 已有对话框时不再排队新调度，
-        // promptReloadTab 内部也会再次防御。
-        if (m_tabs[index].pendingReload && !m_tabs[index].activeReloadDialog)
-            QTimer::singleShot(0, this, [this, index]() { promptReloadTab(index); });
-
-        // 切换到被外部删除的 tab 时提示并关闭
-        if (m_tabs[index].pendingDelete) {
-            QTimer::singleShot(0, this, [this, index]() {
-                if (index < 0 || index >= m_tabs.size() || !m_tabs[index].pendingDelete)
-                    return;
-                m_tabs[index].pendingDelete = false;
-                QString path = m_tabs[index].editor->document()->filePath();
-                QString name = QFileInfo(path).fileName();
-                QMessageBox::information(
-                    this, tr("File Deleted"),
-                    tr("\"%1\" has been deleted by another program.\n\n"
-                       "This tab will be closed.").arg(name));
-                onCloseTab(index);
-            });
+        // 切换到有待重载标记的 tab：静默重载并保持阅读位置
+        if (tab.pendingReload) {
+            tab.pendingReload = false;
+            v->reload();
         }
-
-        // 应用当前显示区域模式（仅编辑器/仅预览/双栏）
-        if (!m_focusMode) applyDisplayMode();
-
-        // [演示模式] 切换 tab 时：隐藏编辑器、预览占满
-        if (m_focusMode) {
-            m_tabs[index].editor->hide();
-            m_tabs[index].preview->show();
-            m_tabs[index].splitter->setSizes({0, 1});
-            m_tabs[index].preview->setFocus();
-        }
+        v->setFocus();
     } else {
         m_tocPanel->setEntries({});
     }
 
-    // 切换 tab 时更新状态栏统计
     updateStatusBarStats();
-    if (index >= 0 && index < m_tabs.size()) {
-        auto curPos = m_tabs[index].editor->document()->selection().cursorPosition();
-        updateCursorPosition(curPos.line, curPos.column);
-    }
-    // Spec: specs/模块-app/15-状态栏布局.md
+    updatePositionStatus();
     updateRightStatusBar();
-
-    // P1 微交互：切换 tab 时内容区淡入（150ms，0.6→1.0）
-    if (index >= 0 && index < m_tabs.size() && !m_focusMode) {
-        auto* page = m_contentStack->currentWidget();
-        if (page) {
-            auto* effect = new QGraphicsOpacityEffect(page);
-            page->setGraphicsEffect(effect);
-            auto* anim = new QPropertyAnimation(effect, "opacity", this);
-            anim->setDuration(150);
-            anim->setStartValue(0.6);
-            anim->setEndValue(1.0);
-            anim->setEasingCurve(QEasingCurve::OutCubic);
-            connect(anim, &QPropertyAnimation::finished, this, [page]() {
-                page->setGraphicsEffect(nullptr);  // 动画结束移除 effect，避免持续性能开销
-            });
-            anim->start(QAbstractAnimation::DeleteWhenStopped);
-        }
-    }
-
-    // [Plan 2026-05-06-多Tab超阈值时休眠最早文档]
-    // Tab 切换 / 新建后检查总数：超阈值则按 FIFO 休眠最早的非豁免 Tab。
-    // 放在末尾以保证当前激活的 Tab 已就绪（豁免逻辑 idx == currentIndex 已生效）。
-    enforceSleepThreshold();
 }
 
 // -- 拖放 --
@@ -2224,11 +1636,7 @@ void MainWindow::dropEvent(QDropEvent* event)
         if (path.isEmpty()) continue;
 
         if (isImageFilePath(path)) {
-            // 图片文件：插入到当前编辑器的光标处
-            TabData* tab = currentTab();
-            if (tab && tab->editor) {
-                tab->editor->insertImageMarkdown(path);
-            }
+            rejected.append(QFileInfo(path).fileName());   // 只读查看器：不再支持把图片插入文档
             continue;
         }
 
@@ -2262,7 +1670,11 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     // Ctrl+滚轮缩放字体
     if (event->type() == QEvent::Wheel) {
         auto* we = static_cast<QWheelEvent*>(event);
-        if (we->modifiers() & Qt::ControlModifier) {
+        // 只处理来自查看器（或其视口）的 Ctrl+滚轮；对话框/文件夹面板等其他控件不受影响
+        const QWidget* ow = qobject_cast<QWidget*>(obj);
+        const bool fromViewer = ow && (qobject_cast<const viewer::ViewerWidget*>(ow)
+                                       || qobject_cast<const viewer::ViewerWidget*>(ow->parentWidget()));
+        if (fromViewer && (we->modifiers() & Qt::ControlModifier)) {
             if (we->angleDelta().y() > 0)
                 zoomIn();
             else if (we->angleDelta().y() < 0)
@@ -2381,13 +1793,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
     if (m_focusMode)
         exitFocusMode();
 
-    // 检查所有标签页是否有未保存的更改
-    for (int i = 0; i < m_tabs.size(); ++i) {
-        if (!maybeSave(i)) {
-            event->ignore();
-            return;
-        }
-    }
+    // 只读查看器：无未保存内容，直接保存会话并退出
     saveSettings();
     event->accept();
 }
@@ -2403,20 +1809,34 @@ void MainWindow::startLocalServer(const char* serverName)
         if (!socket)
             return;
 
-        socket->waitForReadyRead(1000);
-        QByteArray data = socket->readAll();
-        socket->deleteLater();
+        // 异步读取：对端写完即断开。不在 UI 线程 waitForReadyRead（对端卡住会冻结界面）
+        auto finish = [this, socket]() {
+            const QByteArray data = socket->readAll();
+            socket->deleteLater();
+            const QString filePath = QString::fromUtf8(data);
+            // 与拖拽打开同一套校验：只接受存在的文本文件（目录/二进制一律忽略，仅激活窗口）
+            if (!filePath.isEmpty() && QFileInfo(filePath).isFile() && isOpenableTextFile(filePath))
+                openFile(filePath);
 
-        QString filePath = QString::fromUtf8(data);
-        if (!filePath.isEmpty()) {
-            openFile(filePath);
+            setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+            raise();
+            activateWindow();
+        };
+        if (socket->state() != QLocalSocket::ConnectedState) {
+            finish();   // 对端已断开，数据已在缓冲里
+        } else {
+            connect(socket, &QLocalSocket::disconnected, this, finish);
+            // 兜底：1 秒内对端既没写也没断开，就丢弃该连接
+            QTimer::singleShot(1500, socket, [socket]() { if (socket->state() != QLocalSocket::UnconnectedState) socket->abort(); });
         }
-
-        // 激活窗口
-        setWindowState((windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
-        raise();
-        activateWindow();
     });
+}
+
+MainWindow::TabData* MainWindow::tabForPath(const QString& absPath)
+{
+    for (auto& t : m_tabs)
+        if (t.filePath == absPath) return &t;
+    return nullptr;
 }
 
 void MainWindow::saveSessionLater()
@@ -2427,12 +1847,9 @@ void MainWindow::saveSessionLater()
 void MainWindow::saveSettings()
 {
     QSettings s;
-    s.setValue("view/wordWrap", m_wordWrapAct ? m_wordWrapAct->isChecked() : true);
     s.setValue("view/lineSpacing", m_lineSpacingFactor);
     s.setValue("view/fontSizeDelta", m_fontSizeDelta);
     // Spec: specs/模块-app/14-自动保存.md
-    s.setValue("autoSave/enabled", m_autoSaveEnabled);
-    s.setValue("autoSave/delayMs", m_autoSaveDelayMs);
     // Spec: specs/模块-app/12-主题插件系统.md
     // 主题：follow_system / <theme-id>（如 light / dark / liquid-glass / 用户自定义）
     QString themeMode = "follow_system";
@@ -2466,40 +1883,25 @@ void MainWindow::saveSettings()
     // 会话恢复
     s.setValue("session/restoreLastFile", m_restoreSessionAct ? m_restoreSessionAct->isChecked() : true);
     s.setValue("session/activeTab", m_tabBar->currentIndex());
+    // 同时记录活跃文件路径：恢复时已不存在的文件会被过滤，按下标恢复会错位
+    if (m_tabBar->currentIndex() >= 0 && m_tabBar->currentIndex() < m_tabs.size())
+        s.setValue("session/activeFile", m_tabs[m_tabBar->currentIndex()].filePath);
 
-    // 保存所有标签页
+    // 保存所有标签页（只读查看器：路径 + 阅读位置行号）
     s.beginWriteArray("session/tabs");
     int written = 0;
     for (int i = 0; i < m_tabs.size(); ++i) {
-        QString fp = m_tabs[i].editor->document()->filePath();
-        // 懒加载 tab 尚未加载文件，从 lazyFilePath 获取路径
-        if (fp.isEmpty() && m_tabs[i].lazyPending)
-            fp = m_tabs[i].lazyFilePath;
-        if (fp.isEmpty()) continue; // 跳过未保存的空文档
+        const QString fp = m_tabs[i].filePath;
+        if (fp.isEmpty()) continue;
         s.setArrayIndex(written++);
         s.setValue("file", fp);
-        s.setValue("editorScroll", m_tabs[i].editor->verticalScrollBar()->value());
-        s.setValue("editorHScroll", m_tabs[i].editor->horizontalScrollBar()->value());
-        s.setValue("previewScroll", m_tabs[i].preview->verticalScrollBar()->value());
-        s.setValue("previewHScroll", m_tabs[i].preview->horizontalScrollBar()->value());
-        // 光标位置（行号、列号）
-        auto cursorPos = m_tabs[i].editor->document()->selection().cursorPosition();
-        s.setValue("cursorLine", cursorPos.line);
-        s.setValue("cursorColumn", cursorPos.column);
-        // 保存编辑/预览分隔条位置（宽度比例）
-        auto splitterSizes = m_tabs[i].splitter->sizes();
-        if (splitterSizes.size() >= 2 && splitterSizes[0] > 0 && splitterSizes[1] > 0) {
-            s.setValue("editorWidth", splitterSizes[0]);
-            s.setValue("previewWidth", splitterSizes[1]);
-        }
-        // Spec: specs/模块-preview/08-内容标记.md INV-5、T-4
-        // 标记必须在会话恢复时一并恢复
-        QByteArray markings = m_tabs[i].preview->serializeMarkings();
-        if (!markings.isEmpty()) {
-            s.setValue("markings", markings);
-        } else {
-            s.remove("markings");
-        }
+        // 懒加载未激活的 tab 沿用上次保存的行号
+        s.setValue("viewLine", m_tabs[i].lazyPending ? m_tabs[i].pendingLine
+                                                      : m_tabs[i].viewer->readingLine());
+        // Spec: specs/模块-viewer/06-内容标记.md —— 标记随会话持久化（按源行+原文锚定）
+        const QByteArray markings = m_tabs[i].viewer->serializeMarkings();
+        if (!markings.isEmpty()) s.setValue("markings", markings);
+        else s.remove("markings");
     }
     s.endArray();
 }
@@ -2528,8 +1930,6 @@ void MainWindow::loadSettings()
     }
 
     // 自动换行
-    bool wordWrap = s.value("view/wordWrap", true).toBool();
-    m_wordWrapAct->setChecked(wordWrap);
 
     // Tab 栏位置（默认 "全部显示"：侧边 + 顶部都显示）
     bool tabOnSide = s.value("view/tabBarOnSide", true).toBool();
@@ -2554,19 +1954,6 @@ void MainWindow::loadSettings()
 
     // Spec: specs/模块-app/14-自动保存.md
     // 默认不开启自动保存；延时默认 5 分钟（300000ms）
-    m_autoSaveEnabled = s.value("autoSave/enabled", false).toBool();
-    m_autoSaveDelayMs = s.value("autoSave/delayMs", 300000).toInt();
-    // 兜底：只接受 30s/5min/10min 三档；旧版本遗留的小延时值（1500/3000/5000）归一到 5min 默认
-    if (m_autoSaveDelayMs != 30000 && m_autoSaveDelayMs != 300000 && m_autoSaveDelayMs != 600000)
-        m_autoSaveDelayMs = 300000;
-    if (m_autoSaveEnabledAct) m_autoSaveEnabledAct->setChecked(m_autoSaveEnabled);
-    for (QAction* a : m_autoSaveDelayActions) {
-        if (a->data().toInt() == m_autoSaveDelayMs) {
-            a->setChecked(true);
-            break;
-        }
-    }
-
     // 语言设置
     QString locale = s.value("language/locale", "zh_CN").toString();
     if (locale == "en_US" && m_enUSAct) {
@@ -2577,13 +1964,7 @@ void MainWindow::loadSettings()
 
     // 应用到已有标签页
     for (auto& tab : m_tabs) {
-        tab.editor->setLineSpacing(m_lineSpacingFactor);
-        // [Spec 模块-preview/02 INV-13] 重启后从 QSettings 读出的行间距
-        // 必须同步推送到预览区，否则重启后预览仍按 PreviewLayout 默认乘数
-        // 渲染（典型表现：用户上次设了 1.0，重启后预览仍是 1.5）
-        tab.preview->setLineSpacingFactor(m_lineSpacingFactor);
-        tab.editor->setWordWrap(wordWrap);
-        tab.preview->setWordWrap(wordWrap);
+        tab.viewer->setLineSpacingFactor(m_lineSpacingFactor);
     }
 
     // 文件夹面板：恢复上次打开的目录（兼容旧版单路径和新版多路径）
@@ -2685,110 +2066,47 @@ void MainWindow::onFileChangedExternally(const QString& path)
     // 找到对应的 tab
     int tabIndex = -1;
     for (int i = 0; i < m_tabs.size(); ++i) {
-        if (m_tabs[i].editor->document()->filePath() == path) {
-            tabIndex = i;
-            break;
-        }
+        if (m_tabs[i].filePath == path) { tabIndex = i; break; }
     }
-    if (tabIndex < 0)
-        return;
+    if (tabIndex < 0) return;
 
-    // 文件被删除的情况
-    if (!QFileInfo::exists(path)) {
-        // 标记为已修改（磁盘文件已不存在，内存内容需要重新保存）
-        m_tabs[tabIndex].editor->document()->setModified(true);
-        updateTabTitle(tabIndex);
-
-        if (tabIndex == m_tabBar->currentIndex()) {
-            // 当前 tab：提示用户，可继续编辑并 Ctrl+S 重新保存
-            QString name = QFileInfo(path).fileName();
-            QMessageBox::information(
-                this, tr("File Deleted"),
-                tr("\"%1\" has been deleted by another program.\n\n"
-                   "You can continue editing and press Ctrl+S to save it again.").arg(name));
-        } else {
-            // 非当前 tab：标记待删除，切换时提示并关闭
-            m_tabs[tabIndex].pendingDelete = true;
-        }
-        return;
-    }
-
-    // 重新添加监控（某些系统修改后会自动移除）
-    watchFile(path);
-
-    // [Plan 2026-05-06-外部修改弹窗去重]
-    // 若该 Tab 已经有"是否重新加载"对话框正在显示，仅刷新待重载标志，
-    // 不再开新对话框；用户响应当前对话框后会按最新磁盘内容决定是否加载。
-    if (m_tabs[tabIndex].activeReloadDialog) {
-        m_tabs[tabIndex].pendingReload = true;
-        return;
-    }
-
-    // 非当前 tab：标记待重载，切换时再弹窗
+    // 非当前 tab：标记待重载，切换时再静默刷新（懒加载 tab 激活时本来就会读最新内容）
     if (tabIndex != m_tabBar->currentIndex()) {
         m_tabs[tabIndex].pendingReload = true;
         return;
     }
+    // 当前 tab：合并 + 防抖（编辑器常见的「删除再重建」原子保存会连发多次事件；
+    // 事件发生的瞬间文件可能暂时不存在，所以存在性检查推迟到防抖结束）
+    m_reloadPaths.insert(path);
+    m_reloadTimer.start();
+}
 
-    promptReloadTab(tabIndex);
+void MainWindow::flushPendingReloads()
+{
+    const QSet<QString> paths = m_reloadPaths;
+    m_reloadPaths.clear();
+    for (const QString& path : paths) {
+        for (int i = 0; i < m_tabs.size(); ++i) {
+            if (m_tabs[i].filePath != path || !m_tabs[i].viewer || m_tabs[i].lazyPending) continue;
+            if (QFileInfo::exists(path)) {
+                watchFile(path);                 // 原子保存会让监控失效，重新挂上
+                m_tabs[i].viewer->reload();
+            } else if (i == m_tabBar->currentIndex()) {
+                showToast(tr("%1 has been deleted by another program.").arg(QFileInfo(path).fileName()));
+            } else {
+                m_tabs[i].pendingDelete = true;
+            }
+            break;
+        }
+    }
 }
 
 void MainWindow::promptReloadTab(int tabIndex)
 {
-    if (tabIndex < 0 || tabIndex >= m_tabs.size())
-        return;
-
-    // [Plan 2026-05-06-外部修改弹窗去重]
-    // 已经有正在显示的对话框 → 抬升到前台即可，不再开新一个。
-    if (m_tabs[tabIndex].activeReloadDialog) {
-        m_tabs[tabIndex].activeReloadDialog->raise();
-        m_tabs[tabIndex].activeReloadDialog->activateWindow();
-        return;
-    }
-
+    // 只读查看器：外部修改一律静默重载，不再弹窗询问
+    if (tabIndex < 0 || tabIndex >= m_tabs.size()) return;
     m_tabs[tabIndex].pendingReload = false;
-
-    QString path = m_tabs[tabIndex].editor->document()->filePath();
-    if (path.isEmpty() || !QFileInfo::exists(path))
-        return;
-
-    QString name = QFileInfo(path).fileName();
-    auto* box = new QMessageBox(QMessageBox::Question,
-                                tr("File Changed"),
-                                tr("\"%1\" has been modified by another program.\n\n"
-                                   "Do you want to reload it?").arg(name),
-                                QMessageBox::NoButton,
-                                this);
-    // [i18n INV-QMSGBOX-TR] 标准按钮 Yes/No 文案来自 Qt 的 QPlatformTheme context，
-    // 而项目可用的 qt_zh_CN.qm 翻译在 QDialogButtonBox context，二者不匹配会导致中文
-    // 界面下按钮仍显示英文。故用自定义 tr() 按钮，文案完全受项目翻译控制。
-    QPushButton* reloadBtn = box->addButton(tr("Reload"), QMessageBox::AcceptRole);
-    box->addButton(tr("Keep Current"), QMessageBox::RejectRole);
-    box->setDefaultButton(reloadBtn);
-    box->setAttribute(Qt::WA_DeleteOnClose);
-    m_tabs[tabIndex].activeReloadDialog = box;
-
-    // 用户响应后：根据选择决定是否重载，关闭后清状态。
-    // 在响应阶段窗口期间收到的所有 fileChanged 都已被压制（见 onFileChangedExternally），
-    // 但 pendingReload 可能因连续修改被反复置 true。响应"否"时保留 pendingReload，
-    // 让下一次外部修改/切换 Tab 时再次提示；响应"是"则按最新磁盘加载，pendingReload 清零。
-    connect(box, &QMessageBox::finished, this, [this, tabIndex, box, reloadBtn, path](int) {
-        if (tabIndex < 0 || tabIndex >= m_tabs.size())
-            return;
-        if (box->clickedButton() == reloadBtn) {
-            m_tabs[tabIndex].pendingReload = false;
-            // 重载前再确认文件仍存在；用户响应窗口期间可能被删除
-            if (QFileInfo::exists(path)) {
-                m_tabs[tabIndex].editor->document()->loadFromFile(path);
-                m_tabs[tabIndex].scheduler->parseNow();
-                updateTabTitle(tabIndex);
-            }
-        }
-        // QPointer 在 box 销毁后自动归零；显式清一次便于日志/断言时机明确
-        m_tabs[tabIndex].activeReloadDialog.clear();
-    });
-
-    box->open();  // 非模态，避免阻塞主事件循环；用户必须响应一个按钮
+    if (m_tabs[tabIndex].viewer) m_tabs[tabIndex].viewer->reload();
 }
 
 // ---- 状态栏统计信息 ----
@@ -2797,9 +2115,6 @@ void MainWindow::setupStatusBar()
 {
     auto* sb = statusBar();
     sb->setSizeGripEnabled(true);
-
-    // Spec: specs/模块-app/15-状态栏布局.md
-    // 左区：addWidget（贴左）；右区：addPermanentWidget（贴右）。中间 QStatusBar 自然 stretch。
     auto makeLeftLabel = [sb](const QString& text) -> QLabel* {
         auto* label = new QLabel(text, sb);
         label->setContentsMargins(8, 0, 8, 0);
@@ -2812,154 +2127,81 @@ void MainWindow::setupStatusBar()
         sb->addPermanentWidget(label);
         return label;
     };
-
-    // 左区：当前编辑信息
-    m_statusCursorPos = makeLeftLabel(tr("Ln %1, Col %2").arg(1).arg(1));
-    m_statusLineCount = makeLeftLabel(tr("Lines: %1").arg(0));
-    m_statusWordCount = makeLeftLabel(tr("Words: %1").arg(0));
-    m_statusCharCount = makeLeftLabel(tr("Chars: %1").arg(0));
-    m_statusReadTime = makeLeftLabel(tr("Read: <1 min"));
-
-    // 右区：文档元数据 + 保存状态（不含主题名 — 主题从 UI 颜色直接感知）
-    m_statusEncoding   = makeRightLabel(QStringLiteral("UTF-8"));
-    m_statusLineEnding = makeRightLabel(QStringLiteral("LF"));
-    m_statusSaveStatus = makeRightLabel(tr("Unsaved (new file)"));
-
-    // Spec: specs/模块-app/14-自动保存.md
-    // 自动保存失败提示 label：默认空字符串、隐式占位；失败时填字 + 5s 后清空
-    m_statusAutoSaveMsg = makeRightLabel(QString());
-    m_statusAutoSaveMsg->setStyleSheet(QStringLiteral("color: #C62828;"));  // 醒目红
-    m_statusAutoSaveMsg->hide();  // 平时不占地
-
-    m_autoSaveMsgClearTimer.setSingleShot(true);
-    m_autoSaveMsgClearTimer.setInterval(5000);
-    connect(&m_autoSaveMsgClearTimer, &QTimer::timeout, this, [this]() {
-        if (m_statusAutoSaveMsg) {
-            m_statusAutoSaveMsg->setText(QString());
-            m_statusAutoSaveMsg->hide();
-        }
-    });
-
-    // Spec: specs/模块-app/14-自动保存.md
-    // 自动保存：debounce 定时器；textChanged → start，timeout → performAutoSave
-    m_autoSaveTimer.setSingleShot(true);
-    m_autoSaveTimer.setInterval(m_autoSaveDelayMs);
-    connect(&m_autoSaveTimer, &QTimer::timeout, this, &MainWindow::performAutoSave);
-
-    // 防抖定时器：文本变化后 300ms 才更新统计（避免频繁计算）
-    m_statsDebounceTimer.setSingleShot(true);
-    m_statsDebounceTimer.setInterval(300);
-    connect(&m_statsDebounceTimer, &QTimer::timeout, this, &MainWindow::updateStatusBarStats);
-
-    // Spec: specs/模块-app/15-状态栏布局.md
-    // 30s 周期重算"已保存 · X 分钟前"相对时间（不访问磁盘，只重算字符串）
-    m_relTimeRefreshTimer.setSingleShot(false);
-    m_relTimeRefreshTimer.setInterval(30 * 1000);
-    connect(&m_relTimeRefreshTimer, &QTimer::timeout, this, &MainWindow::updateSaveStatusOnly);
-    m_relTimeRefreshTimer.start();
-}
-
-void MainWindow::connectTabStatusBar(const TabData& tab)
-{
-    // 文本变化 → 防抖更新统计 + 触发自动保存
-    // Spec: specs/模块-app/14-自动保存.md
-    connect(tab.editor->document(), &Document::textChanged,
-            this, [this]() {
-        m_statsDebounceTimer.start();
-        scheduleAutoSave();
-    });
-
-    // 光标移动 → 立即更新光标位置
-    connect(tab.editor, &EditorWidget::cursorPositionChanged,
-            this, &MainWindow::updateCursorPosition);
-}
-
-void MainWindow::updateCursorPosition(int line, int column)
-{
-    if (!m_statusCursorPos) return;
-    // [2026-05-13] 仅预览模式下编辑区不可见——行/列号失去参考意义，强制隐藏 label。
-    // 兜底 applyDisplayMode 的 setVisible（避免任何路径让 label 重新出现）。
-    if (m_displayMode == 2) {
-        m_statusCursorPos->hide();
-        return;
-    }
-    if (!m_statusCursorPos->isVisible()) m_statusCursorPos->show();
-    m_statusCursorPos->setText(tr("Ln %1, Col %2").arg(line + 1).arg(column + 1));
+    // 只读查看器状态栏：阅读位置 / 行数 / 大小 / 索引进度；右侧编码
+    m_statusCursorPos = makeLeftLabel(QString());
+    m_statusLineCount = makeLeftLabel(QString());
+    m_statusLineCount->hide();   // 总行数已并入阅读位置 "Ln x / y"，不再单独显示
+    m_statusWordCount = makeLeftLabel(QString());   // 复用：文件大小
+    m_statusCharCount = makeLeftLabel(QString());   // 复用：索引进度 / 错误信息
+    m_statusEncoding = makeRightLabel(QStringLiteral("UTF-8"));
 }
 
 void MainWindow::updateStatusBarStats()
 {
     auto* tab = currentTab();
-    if (!tab) return;
-
-    QString text = tab->editor->document()->text();
-
-    // 行数
-    int lineCount = tab->editor->document()->lineCount();
-    m_statusLineCount->setText(tr("Lines: %1").arg(lineCount));
-
-    // 字符数（不含空格）
-    int charsNoSpace = 0;
-    for (const QChar& ch : text) {
-        if (!ch.isSpace())
-            ++charsNoSpace;
+    if (!tab || !tab->viewer) {
+        m_statusWordCount->setText(QString());
+        m_statusCharCount->setText(QString());
+        return;
     }
-    m_statusCharCount->setText(tr("Chars: %1/%2").arg(charsNoSpace).arg(text.length()));
+    auto* v = tab->viewer;
 
-    // 字数统计：中文按字计算，英文按单词计算
-    int wordCount = 0;
-    bool inWord = false;
-    for (int i = 0; i < text.length(); ++i) {
-        QChar ch = text[i];
-        // CJK 统一汉字区间
-        ushort uc = ch.unicode();
-        bool isCJK = (uc >= 0x4E00 && uc <= 0x9FFF)    // CJK 统一汉字
-                  || (uc >= 0x3400 && uc <= 0x4DBF)     // CJK 扩展 A
-                  || (uc >= 0xF900 && uc <= 0xFAFF);    // CJK 兼容汉字
-        if (isCJK) {
-            if (inWord) {
-                ++wordCount;  // 结束英文单词
-                inWord = false;
-            }
-            ++wordCount;  // 每个中文字符算一个
-        } else if (ch.isLetterOrNumber()) {
-            inWord = true;
-        } else {
-            if (inWord) {
-                ++wordCount;
-                inWord = false;
-            }
-        }
-    }
-    if (inWord)
-        ++wordCount;
+    const qint64 bytes = static_cast<qint64>(v->sourceBytes());
+    QString sizeText;
+    if (bytes < 1024) sizeText = QStringLiteral("%1 B").arg(bytes);
+    else if (bytes < 1024 * 1024) sizeText = QStringLiteral("%1 KB").arg(bytes / 1024.0, 0, 'f', 1);
+    else sizeText = QStringLiteral("%1 MB").arg(bytes / (1024.0 * 1024.0), 0, 'f', 1);
+    m_statusWordCount->setText(tr("Size: %1").arg(sizeText));
 
-    m_statusWordCount->setText(tr("Words: %1").arg(wordCount));
-
-    // 阅读时间估算（300 字/分钟）
-    int minutes = wordCount / 300;
-    if (minutes < 1)
-        m_statusReadTime->setText(tr("Read: <1 min"));
+    if (!v->errorString().isEmpty())
+        m_statusCharCount->setText(v->errorString());
     else
-        m_statusReadTime->setText(tr("Read: %1 min").arg(minutes));
+        m_statusCharCount->setText(v->isLoading() ? tr("Indexing…") : QString());
 
-    // Spec: specs/模块-preview/07-TOC面板.md INV-TOC-DOCCARD-NO-REPARSE
-    // 同步推送文档摘要到 TocPanel 的 DocInfoCard（复用上面算好的结果，不重复 parse）
+    // 文档信息卡：大小/行数/修改时间（字数在大文件上代价高，只对 ≤2MB 精确统计）
     DocInfo di;
-    di.wordCount = wordCount;
-    di.charCount = text.length();
-    di.charCountNoSpace = charsNoSpace;
-    di.lineCount = lineCount;
-    const QString fp = tab->editor->document()->filePath();
+    di.lineCount = static_cast<int>(v->lineCount());
+    di.sizeBytes = bytes;
+    const QString fp = tab->filePath;
     if (!fp.isEmpty()) {
         QFileInfo fi(fp);
-        if (fi.exists()) {
-            di.sizeBytes = fi.size();
-            di.mtime = fi.lastModified();
-        }
+        if (fi.exists()) di.mtime = fi.lastModified();
     }
-    // frontmatter title/tags 留待 v2 从 AST 提取，当前传空
+    if (!v->isLoading() && bytes > 0 && bytes <= 2 * 1024 * 1024) {
+        const QString text = v->readAllText();
+        int words = 0, noSpace = 0;
+        bool inWord = false;
+        for (const QChar& ch : text) {
+            if (!ch.isSpace()) ++noSpace;
+            const ushort uc = ch.unicode();
+            const bool cjk = (uc >= 0x4E00 && uc <= 0x9FFF) || (uc >= 0x3400 && uc <= 0x4DBF)
+                          || (uc >= 0xF900 && uc <= 0xFAFF);
+            if (cjk) { if (inWord) { ++words; inWord = false; } ++words; }
+            else if (ch.isLetterOrNumber()) inWord = true;
+            else if (inWord) { ++words; inWord = false; }
+        }
+        if (inWord) ++words;
+        di.wordCount = words;
+        di.charCount = text.length();
+        di.charCountNoSpace = noSpace;
+    } else {
+        di.wordCount = -1;
+        di.charCount = -1;
+        di.charCountNoSpace = -1;
+    }
     m_tocPanel->setDocumentInfo(di);
+}
+
+void MainWindow::updatePositionStatus()
+{
+    if (!m_statusCursorPos) return;
+    auto* tab = currentTab();
+    if (!tab || !tab->viewer || tab->viewer->lineCount() == 0) {
+        m_statusCursorPos->setText(QString());
+        return;
+    }
+    m_statusCursorPos->setText(tr("Ln %1 / %2").arg(tab->viewer->topSourceLine() + 1)
+                                   .arg(tab->viewer->lineCount()));
 }
 
 // ---- 自动保存 ----
@@ -2967,59 +2209,6 @@ void MainWindow::updateStatusBarStats()
 // INV-1: 仅保存有磁盘路径的 Tab；未命名（filePath 空）跳过、不弹文件对话框
 // INV-2: 失败不打断输入，状态栏右下显示瞬时提示
 // INV-3: textChanged 重置 timer，连续输入只在最后一次停顿后保存
-
-void MainWindow::scheduleAutoSave()
-{
-    if (!m_autoSaveEnabled) return;
-    // restart：每次编辑都重置 debounce
-    m_autoSaveTimer.start(m_autoSaveDelayMs);
-}
-
-void MainWindow::performAutoSave()
-{
-    if (!m_autoSaveEnabled) return;
-
-    QStringList failedNames;
-    for (int i = 0; i < m_tabs.size(); ++i) {
-        Document* doc = m_tabs[i].editor->document();
-        if (!doc) continue;
-        const QString fp = doc->filePath();
-        if (fp.isEmpty()) continue;            // INV-1：未命名跳过
-        if (m_tabs[i].pendingDelete) continue; // 文件已被外部删除，切换时关闭，不自动重建
-        if (!doc->isModified()) continue;      // 没改过的也跳过
-
-        // 与手动保存对齐：先 unwatch，避免 self-trigger 文件外部修改信号
-        unwatchFile(fp);
-        const bool ok = doc->saveToFile();     // 用当前 filePath 保存
-        if (ok) {
-            updateTabTitle(i);
-            // 异步 re-watch（与手动保存一致）
-            QTimer::singleShot(500, this, [this, fp]() { watchFile(fp); });
-        } else {
-            failedNames.append(QFileInfo(fp).fileName());
-        }
-    }
-
-    if (!failedNames.isEmpty()) {
-        // INV-2：失败不弹对话框，仅状态栏提示
-        showAutoSaveError(tr("Auto save failed: %1").arg(failedNames.join(QStringLiteral(", "))));
-    }
-
-    // 自动保存时同步持久化会话状态（Tab 列表、滚动位置等），
-    // 防止进程被强杀时丢失会话信息
-    saveSettings();
-
-    // Spec: specs/模块-app/15-状态栏布局.md
-    updateSaveStatusOnly();
-}
-
-void MainWindow::showAutoSaveError(const QString& message)
-{
-    if (!m_statusAutoSaveMsg) return;
-    m_statusAutoSaveMsg->setText(message);
-    m_statusAutoSaveMsg->show();
-    m_autoSaveMsgClearTimer.start();
-}
 
 // ---- 状态栏右区元数据 ----
 // Spec: specs/模块-app/15-状态栏布局.md
@@ -3060,74 +2249,8 @@ SaveStatusText classifySaveTime(const QDateTime& mtime) {
 
 void MainWindow::updateRightStatusBar()
 {
-    if (!m_statusEncoding) return;  // 还未 setupStatusBar
-
-    // 编码：项目硬约束 UTF-8（参见 INV-CODE-UTF8 + Document::loadFromFile 行为）
-    m_statusEncoding->setText(QStringLiteral("UTF-8"));
-
-    auto* tab = currentTab();
-    if (!tab) {
-        m_statusLineEnding->setText(QStringLiteral("LF"));
-        m_statusSaveStatus->setText(tr("Unsaved (new file)"));
-        return;
-    }
-
-    // 换行风格
-    Document* doc = tab->editor->document();
-    const auto le = doc->detectedLineEnding();
-    m_statusLineEnding->setText(le == Document::CRLF
-        ? QStringLiteral("CRLF")
-        : QStringLiteral("LF"));
-
-    // 保存状态
-    updateSaveStatusOnly();
-}
-
-void MainWindow::updateSaveStatusOnly()
-{
-    if (!m_statusSaveStatus) return;
-    auto* tab = currentTab();
-    if (!tab) {
-        m_statusSaveStatus->setText(tr("Unsaved (new file)"));
-        return;
-    }
-    Document* doc = tab->editor->document();
-    const QString fp = doc->filePath();
-
-    if (fp.isEmpty()) {
-        // 未命名文档
-        m_statusSaveStatus->setText(tr("Unsaved (new file)"));
-        m_statusSaveStatus->setStyleSheet(QString());
-        return;
-    }
-    if (doc->isModified()) {
-        // 有路径但未保存修改
-        m_statusSaveStatus->setText(tr("Unsaved changes"));
-        m_statusSaveStatus->setStyleSheet(QStringLiteral("color: #C62828;"));
-        return;
-    }
-
-    // 已保存：计算相对时间（不访问磁盘多余字段，只读 lastModified）
-    QFileInfo fi(fp);
-    const QDateTime mtime = fi.exists() ? fi.lastModified() : QDateTime();
-    const auto t = classifySaveTime(mtime);
-    QString text;
-    switch (t.kind) {
-        case SaveStatusText::JustSaved:
-            text = tr("Saved · just now");
-            break;
-        case SaveStatusText::MinutesAgo:
-            text = tr("Saved · %1 min ago", "", t.value).arg(t.value);
-            break;
-        case SaveStatusText::HoursAgo:
-            text = tr("Saved · %1 hour ago", "", t.value).arg(t.value);
-            break;
-        case SaveStatusText::DaysAgo:
-            text = tr("Saved · %1 day ago", "", t.value).arg(t.value);
-            break;
-    }
-    m_statusSaveStatus->setText(text);
-    m_statusSaveStatus->setStyleSheet(QString());
+    // 只读查看器：编码固定 UTF-8（非 UTF-8 文件加载时已转码）
+    if (m_statusEncoding) m_statusEncoding->setText(QStringLiteral("UTF-8"));
 }
 
 // ---- 字体缩放 ----
@@ -3156,23 +2279,11 @@ void MainWindow::zoomReset()
 
 void MainWindow::applyFontSize()
 {
-    // [字体系统] Spec: specs/横切关注点/80-字体系统.md INV-1, INV-2, INV-5, INV-6, INV-10
-    // 预览侧字号固定为 base + delta；编辑器侧通过 balanceEditorFontSize 做视觉补偿
-    // （等宽字体与比例字体在同 pointSize 下视觉差异显著，需对齐 xHeight）
-    QFont previewFont = font_defaults::defaultPreviewFont(m_fontSizeDelta);
-    QFont editorBase  = font_defaults::defaultEditorFont(m_fontSizeDelta);
-
+    const QFont previewFont = font_defaults::defaultPreviewFont(m_fontSizeDelta);
     for (auto& tab : m_tabs) {
-        // 用预览的 viewport 作为度量 device，确保 DPI 一致
-        QFont editorFont = font_defaults::balanceEditorFontSize(
-            editorBase, previewFont, tab.preview->viewport());
-        tab.editor->editorLayout()->setFont(editorFont);
-        tab.preview->previewLayout()->setFont(previewFont);
-        tab.preview->rebuildLayout();
-        tab.preview->viewport()->update();
-        tab.editor->viewport()->update();
+        tab.viewer->previewLayout()->setFont(previewFont);
+        tab.viewer->rebuildLayout();
     }
-    saveSessionLater();
 }
 
 // ---- 导出与打印 ----
@@ -3180,11 +2291,16 @@ void MainWindow::applyFontSize()
 QString MainWindow::currentMarkdownToHtml()
 {
     auto* tab = currentTab();
-    if (!tab) return {};
-
-    QString markdown = tab->editor->document()->text();
+    if (!tab || !tab->viewer) return QString();
+    // 导出/打印需要整篇 HTML：此时才一次性解码并渲染。超过 8MB 的文件会长时间占用主线程且内存翻倍，
+    // 直接拒绝并提示（查看大文件不受影响）。
+    constexpr uint64_t kMaxExportBytes = 8ull * 1024 * 1024;
+    if (tab->viewer->sourceBytes() > kMaxExportBytes) {
+        showToast(tr("File is too large to export or print (limit 8 MB)."));
+        return QString();
+    }
     MarkdownParser parser;
-    return parser.renderHtml(markdown);
+    return parser.renderHtml(tab->viewer->readAllText());
 }
 
 void MainWindow::onExportHtml()
@@ -3195,12 +2311,12 @@ void MainWindow::onExportHtml()
     QString body = currentMarkdownToHtml();
     if (body.isEmpty()) return;
 
-    QString baseName = QFileInfo(tab->editor->document()->filePath()).completeBaseName();
+    QString baseName = QFileInfo(tab->filePath).completeBaseName();
     if (baseName.isEmpty()) baseName = "untitled";
 
     QString html = QString(kHtmlTemplate).arg(baseName.toHtmlEscaped(), body);
 
-    QString defaultPath = QFileInfo(tab->editor->document()->filePath()).absolutePath();
+    QString defaultPath = QFileInfo(tab->filePath).absolutePath();
     if (defaultPath.isEmpty()) defaultPath = QDir::homePath();
 
     QString savePath = QFileDialog::getSaveFileName(
@@ -3223,12 +2339,12 @@ void MainWindow::onExportPdf()
     QString body = currentMarkdownToHtml();
     if (body.isEmpty()) return;
 
-    QString baseName = QFileInfo(tab->editor->document()->filePath()).completeBaseName();
+    QString baseName = QFileInfo(tab->filePath).completeBaseName();
     if (baseName.isEmpty()) baseName = "untitled";
 
     QString html = QString(kHtmlTemplate).arg(baseName.toHtmlEscaped(), body);
 
-    QString defaultPath = QFileInfo(tab->editor->document()->filePath()).absolutePath();
+    QString defaultPath = QFileInfo(tab->filePath).absolutePath();
     if (defaultPath.isEmpty()) defaultPath = QDir::homePath();
 
     QString savePath = QFileDialog::getSaveFileName(
@@ -3260,7 +2376,7 @@ void MainWindow::onPrint()
     QString body = currentMarkdownToHtml();
     if (body.isEmpty()) return;
 
-    QString baseName = QFileInfo(tab->editor->document()->filePath()).completeBaseName();
+    QString baseName = QFileInfo(tab->filePath).completeBaseName();
     if (baseName.isEmpty()) baseName = "untitled";
 
     QString html = QString(kHtmlTemplate).arg(baseName.toHtmlEscaped(), body);
@@ -3448,45 +2564,6 @@ void MainWindow::showToast(const QString& message, int durationMs)
 
 // ---- 显示区域切换 ----
 
-void MainWindow::setDisplayMode(int mode)
-{
-    m_displayMode = mode;
-    applyDisplayMode();
-    saveSessionLater();
-}
-
-void MainWindow::applyDisplayMode()
-{
-    auto* tab = currentTab();
-    if (!tab) return;
-    switch (m_displayMode) {
-    case 0: // 双栏
-        tab->editor->show();
-        tab->preview->show();
-        // 恢复 50/50 比例（如果某侧被隐藏过）
-        if (tab->splitter->sizes()[0] == 0 || tab->splitter->sizes()[1] == 0)
-            tab->splitter->setSizes({1, 1});
-        break;
-    case 1: // 仅编辑器
-        tab->editor->show();
-        tab->preview->hide();
-        tab->splitter->setSizes({1, 0});
-        break;
-    case 2: // 仅预览
-        tab->editor->hide();
-        tab->preview->show();
-        tab->splitter->setSizes({0, 1});
-        break;
-    }
-
-    // [plan 2026-05-13-仅预览模式下隐藏左下角行号列号] 仅预览模式编辑区不可见，
-    // 行/列号失去参考意义——隐藏 m_statusCursorPos 标签，其他状态（字数 / 行数 / 编码等）
-    // 与文档相关仍保留
-    if (m_statusCursorPos) {
-        m_statusCursorPos->setVisible(m_displayMode != 2);
-    }
-}
-
 // ---- Tab 栏位置切换 ----
 
 void MainWindow::setTabBarPosition(bool onSide, bool hideTopBar)
@@ -3574,6 +2651,19 @@ void MainWindow::updateEmptyState()
     // 演示模式下 TocPanel 由 m_savedTocVisible 独立控制（enterFocusMode/exitFocusMode），
     // 不与本机制叠加；T-9 保证演示模式与空 Tab 不会同时成立
     if (m_tocPanel && !m_focusMode) m_tocPanel->setVisible(!empty);
+    if (empty) {
+        // 关闭最后一个 tab：清理残留的标题/目录/文档信息/文件夹选中项
+        setWindowTitle("SimpleMarkdown");
+        if (m_tocPanel) {
+            m_tocPanel->setCurrentFileKey(QString());
+            m_tocPanel->setEntries({});
+            m_tocPanel->setDocumentInfo(DocInfo());
+        }
+        if (m_folderPanel) m_folderPanel->selectFile(QString());
+        if (m_statusWordCount) m_statusWordCount->setText(QString());
+        if (m_statusCharCount) m_statusCharCount->setText(QString());
+        if (m_statusCursorPos) m_statusCursorPos->setText(QString());
+    }
 }
 
 void MainWindow::updateLeftPaneVisibility()
@@ -3650,87 +2740,31 @@ void MainWindow::toggleFocusMode()
 
 void MainWindow::enterFocusMode()
 {
-    if (m_focusMode) return;
     m_focusMode = true;
-    m_focusModeAct->setChecked(true);
-
-    // 保存当前布局状态
+    if (m_focusModeAct) m_focusModeAct->setChecked(true);
     m_savedMainSplitterState = m_mainSplitter->saveState();
     m_savedTocVisible = m_tocPanel->isVisible();
-    auto* tab = currentTab();
-    if (tab)
-        m_savedTabSplitterSizes = tab->splitter->sizes();
-
-    // 隐藏菜单栏、状态栏、tab 栏、左侧面板
+    m_tocPanel->hide();
+    m_leftPaneSplitter->hide();
+    m_tabBarBox->hide();
     menuBar()->hide();
     statusBar()->hide();
-    m_tabBarBox->hide();
-    m_leftPaneSplitter->hide();
-
-    // 隐藏 TOC 面板
-    m_tocPanel->hide();
-
-    // [演示模式] 隐藏编辑器、显示预览，让预览占满整个 Tab
-    for (auto& t : m_tabs) {
-        t.editor->hide();
-        t.preview->show();
-        t.editor->setTypewriterMode(false);  // 演示模式不需要打字机
-    }
-
-    // 让预览吃掉所有宽度
-    if (tab) {
-        tab->splitter->setSizes({0, 1});  // 编辑器 0，预览 1
-    }
-
-    // mainSplitter：所有宽度给 contentStack（中间）
-    m_mainSplitter->setSizes({0, 1, 0});
-
-    // 进入全屏
     showFullScreen();
-
-    // 给预览焦点（用于翻页键）
-    if (tab)
-        tab->preview->setFocus();
+    if (auto* tab = currentTab()) tab->viewer->setFocus();
 }
 
 void MainWindow::exitFocusMode()
 {
-    if (!m_focusMode) return;
     m_focusMode = false;
-    m_focusModeAct->setChecked(false);
-
-    // 退出全屏
+    if (m_focusModeAct) m_focusModeAct->setChecked(false);
     showNormal();
-
-    // 恢复菜单栏、状态栏
     menuBar()->show();
     statusBar()->show();
-    // 恢复 tab 栏（根据侧边模式决定显隐）
-    m_tabBarBox->setVisible(!m_tabBarOnSide || !m_hideTopBarWhenSide);
-    // 恢复左侧面板
-    updateLeftPaneVisibility();
-
-    // 恢复 TOC 面板
+    m_tabBarBox->show();
     m_tocPanel->setVisible(m_savedTocVisible);
-
-    // [演示模式] 恢复编辑器显示（根据 displayMode）
-    for (auto& t : m_tabs) {
-        t.editor->show();
-        t.preview->show();
-    }
-    applyDisplayMode();
-
-    // 恢复 splitter 状态
-    if (!m_savedMainSplitterState.isEmpty())
-        m_mainSplitter->restoreState(m_savedMainSplitterState);
-
-    auto* tab = currentTab();
-    if (tab && !m_savedTabSplitterSizes.isEmpty())
-        tab->splitter->setSizes(m_savedTabSplitterSizes);
-
-    // 给编辑器焦点
-    if (tab)
-        tab->editor->setFocus();
+    updateLeftPaneVisibility();
+    m_mainSplitter->restoreState(m_savedMainSplitterState);
+    if (auto* tab = currentTab()) tab->viewer->setFocus();
 }
 
 // ---- 预览区链接点击处理 [Spec 模块-preview/09] ----
@@ -3743,53 +2777,33 @@ static bool isExecutableExt(const QString& path)
     return exts.contains(QFileInfo(path).suffix().toLower());
 }
 
-void MainWindow::onPreviewLinkClicked(const QString& url, EditorWidget* originEditor)
+void MainWindow::onPreviewLinkClicked(const QString& url, const QString& originFile)
 {
     if (url.isEmpty()) return;
 
-    // 1. http(s):// / mailto: / ftp:// 等 scheme → 交给系统
-    QUrl qurl(url);
-    if (qurl.scheme() == "http" || qurl.scheme() == "https"
-        || qurl.scheme() == "mailto" || qurl.scheme() == "ftp") {
+    // 外部链接：交给系统浏览器
+    const QUrl qurl(url);
+    if (qurl.scheme() == QLatin1String("http") || qurl.scheme() == QLatin1String("https")
+        || qurl.scheme() == QLatin1String("mailto")) {
         QDesktopServices::openUrl(qurl);
         return;
     }
 
-    // 2. 本地路径：相对路径基于当前文件目录解析
+    // 本地路径（相对路径基于当前文档目录）
     QString localPath = url;
-    if (qurl.isLocalFile()) localPath = qurl.toLocalFile();
-
+    const int hash = localPath.indexOf('#');
+    if (hash >= 0) localPath = localPath.left(hash);
+    if (localPath.isEmpty()) return;
     QFileInfo fi(localPath);
-    if (fi.isRelative() && originEditor) {
-        QString srcDir = QFileInfo(originEditor->document()->filePath()).absolutePath();
-        fi = QFileInfo(srcDir + "/" + localPath);
-    }
-    QString absPath = fi.absoluteFilePath();
-
-    // 3. 安全黑名单：禁止执行可执行文件
-    if (isExecutableExt(absPath)) {
-        QMessageBox::warning(this, tr("Blocked"),
-            tr("Refusing to open executable file: %1").arg(fi.fileName()));
-        return;
-    }
-
-    // 4. 文件不存在 → 提示
+    if (fi.isRelative() && !originFile.isEmpty())
+        fi = QFileInfo(QFileInfo(originFile).absolutePath() + "/" + localPath);
     if (!fi.exists()) {
-        QMessageBox::warning(this, tr("File Not Found"),
-            tr("Cannot find file: %1").arg(absPath));
+        showToast(tr("File not found: %1").arg(fi.absoluteFilePath()));
         return;
     }
-
-    // 5. Markdown/文本文件 → 新开 Tab
-    QString suffix = fi.suffix().toLower();
-    static const QStringList mdExts = {"md", "markdown", "txt"};
-    if (mdExts.contains(suffix)) {
-        openFile(absPath);
-        return;
-    }
-
-    // 6. 其他可打开的文档 → 交给系统默认应用
-    QDesktopServices::openUrl(QUrl::fromLocalFile(absPath));
+    const QString suffix = fi.suffix().toLower();
+    if (suffix == "md" || suffix == "markdown" || suffix == "txt") openFile(fi.absoluteFilePath());
+    else QDesktopServices::openUrl(QUrl::fromLocalFile(fi.absoluteFilePath()));
 }
 
 // ---- 文档统计弹窗 [Plan plans/2026-04-13-文档统计信息.md] ----
@@ -3797,127 +2811,12 @@ void MainWindow::onPreviewLinkClicked(const QString& url, EditorWidget* originEd
 void MainWindow::onShowDocumentStats()
 {
     auto* tab = currentTab();
-    if (!tab) return;
-
-    const QString text = tab->editor->document()->text();
-
-    // 基础字数/字符数/行数（复用状态栏逻辑）
-    const int totalChars = text.length();
-    int charsNoSpace = 0;
-    for (const QChar& ch : text) if (!ch.isSpace()) ++charsNoSpace;
-    const int lineCount = tab->editor->document()->lineCount();
-
-    // Word count（中文按字 + 英文按词）
-    int wordCount = 0;
-    bool inWord = false;
-    for (const QChar& ch : text) {
-        ushort uc = ch.unicode();
-        bool isCJK = (uc >= 0x4E00 && uc <= 0x9FFF)
-                  || (uc >= 0x3400 && uc <= 0x4DBF)
-                  || (uc >= 0xF900 && uc <= 0xFAFF);
-        if (isCJK) {
-            if (inWord) { ++wordCount; inWord = false; }
-            ++wordCount;
-        } else if (ch.isLetterOrNumber()) {
-            inWord = true;
-        } else {
-            if (inWord) { ++wordCount; inWord = false; }
-        }
-    }
-    if (inWord) ++wordCount;
-
-    // 结构统计：用正则扫源码，避免依赖 AST 指针
-    int h1 = 0, h2 = 0, h3 = 0, h4 = 0, h5 = 0, h6 = 0;
-    int paragraphCount = 0;
-    int codeBlockCount = 0;
-    int imageCount = 0;
-    int linkCount = 0;
-    int tableCount = 0;
-    int blockQuoteCount = 0;
-
-    const QStringList lines = text.split('\n');
-    bool inCodeFence = false;
-    bool prevBlank = true;
-    for (const QString& raw : lines) {
-        QString line = raw;
-        QString trimmed = line.trimmed();
-
-        // 代码围栏
-        if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
-            if (!inCodeFence) ++codeBlockCount;
-            inCodeFence = !inCodeFence;
-            prevBlank = false;
-            continue;
-        }
-        if (inCodeFence) { prevBlank = false; continue; }
-
-        // 标题
-        if (trimmed.startsWith("#")) {
-            int level = 0;
-            while (level < trimmed.size() && trimmed[level] == '#') ++level;
-            if (level >= 1 && level <= 6
-                && (level == trimmed.size() || trimmed[level] == ' ')) {
-                switch (level) {
-                    case 1: ++h1; break; case 2: ++h2; break; case 3: ++h3; break;
-                    case 4: ++h4; break; case 5: ++h5; break; case 6: ++h6; break;
-                }
-                prevBlank = false;
-                continue;
-            }
-        }
-
-        // 引用块
-        if (trimmed.startsWith(">")) ++blockQuoteCount;
-
-        // 表格（至少两行 | 分隔）
-        if (trimmed.contains('|') && trimmed.contains("---")) ++tableCount;
-
-        // 段落：非空行且前一行是空行
-        if (!trimmed.isEmpty() && prevBlank) ++paragraphCount;
-
-        prevBlank = trimmed.isEmpty();
-    }
-
-    // 图片 / 链接：用正则全文扫
-    QRegExp imgRe("!\\[[^\\]]*\\]\\([^)]+\\)");
-    int pos = 0;
-    while ((pos = imgRe.indexIn(text, pos)) != -1) { ++imageCount; pos += imgRe.matchedLength(); }
-    QRegExp linkRe("(?<!!)\\[[^\\]]*\\]\\([^)]+\\)");
-    pos = 0;
-    while ((pos = linkRe.indexIn(text, pos)) != -1) { ++linkCount; pos += linkRe.matchedLength(); }
-
-    const int minutes = qMax(1, wordCount / 300);
-
+    if (!tab || !tab->viewer) return;
+    auto* v = tab->viewer;
     const QString title = tr("Document Statistics");
-    const QString body = QString(
-        "<table cellpadding='3'>"
-        "<tr><td><b>%1</b></td><td>%2</td></tr>"
-        "<tr><td><b>%3</b></td><td>%4 (%5 %6)</td></tr>"
-        "<tr><td><b>%7</b></td><td>%8</td></tr>"
-        "<tr><td><b>%9</b></td><td>%10</td></tr>"
-        "<tr><td><b>%11</b></td><td>%12</td></tr>"
-        "<tr><td><b>%13</b></td><td>H1:%14 H2:%15 H3:%16 H4:%17 H5:%18 H6:%19</td></tr>"
-        "<tr><td><b>%20</b></td><td>%21</td></tr>"
-        "<tr><td><b>%22</b></td><td>%23</td></tr>"
-        "<tr><td><b>%24</b></td><td>%25</td></tr>"
-        "<tr><td><b>%26</b></td><td>%27</td></tr>"
-        "<tr><td><b>%28</b></td><td>%29</td></tr>"
-        "<tr><td><b>%30</b></td><td>%31 min</td></tr>"
-        "</table>"
-    )
-    .arg(tr("Words:")).arg(wordCount)
-    .arg(tr("Characters:")).arg(totalChars).arg(charsNoSpace).arg(tr("no space"))
-    .arg(tr("Lines:")).arg(lineCount)
-    .arg(tr("Paragraphs:")).arg(paragraphCount)
-    .arg(tr("Headings:")).arg(h1 + h2 + h3 + h4 + h5 + h6)
-    .arg(tr("By Level:")).arg(h1).arg(h2).arg(h3).arg(h4).arg(h5).arg(h6)
-    .arg(tr("Code Blocks:")).arg(codeBlockCount)
-    .arg(tr("Images:")).arg(imageCount)
-    .arg(tr("Links:")).arg(linkCount)
-    .arg(tr("Tables:")).arg(tableCount)
-    .arg(tr("Block Quotes:")).arg(blockQuoteCount)
-    .arg(tr("Reading Time:")).arg(minutes);
-
+    QString body = tr("Lines: %1").arg(v->lineCount()) + "<br>"
+                 + tr("Size: %1 bytes").arg(v->sourceBytes()) + "<br>"
+                 + tr("Headings: %1").arg(v->tocEntries().size());
     QMessageBox::information(this, title, body);
 }
 
@@ -3943,11 +2842,11 @@ void MainWindow::onShowWelcome()
     )
     .arg(tr("A lightweight, fast, cross-platform Markdown editor."))
     .arg(tr("Key Features"))
-    .arg(tr("Dual-pane view: edit on the left, live preview on the right"))
+    .arg(tr("Read-only viewer: opens huge files instantly and scrolls smoothly"))
     .arg(tr("Multi-tab workspace with drag-and-drop file support"))
     .arg(tr("Full-text search with highlight (Ctrl+F), Ctrl+click to follow links"))
     .arg(tr("Outline/TOC panel for quick heading navigation"))
-    .arg(tr("Content marking (highlighter effect) for key passages"))
+    .arg(tr("Auto-refresh when the file changes on disk, keeping your reading position"))
     .arg(tr("Presentation Mode: press F11 to full-screen the preview"))
     .arg(tr("Light / dark themes with system-follow option"))
     .arg(tr("Tip: press Ctrl+/ or open Help → Keyboard Shortcuts to see all shortcuts."));

@@ -44,7 +44,7 @@ qt5_add_resources(APP_QRC ${CMAKE_SOURCE_DIR}/resources/resources.qrc)
 
 add_executable(SimpleMarkdown WIN32 ${APP_SOURCES} ${APP_QRC} ${QM_FILES})
 target_compile_definitions(SimpleMarkdown PRIVATE APP_VERSION="${PROJECT_VERSION}")
-target_link_libraries(SimpleMarkdown PRIVATE sm_editor sm_preview sm_parser sm_sync Qt5::Network Qt5::PrintSupport)
+target_link_libraries(SimpleMarkdown PRIVATE sm_viewerwidget sm_viewer sm_preview sm_parser sm_core Qt5::Network Qt5::PrintSupport)
 
 if(UNIX AND NOT APPLE)
     set_target_properties(SimpleMarkdown PROPERTIES OUTPUT_NAME simplemarkdown)

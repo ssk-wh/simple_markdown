@@ -59,6 +59,7 @@ private:
     void requestLatestRelease();
 
     QNetworkAccessManager* m_nam = nullptr;
+    void ensureNam();
     bool m_manual = false;
     bool m_triedTagsFallback = false;  // releases/latest 404 时回退 /tags 一次
 };

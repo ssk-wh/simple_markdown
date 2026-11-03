@@ -1,7 +1,6 @@
 add_library(sm_parser STATIC
     MarkdownAst.h MarkdownAst.cpp
     MarkdownParser.h MarkdownParser.cpp
-    ParseScheduler.h ParseScheduler.cpp
 )
 target_include_directories(sm_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(sm_parser PRIVATE

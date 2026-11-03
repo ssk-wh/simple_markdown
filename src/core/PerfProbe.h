@@ -62,6 +62,13 @@ private:
 
 } // namespace core
 
+
+namespace core {
+// 启动里程碑：打印自「进程创建」起的毫秒数（仅 perfEnabled() 时），用于定位冷启动各阶段。
+// 实现在 PerfStartup.cpp（避免在头文件引入 windows.h 污染 min/max 宏）
+void startupMark(const char* label);
+} // namespace core
+
 // 宏让埋点行号自动变成唯一变量名，避免一个 scope 里多个 probe 冲突
 #define SM_PERF_CONCAT_(a, b) a##b
 #define SM_PERF_CONCAT(a, b) SM_PERF_CONCAT_(a, b)

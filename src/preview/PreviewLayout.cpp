@@ -1,4 +1,5 @@
 #include "PreviewLayout.h"
+#include "TextWrap.h"
 #include "ImageCache.h"
 #include "MarkdownAst.h"
 #include "FontDefaults.h"
@@ -8,6 +9,11 @@
 #include <QFontMetricsF>
 #include <QtMath>
 #include <algorithm>
+
+namespace {
+// 嵌套容器（列表/引用）内容区的最小宽度（像素）：深层嵌套时不再继续收窄
+constexpr qreal kMinNestedContentWidth = 160.0;
+}  // namespace
 
 PreviewLayout::PreviewLayout()
 {
@@ -200,6 +206,37 @@ void PreviewLayout::buildFromAst(const std::shared_ptr<AstNode>& root)
     m_root.bounds = QRectF(0, 0, m_viewportWidth, y);
     // [plan A3] mappings 缓存失效——下次 sourceLineToY/yToSourceLine 重建
     m_mappingsCacheDirty = true;
+}
+
+// [Spec 模块-viewer/03] 分块布局：与 buildFromAst 同构，但状态无关（不写 m_root）
+PreviewLayout::ChunkLayoutResult PreviewLayout::layoutChunk(const AstNode& docRoot, bool isFirstChunk)
+{
+    ChunkLayoutResult res;
+    res.root.type = LayoutBlock::Document;
+    qreal y = 0;
+    if (isFirstChunk) {
+        // 与 buildFromAst 的 INV-PREVIEW-TOP-PAD 保持一致
+        y = cachedFontMetrics(m_baseFont).height() * 0.1;
+    }
+    for (const auto& child : docRoot.children) {
+        LayoutBlock block = layoutBlock(child.get(), m_viewportWidth);
+        block.bounds.moveTop(y);
+        y += block.bounds.height() + 12.0;
+        res.root.children.push_back(std::move(block));
+    }
+    res.root.bounds = QRectF(0, 0, m_viewportWidth, y);
+    res.height = y;
+    // 收集图片 URL（递归）
+    std::vector<const LayoutBlock*> stack;
+    for (const auto& c : res.root.children) stack.push_back(&c);
+    while (!stack.empty()) {
+        const LayoutBlock* b = stack.back();
+        stack.pop_back();
+        if (b->type == LayoutBlock::Image && !b->imageUrl.isEmpty())
+            res.imageUrls.push_back(b->imageUrl);
+        for (const auto& c : b->children) stack.push_back(&c);
+    }
+    return res;
 }
 
 // [plan A3 2026-05-12] 按需重建 sourceLine ↔ Y 双向映射缓存。
@@ -457,7 +494,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
                 int fit = 0;
                 qreal acc = 0;
                 for (int i = physOffset; i < line.length(); ++i) {
-                    qreal cw = fmCode.horizontalAdvance(QString(line[i]));
+                    qreal cw = fmCode.horizontalAdvance(line[i]);
                     if (acc + cw > contentWidth && fit > 0) break;
                     acc += cw;
                     fit = i + 1 - physOffset;
@@ -475,7 +512,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
     case AstNodeType::BlockQuote: {
         block.type = LayoutBlock::BlockQuote;
         qreal indent = 19.0; // 3px line + 16px spacing
-        qreal childMaxWidth = maxWidth - indent;
+        qreal childMaxWidth = qMax(maxWidth - indent, kMinNestedContentWidth);
         qreal y = 8.0; // top padding
         for (const auto& child : node->children) {
             LayoutBlock childBlock = layoutBlock(child.get(), childMaxWidth);
@@ -493,7 +530,7 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
         block.ordered = (node->listType == ListType::Ordered);
         block.listStart = node->listStart;
         qreal indent = 24.0;
-        qreal childMaxWidth = maxWidth - indent;
+        qreal childMaxWidth = qMax(maxWidth - indent, kMinNestedContentWidth);
         qreal y = 0;
         for (const auto& child : node->children) {
             LayoutBlock childBlock = layoutBlock(child.get(), childMaxWidth);
@@ -522,8 +559,8 @@ LayoutBlock PreviewLayout::layoutBlock(const AstNode* node, qreal maxWidth)
         // [Spec INV-11] 不要用 m_lineHeight (= baseFm.height()*1.5) 做下界保底，
         // 否则会把单行段落 (height ≈ baseFm.height()) 抬高到 1.5 倍墨迹高，
         // 在连续列表项之间留出半行空白。空 item 才用墨迹高度保底。
-        QFontMetricsF baseFm(m_baseFont, m_device);
-        qreal itemMinHeight = baseFm.height();
+        // 走度量缓存：每个列表项都新建 QFontMetricsF 在深层/超长列表上代价很高
+        qreal itemMinHeight = cachedFontMetrics(m_baseFont).height();
         block.bounds = QRectF(0, 0, maxWidth, qMax(y, itemMinHeight));
         break;
     }
@@ -872,8 +909,9 @@ qreal PreviewLayout::estimateParagraphHeight(const std::vector<InlineRun>& runs,
         const QFontMetricsF& fm = cachedFontMetrics(run.font);
         QString text = run.text;
         while (!text.isEmpty()) {
-            qreal fullWidth = fm.horizontalAdvance(text);
             qreal remaining = x + safeMaxWidth - curX;
+            qreal fullWidth = 0;
+            textwrap::fitsInLine(fm, text, remaining, &fullWidth);   // 与 PreviewPainter 共用，见 TextWrap.h
             // 与 PreviewPainter::paintInlineRuns 的换行分支保持完全一致
             if (fullWidth <= remaining || curX <= x) {
                 if (fullWidth > remaining && curX <= x) {

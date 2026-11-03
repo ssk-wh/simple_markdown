@@ -4,7 +4,7 @@
 // Bug:  归档/2026-05-09 用户报告——表格行内拖到右侧空白时，纯 2D 距离 snap 会跳到上/下行
 //       segment，导致 selStart→selEnd 跨多行、整段被高亮。2026-05-11 修复为双层 closest。
 //
-// 直接调用真实算法 PreviewWidget::textIndexForSegments（public static seam），不复刻逻辑，
+// 直接调用真实算法 TextHitTest::textIndexForSegments（public static seam），不复刻逻辑，
 // 杜绝「测试与实现两份代码走样」（CLAUDE.md 反模式 B）。
 //
 // 验收：
@@ -27,7 +27,7 @@
 #include "MarkdownParser.h"
 #include "PreviewLayout.h"
 #include "PreviewPainter.h"
-#include "PreviewWidget.h"
+#include "TextHitTest.h"
 #include "FontDefaults.h"
 
 namespace {
@@ -181,7 +181,7 @@ TEST(PreviewSelectionDragTest, T1_TableRowRightWhitespaceStaysInRow)
     int steps = 0;
     for (qreal y = row2.top + 0.5; y <= row2.bottom - 0.5; y += 1.0) {
         QPointF pt(W - 4.0, y);
-        int real = PreviewWidget::textIndexForSegments(segs, pt, &device);
+        int real = TextHitTest::textIndexForSegments(segs, pt, &device);
         int naive = naive2DClosest(segs, pt, &device);
         // 真实算法：y 在第 2 行 band 内 → 同行优先必然命中第 2 行，绝不跨行
         ASSERT_GE(real, row2.charLo) << "真实算法在 y=" << y << " 跨到上一行";
@@ -223,7 +223,7 @@ TEST(PreviewSelectionDragTest, T2_ParagraphLineRightWhitespaceStopsAtLineEnd)
     ASSERT_TRUE(hasLowerRow) << "段落未折行，用例前提不成立（应缩小视口宽度）";
 
     QPointF pt(W - 4.0, firstRow.centerY);
-    int idx = PreviewWidget::textIndexForSegments(segs, pt, &device);
+    int idx = TextHitTest::textIndexForSegments(segs, pt, &device);
 
     fprintf(stderr, "[drag] T2 firstRow char=[%d,%d] idx=%d\n",
             firstRow.charLo, firstRow.charHi, idx);
@@ -255,7 +255,7 @@ TEST(PreviewSelectionDragTest, T3_BetweenRowsFallsBackTo2D)
     // 点击点：两段之间的垂直空白（y 不在任何 segment 垂直范围内），水平居中
     qreal midY = (r1.centerY + r2.centerY) / 2.0;
     QPointF pt(W / 2.0, midY);
-    int idx = PreviewWidget::textIndexForSegments(segs, pt, &device);
+    int idx = TextHitTest::textIndexForSegments(segs, pt, &device);
 
     fprintf(stderr, "[drag] T3 midY=%.1f idx=%d\n", midY, idx);
 

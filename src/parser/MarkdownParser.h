@@ -12,6 +12,9 @@ public:
     MarkdownParser();
     ~MarkdownParser();
     AstNodePtr parse(const QString& markdown);
+    // 分块渲染用：直接解析 UTF-8 片段（无 QString 往返）；结果行号整体加 lineDelta。
+    // allowFrontmatter=true 时（仅文件首块）识别并生成 Frontmatter 节点。
+    AstNodePtr parseChunk(const QByteArray& utf8, int lineDelta, bool allowFrontmatter);
     QString renderHtml(const QString& markdown);
 
     // Spec §4.2 §5.2：尝试从原文剥离 frontmatter。
@@ -24,7 +27,10 @@ public:
                             int& outFrontmatterLineCount);
 
 private:
+    AstNodePtr parseBody(const QByteArray& utf8);
     AstNodePtr convertNode(cmark_node* node);
+    static constexpr int kMaxAstDepth = 64;  // AST 递归深度上限：防栈溢出，同时使畸形的深层嵌套（实测 5000 层列表布局 >40s）有界
+    int m_depth = 0;
     AstNodeType mapNodeType(cmark_node* node);
     void shiftLineNumbers(AstNode* node, int delta);
     bool m_extensionsRegistered = false;

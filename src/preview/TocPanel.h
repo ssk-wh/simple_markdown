@@ -13,7 +13,7 @@
 #include <QDateTime>
 #include "Theme.h"
 
-class QScrollArea;
+class TocListView;
 class QVBoxLayout;
 class QLabel;
 class QToolButton;
@@ -82,6 +82,7 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
 
 private:
     void buildList();
@@ -95,8 +96,7 @@ private:
     void loadCollapsed();
     void saveCollapsed();
 
-    QScrollArea* m_scrollArea;
-    QVBoxLayout* m_listLayout;
+    TocListView* m_list = nullptr;   // 虚拟化目录列表（INV-TOC-VIRTUAL）
 
     // DocInfoCard 相关
     QFrame* m_docCard = nullptr;

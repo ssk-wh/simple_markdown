@@ -54,6 +54,12 @@ void parseTriple(const QString& ver, int& major, int& minor, int& patch)
 UpdateChecker::UpdateChecker(QObject* parent)
     : QObject(parent)
 {
+    // NAM 延迟创建（见 ensureNam）：启动期不触碰网络栈，避免加载 bearer 插件等额外 DLL
+}
+
+void UpdateChecker::ensureNam()
+{
+    if (m_nam) return;
     m_nam = new QNetworkAccessManager(this);  // Qt 对象树管理生命周期（RAII）
     connect(m_nam, &QNetworkAccessManager::finished,
             this, &UpdateChecker::onReplyFinished);
@@ -138,6 +144,7 @@ void UpdateChecker::requestLatestRelease()
     // GitHub API 要求带 User-Agent，否则返回 403
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("SimpleMarkdown-UpdateChecker"));
     req.setRawHeader("Accept", "application/vnd.github+json");
+    ensureNam();
     QNetworkReply* reply = m_nam->get(req);
 
     // [INV-UPD-TIMEOUT] Qt 5.12 无 setTransferTimeout，用 QTimer 15s 兜底：超时 abort
