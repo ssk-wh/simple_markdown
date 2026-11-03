@@ -1,4 +1,8 @@
-"""PostToolUse hook: git push 后自动打 tag 并推送（自愈：检查远端而非仅本地）"""
+"""PostToolUse hook: git push 后自动打 tag 并推送（自愈：检查远端而非仅本地）
+
+触发：任何包含 `git push` 的 Bash 命令（含 `git add && git commit ; git push` 这类复合命令）。
+动作：读取 CHANGELOG.md 最高版本号 → 本地缺 tag 则创建 → 远端缺 tag 则推送。
+"""
 import sys
 import json
 import subprocess
@@ -7,11 +11,15 @@ import re
 data = json.load(sys.stdin)
 cmd = data.get("tool_input", {}).get("command", "")
 
-if "git push" not in cmd:
+# 复合命令兼容：在命令文本任意位置匹配 git push，只取这一段的参数
+m_push = re.search(r"\bgit\s+push\b([^&;|\n]*)", cmd)
+if not m_push:
     sys.exit(0)
 
-# 避免 git push --tags / git push origin vX.Y.Z 时重复触发
-if "--tags" in cmd or re.search(r"v\d+\.\d+\.\d+", cmd):
+# 避免 git push --tags / git push origin vX.Y.Z 本身再次触发（只看 push 这一段的参数，
+# 不因整条命令里别处出现版本号字符串而误跳过）
+push_args = m_push.group(1)
+if "--tags" in push_args or re.search(r"(^|\s)v\d+\.\d+\.\d+(\s|$)", push_args):
     sys.exit(0)
 
 
@@ -49,7 +57,7 @@ try:
     ).stdout.strip()
 
     if remote:
-        # 远端已有：确认本地 tag 与远端指向一致即可，无需重推
+        # 远端已有：无需重推
         sys.exit(0)
 
     # 远端缺失 → 推送（自愈：覆盖"上次创建了本地 tag 但没推成功"的情况）
