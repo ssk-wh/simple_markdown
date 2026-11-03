@@ -1661,7 +1661,9 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     // Esc 键退出专注模式
     if (m_focusMode && event->type() == QEvent::KeyPress) {
         auto* ke = static_cast<QKeyEvent*>(event);
-        if (ke->key() == Qt::Key_Escape) {
+        // Spec: specs/模块-app/11-演示模式.md INV-1/INV-2：F11 与 Esc 都能退出。
+        // 演示模式下菜单栏被隐藏，挂在菜单栏上的 F11 动作快捷键随之失效，所以这里直接处理按键。
+        if ((ke->key() == Qt::Key_Escape || ke->key() == Qt::Key_F11) && !ke->isAutoRepeat()) {
             exitFocusMode();
             return true;
         }

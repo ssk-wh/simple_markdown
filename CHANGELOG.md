@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2026-11-03
+
+### Fixed
+- 修复演示模式下再次按 F11 无法退出的问题，现在 F11 与 Esc 都可以退出演示模式
+
 ## [2.0.0] - 2026-11-02
 
 > 重大改版：SimpleMarkdown 变为**只读 Markdown 查看器**，以换取秒开与丝滑滚动。需要编辑时请用「文件 → 用默认程序打开」交给你喜欢的编辑器，保存后本窗口会自动刷新并保持阅读位置。
