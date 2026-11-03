@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QScrollBar>
 #include <QTemporaryDir>
+#include <QTest>
 #include <QWheelEvent>
 #include <memory>
 
@@ -402,4 +403,38 @@ TEST(ViewerWidgetTest, T17_ClearMarksInSectionAndAll)
     v.clearAllMarks();
     EXPECT_EQ(v.markCountForTest(), 0);
     EXPECT_TRUE(v.tocHighlightedIndices().isEmpty());
+}
+
+// ---- 链接 Ctrl+点击（Spec 模块-viewer/04 INV-VIEW-LINK-CTRL-CLICK）----
+
+TEST(ViewerWidgetTest, T18_CtrlClickOnLinkEmitsLinkClicked)
+{
+    QTemporaryDir dir;
+    ViewerWidget v;
+    v.resize(900, 600);
+    v.show();
+    loadAndWait(v, writeTmp(dir, "l.md", "# T\n\nbefore [Example Site](https://example.com/a?b=1) after\n\n"
+                                         "<https://auto.link/x> and https://bare.link/y\n"));
+    QStringList got;
+    QObject::connect(&v, &ViewerWidget::linkClicked, [&](const QString& u) { got << u; });
+
+    const auto segs = v.segmentsForTest();
+    QPoint target;
+    for (const auto& s : segs)
+        if (s.linkUrl == "https://example.com/a?b=1") target = (s.rect.center() + QPointF(20, 0)).toPoint();
+    ASSERT_FALSE(target.isNull()) << "没有记录到带链接的文本段";
+
+    // 无 Ctrl：不触发
+    QTest::mouseClick(v.viewport(), Qt::LeftButton, Qt::NoModifier, target);
+    EXPECT_TRUE(got.isEmpty());
+    // Ctrl+点击：触发
+    QTest::mouseClick(v.viewport(), Qt::LeftButton, Qt::ControlModifier, target);
+    ASSERT_EQ(got.size(), 1);
+    EXPECT_EQ(got[0], "https://example.com/a?b=1");
+
+    // 尖括号自动链接与裸 URL 同样应被识别为链接
+    QStringList urls;
+    for (const auto& sg : v.segmentsForTest()) if (!sg.linkUrl.isEmpty()) urls << sg.linkUrl;
+    EXPECT_TRUE(urls.contains("https://auto.link/x")) << qPrintable(urls.join(" | "));
+    EXPECT_TRUE(urls.contains("https://bare.link/y")) << qPrintable(urls.join(" | "));
 }

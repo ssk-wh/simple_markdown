@@ -512,7 +512,7 @@ endif()
 # --- ViewerWidgetTest ---
 # Spec: specs/模块-viewer/04-查看器控件.md / 05-查找.md  验收：T1 ~ T14
 add_executable(ViewerWidgetTest viewer/ViewerWidgetTest.cpp)
-target_link_libraries(ViewerWidgetTest PRIVATE sm_viewerwidget sm_viewer sm_preview sm_parser sm_core Qt5::Widgets gtest gtest_main)
+target_link_libraries(ViewerWidgetTest PRIVATE sm_viewerwidget sm_viewer sm_preview sm_parser sm_core Qt5::Widgets Qt5::Test gtest gtest_main)
 add_test(NAME ViewerWidgetTest COMMAND ViewerWidgetTest)
 
 # --- ViewerFuzzTest ---

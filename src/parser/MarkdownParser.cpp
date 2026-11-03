@@ -138,6 +138,11 @@ AstNodePtr MarkdownParser::parseBody(const QByteArray& utf8)
     if (tasklistExt)
         cmark_parser_attach_syntax_extension(parser, tasklistExt);
 
+    // GFM 自动链接：裸 URL（https://…、www.…）与邮箱自动成为链接，支持 Ctrl+点击打开
+    cmark_syntax_extension* autolinkExt = cmark_find_syntax_extension("autolink");
+    if (autolinkExt)
+        cmark_parser_attach_syntax_extension(parser, autolinkExt);
+
     cmark_parser_feed(parser, utf8.data(), utf8.size());
     cmark_node* doc = cmark_parser_finish(parser);
 
@@ -276,6 +281,11 @@ QString MarkdownParser::renderHtml(const QString& markdown)
     cmark_syntax_extension* tasklistExt = cmark_find_syntax_extension("tasklist");
     if (tasklistExt)
         cmark_parser_attach_syntax_extension(parser, tasklistExt);
+
+    // GFM 自动链接：裸 URL（https://…、www.…）与邮箱自动成为链接，支持 Ctrl+点击打开
+    cmark_syntax_extension* autolinkExt = cmark_find_syntax_extension("autolink");
+    if (autolinkExt)
+        cmark_parser_attach_syntax_extension(parser, autolinkExt);
 
     cmark_parser_feed(parser, utf8.data(), utf8.size());
     cmark_node* doc = cmark_parser_finish(parser);

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2026-11-03
+
+### Fixed
+- 修复正文中直接写出的网址（如 https://example.com）没有被识别为链接的问题，现在可以 Ctrl+鼠标点击在浏览器中打开
+
 ## [2.0.1] - 2026-11-03
 
 ### Fixed
